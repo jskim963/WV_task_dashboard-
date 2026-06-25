@@ -79,6 +79,18 @@ tailwind.config = {
   /* Modal */
   .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; display:flex; align-items:center; justify-content:center; animation:fadeIn 0.15s ease; }
   .modal-box { background:#fff; border-radius:12px; padding:28px; width:560px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
+  @media (max-width: 639px) {
+    .modal-overlay { align-items: flex-end !important; }
+    .modal-box {
+      padding: 20px 16px !important;
+      border-radius: 16px 16px 0 0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 !important;
+      max-height: 92vh;
+      overflow-y: auto;
+    }
+  }
 
   /* Calendar */
   .cal-day { min-height:80px; padding:6px; border:1px solid #f1f5f9; cursor:pointer; transition:background 0.1s; }
@@ -573,7 +585,7 @@ tailwind.config = {
               <input type="text" placeholder="센터 검색..." class="pl-9 pr-4 py-1.5 bg-surface-container border border-outline-variant rounded-lg text-sm w-full" oninput="searchCenters(this.value)">
             </div>
           </div>
-          <div class="overflow-y-auto" style="max-height:600px;" id="center-list"></div>
+          <div class="overflow-y-auto lg:max-h-[600px]" id="center-list"></div>
         </div>
         <!-- Center detail -->
         <div class="lg:col-span-2" id="center-detail">
