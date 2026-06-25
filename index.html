@@ -155,6 +155,21 @@ tailwind.config = {
   .wk-cell { min-height:64px; }
   .wk-event { font-size:11px; padding:2px 6px; border-radius:4px; margin-bottom:2px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; }
   .wk-today { background:#eff6ff !important; }
+  @media (max-width: 1023px) {
+    #search-wrap.mobile-open {
+      display: block !important;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 160;
+      background: #fff;
+      padding: 10px 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    #search-wrap.mobile-open input {
+      width: 100%;
+      box-sizing: border-box;
+    }
+  }
 </style>
 </head>
 <body class="flex h-screen overflow-hidden">
@@ -257,10 +272,17 @@ tailwind.config = {
       <button id="mobile-toggle" class="hidden p-1 rounded text-secondary hover:bg-surface-container" onclick="toggleSidebar()">
         <span class="material-symbols-outlined">menu</span>
       </button>
-      <div class="relative">
-        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm">search</span>
-        <input type="text" placeholder="검색..." class="pl-9 pr-4 py-1.5 bg-surface-container border border-outline-variant rounded-full text-sm w-64 transition-all" id="global-search" oninput="globalSearch(this.value)" onblur="setTimeout(hideSearchDrop,250)" onkeydown="if(event.key==='Escape')hideSearchDrop()">
-        <div id="search-dropdown" class="hidden"></div>
+      <div class="relative flex items-center">
+        <!-- 모바일: 돋보기 버튼만 표시 -->
+        <button id="mobile-search-btn" class="lg:hidden p-2 rounded-full hover:bg-surface-container text-secondary" onclick="toggleMobileSearch()">
+          <span class="material-symbols-outlined text-xl">search</span>
+        </button>
+        <!-- 데스크탑: 항상 표시 / 모바일: 활성화 시 표시 -->
+        <div id="search-wrap" class="hidden lg:block relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm">search</span>
+          <input type="text" placeholder="검색..." class="pl-9 pr-4 py-1.5 bg-surface-container border border-outline-variant rounded-full text-sm w-64 transition-all" id="global-search" oninput="globalSearch(this.value)" onblur="setTimeout(()=>{hideSearchDrop();closeMobileSearch()},250)" onkeydown="if(event.key==='Escape'){hideSearchDrop();closeMobileSearch()}">
+          <div id="search-dropdown" class="hidden"></div>
+        </div>
       </div>
     </div>
     <div class="flex items-center gap-3">
@@ -2152,6 +2174,18 @@ function globalSearch(q) {
   dd.classList.remove('hidden');
 }
 function hideSearchDrop() { document.getElementById('search-dropdown').classList.add('hidden'); document.getElementById('global-search').value=''; }
+function toggleMobileSearch() {
+  const wrap = document.getElementById('search-wrap');
+  wrap.classList.add('mobile-open');
+  wrap.style.display = 'block';
+  setTimeout(() => document.getElementById('global-search').focus(), 50);
+}
+function closeMobileSearch() {
+  if (window.innerWidth >= 1024) return;
+  const wrap = document.getElementById('search-wrap');
+  wrap.classList.remove('mobile-open');
+  wrap.style.display = '';
+}
 function searchGoTask(id) { hideSearchDrop(); showPage('dashboard'); setTimeout(()=>showTaskDetail(id),100); }
 function searchGoMember(id) { hideSearchDrop(); showPage('team'); }
 function searchGoCenter(id) { hideSearchDrop(); showPage('centers'); setTimeout(()=>selectCenter(id),100); }
