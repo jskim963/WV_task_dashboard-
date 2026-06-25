@@ -170,6 +170,13 @@ tailwind.config = {
       box-sizing: border-box;
     }
   }
+@media (max-width: 1023px) {
+  .cal-day { min-height: 48px !important; padding: 4px 3px !important; }
+  .cal-event { display: none; }
+  .cal-dot-row { display: flex !important; }
+}
+.cal-dot-row { display: none; justify-content: center; gap: 3px; margin-top: 2px; flex-wrap: wrap; }
+.cal-dot { width: 5px; height: 5px; border-radius: 50%; }
 </style>
 </head>
 <body class="flex h-screen overflow-hidden">
@@ -459,6 +466,17 @@ tailwind.config = {
           <div class="py-2 text-blue-500">토</div>
         </div>
         <div class="grid grid-cols-7 border-l border-t border-outline-variant" id="cal-grid"></div>
+        <!-- 모바일 날짜 일정 패널 -->
+        <div id="cal-day-panel" class="lg:hidden mt-3 rounded-xl border border-outline-variant overflow-hidden" style="display:none">
+          <div class="bg-primary px-4 py-2.5 flex items-center justify-between">
+            <span id="cal-panel-title" class="text-white font-bold text-sm"></span>
+            <button onclick="document.getElementById('cal-day-panel').style.display='none'" class="text-white/70 hover:text-white text-sm px-2 py-1">✕ 닫기</button>
+          </div>
+          <div id="cal-panel-events" class="divide-y divide-outline-variant bg-white"></div>
+          <div class="p-3 bg-white">
+            <button id="cal-panel-add-btn" class="w-full border border-dashed border-outline rounded-lg py-2 text-sm text-secondary hover:text-primary hover:border-primary">＋ 일정 추가</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1603,8 +1621,12 @@ function renderCalendar() {
       const colors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 기타:'background:#ede9fe;color:#7c3aed'};
       return `<div class="cal-event opacity-50" style="${colors[e.type]||colors['기타']}">${e.title}</div>`;
     }).join('');
-    grid.innerHTML += `<div class="cal-day border-r border-b border-outline-variant other-month" onclick="openAddEventModal('${prevDateStr}')">
-      <div class="text-xs font-semibold mb-1 opacity-40 ${isSun?'text-red-400':isSat?'text-blue-400':''}">${prevDay}</div>${evHtml}</div>`;
+    const prevDotBgColors = {휴무:'#ef4444', 출장:'#2563eb', 미팅:'#d97706', 기타:'#7c3aed'};
+    const prevDotHtml = prevEvs.length
+      ? `<div class="cal-dot-row">${prevEvs.slice(0,4).map(e=>`<div class="cal-dot" style="background:${prevDotBgColors[e.type]||'#7c3aed'};opacity:0.5"></div>`).join('')}</div>`
+      : '';
+    grid.innerHTML += `<div class="cal-day border-r border-b border-outline-variant other-month" onclick="calDayClick('${prevDateStr}', event)">
+      <div class="text-xs font-semibold mb-1 opacity-40 ${isSun?'text-red-400':isSat?'text-blue-400':''}">${prevDay}</div>${evHtml}${prevDotHtml}</div>`;
   }
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
@@ -1625,10 +1647,14 @@ function renderCalendar() {
       const nb = isNew(e) ? '<span class="new-badge">NEW</span>' : '';
       return `<div class="cal-event" style="${s}" onclick="event.stopPropagation();openEventDetail(${e.id})">${prefix}${e.title}${nb}</div>`;
     }).join('');
+    const dotBgColors = {휴무:'#ef4444', 출장:'#2563eb', 미팅:'#d97706', 기타:'#7c3aed'};
+    const dotHtml = dayEvents.length
+      ? `<div class="cal-dot-row">${dayEvents.slice(0,4).map(e=>`<div class="cal-dot" style="background:${dotBgColors[e.type]||'#7c3aed'}"></div>`).join('')}</div>`
+      : '';
     grid.innerHTML += `
-      <div class="cal-day border-r border-b border-outline-variant ${isToday?'today':''}" onclick="openAddEventModal('${dateStr}')">
+      <div class="cal-day border-r border-b border-outline-variant ${isToday?'today':''}" onclick="calDayClick('${dateStr}', event)">
         <div class="text-xs font-semibold mb-1 ${isSun?'text-red-500':isSat?'text-blue-500':''} ${isToday?'bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center':''}">${day}</div>
-        ${evHtml}
+        ${evHtml}${dotHtml}
       </div>`;
   }
   // 다음 달 날짜 채우기
@@ -1645,9 +1671,45 @@ function renderCalendar() {
       const colors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 기타:'background:#ede9fe;color:#7c3aed'};
       return `<div class="cal-event opacity-50" style="${colors[e.type]||colors['기타']}">${e.title}</div>`;
     }).join('');
-    grid.innerHTML += `<div class="cal-day border-r border-b border-outline-variant other-month" onclick="openAddEventModal('${nextDateStr}')">
-      <div class="text-xs font-semibold mb-1 opacity-40 ${isSun?'text-red-400':isSat?'text-blue-400':''}">${i}</div>${evHtml}</div>`;
+    const nextDotBgColors = {휴무:'#ef4444', 출장:'#2563eb', 미팅:'#d97706', 기타:'#7c3aed'};
+    const nextDotHtml = nextEvs.length
+      ? `<div class="cal-dot-row">${nextEvs.slice(0,4).map(e=>`<div class="cal-dot" style="background:${nextDotBgColors[e.type]||'#7c3aed'};opacity:0.5"></div>`).join('')}</div>`
+      : '';
+    grid.innerHTML += `<div class="cal-day border-r border-b border-outline-variant other-month" onclick="calDayClick('${nextDateStr}', event)">
+      <div class="text-xs font-semibold mb-1 opacity-40 ${isSun?'text-red-400':isSat?'text-blue-400':''}">${i}</div>${evHtml}${nextDotHtml}</div>`;
   }
+}
+
+function calDayClick(dateStr, e) {
+  if (window.innerWidth >= 1024) { openAddEventModal(dateStr); return; }
+  const panel = document.getElementById('cal-day-panel');
+  const title = document.getElementById('cal-panel-title');
+  const evList = document.getElementById('cal-panel-events');
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = ['일','월','화','수','목','금','토'][d.getDay()];
+  title.textContent = `${d.getMonth()+1}월 ${d.getDate()}일 (${dow})`;
+  const dayEvents = DB.events.filter(ev => eventFallsOnDate(ev, dateStr));
+  const evColors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 기타:'background:#ede9fe;color:#7c3aed'};
+  if (dayEvents.length === 0) {
+    evList.innerHTML = '<div class="px-4 py-4 text-sm text-secondary italic text-center">일정이 없어요</div>';
+  } else {
+    evList.innerHTML = dayEvents.map(ev => {
+      const s = evColors[ev.type] || evColors['기타'];
+      const eIds = getEventPersonIds(ev);
+      const eNames = eIds.map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean).join(', ');
+      const dotColor = {휴무:'#ef4444', 출장:'#2563eb', 미팅:'#d97706', 기타:'#7c3aed'}[ev.type] || '#7c3aed';
+      return `<div class="px-4 py-3 flex items-start gap-3 cursor-pointer hover:bg-surface-container-low" onclick="openEventDetail(${ev.id})">
+        <div class="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style="background:${dotColor}"></div>
+        <div>
+          <div class="text-sm font-semibold text-on-surface">${ev.title}</div>
+          <div class="text-xs text-secondary mt-0.5">${eNames ? '👤 '+eNames : '팀 전체'}${ev.startTime?' · 🕐 '+ev.startTime:''}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('cal-panel-add-btn').onclick = () => openAddEventModal(dateStr);
+  panel.style.display = 'block';
+  setTimeout(() => panel.scrollIntoView({behavior:'smooth', block:'nearest'}), 50);
 }
 
 function changeMonth(dir) {
