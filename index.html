@@ -374,8 +374,9 @@ tailwind.config = {
           <h1 class="text-xl lg:text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">업무 현황 대시보드</h1>
           <p class="text-sm text-secondary mt-0.5" id="today-date"></p>
         </div>
-        <button onclick="openAddTaskModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
-          <span class="material-symbols-outlined text-base">add</span> 새 업무 추가
+        <button onclick="openAddTaskModal()" class="flex items-center gap-2 bg-primary text-white px-3 py-2 lg:px-4 lg:py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
+          <span class="material-symbols-outlined text-base">add</span>
+          <span class="hidden sm:inline">새 업무 추가</span>
         </button>
       </div>
 
@@ -392,7 +393,7 @@ tailwind.config = {
             <button class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary" data-filter="지연" onclick="filterTasks('지연')">지연</button>
             <button class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary" data-filter="대기" onclick="filterTasks('대기')">대기</button>
           </div>
-          <div class="flex gap-2">
+          <div class="hidden sm:flex gap-2">
             <select onchange="filterByAssignee(this.value)" class="border border-outline-variant rounded-lg px-3 py-1.5 text-sm text-secondary bg-white">
               <option value="">담당자 (전체)</option>
             </select>
@@ -404,7 +405,7 @@ tailwind.config = {
             </select>
           </div>
         </div>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto hidden lg:block" id="task-table-wrap">
           <table class="w-full text-sm">
             <thead>
               <tr class="bg-slate-50 text-xs uppercase text-secondary font-semibold">
@@ -420,6 +421,8 @@ tailwind.config = {
             <tbody id="task-table-body"></tbody>
           </table>
         </div>
+        <!-- 모바일 카드 목록 -->
+        <div id="task-card-list" class="lg:hidden divide-y divide-outline-variant"></div>
         <div class="flex items-center justify-between px-4 py-3 border-t border-outline-variant text-xs text-secondary">
           <span id="task-count-info"></span>
           <div class="flex gap-1" id="pagination"></div>
@@ -1378,6 +1381,31 @@ function renderTaskTable() {
           </td>
         </tr>
       `;
+    }).join('');
+  }
+
+  // 모바일 카드 렌더링
+  const cardList = document.getElementById('task-card-list');
+  if (cardList) {
+    const statusColors = { '완료':'badge-complete', '진행중':'badge-progress', '지연':'badge-delayed', '대기':'badge-pending' };
+    const priColors = { '높음':'badge-high', '보통':'badge-normal', '낮음':'badge-low', '긴급':'badge-urgent' };
+    cardList.innerHTML = paged.map(t => {
+      const nb = isNew(t) ? '<span class="new-badge">NEW</span>' : '';
+      const sc = statusColors[t.status] || 'badge-normal';
+      const pc = priColors[t.priority] || 'badge-normal';
+      const assignees = getAssigneeIds(t).map(id => DB.members.find(m=>m.id===id)).filter(Boolean);
+      const assigneeLabel = assignees.length ? assignees.map(m=>m.name).join(', ') : '-';
+      return `<div class="p-4 hover:bg-surface-container-low cursor-pointer" onclick="showTaskDetail(${t.id})">
+        <div class="flex items-start justify-between gap-2 mb-1.5">
+          <span class="font-semibold text-sm text-on-surface leading-snug">${t.name}${nb}</span>
+          <span class="badge ${sc} text-xs px-2 py-0.5 rounded-full flex-shrink-0">${t.status}</span>
+        </div>
+        <div class="flex items-center gap-3 text-xs text-secondary flex-wrap">
+          <span>👤 ${assigneeLabel}</span>
+          <span>📅 ${t.deadline || '-'}</span>
+          <span class="badge ${pc} text-xs px-2 py-0.5 rounded-full">${t.priority || '-'}</span>
+        </div>
+      </div>`;
     }).join('');
   }
 
