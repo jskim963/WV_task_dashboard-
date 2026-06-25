@@ -1,0 +1,3023 @@
+<!DOCTYPE html>
+<html lang="ko" class="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W&V팀 내부관리 Tool</title>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700;800&family=Noto+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script id="tailwind-config">
+tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        primary: "#2563eb", "on-primary": "#ffffff",
+        "primary-container": "#dbeafe", "on-primary-container": "#1e40af",
+        secondary: "#505f76", "on-secondary": "#ffffff",
+        "secondary-container": "#d0e1fb", "on-secondary-container": "#0b1c30",
+        surface: "#faf8ff", "on-surface": "#191b23",
+        "surface-variant": "#e1e2ed", "on-surface-variant": "#434655",
+        "surface-container": "#ededf9", "surface-container-low": "#f3f3fe",
+        "surface-container-high": "#e7e7f3", "surface-container-highest": "#e1e2ed",
+        "surface-container-lowest": "#ffffff",
+        "outline": "#737686", "outline-variant": "#c3c6d7",
+        "error": "#ba1a1a", "on-error": "#ffffff", "error-container": "#ffdad6",
+        background: "#f8fafc", "on-background": "#191b23",
+        "inverse-surface": "#2e3039",
+      },
+      fontFamily: {
+        "display": ["Hanken Grotesk", "sans-serif"],
+        "body": ["Noto Sans", "sans-serif"],
+      },
+      borderRadius: {
+        DEFAULT: "0.5rem", sm: "0.25rem", md: "0.5rem", lg: "0.75rem", xl: "1rem", "2xl": "1.25rem", full: "9999px"
+      },
+    }
+  }
+}
+</script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Noto Sans', sans-serif; background: #f8fafc; }
+  h1, h2, h3 { font-family: 'Hanken Grotesk', sans-serif; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
+  .fill-icon { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c3c6d7; border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: #737686; }
+
+  /* Page transitions */
+  .page { display: none; animation: fadeIn 0.2s ease; }
+  .page.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Status badges */
+  .badge-complete { background:#dcfce7; color:#16a34a; }
+  .badge-progress { background:#dbeafe; color:#2563eb; }
+  .badge-delayed  { background:#fee2e2; color:#dc2626; }
+  .badge-pending  { background:#fef9c3; color:#ca8a04; }
+  .badge-urgent   { background:#fee2e2; color:#dc2626; }
+  .badge-normal   { background:#f1f5f9; color:#475569; }
+  .badge-low      { background:#f0fdf4; color:#16a34a; }
+  .badge-high     { background:#fef2f2; color:#dc2626; }
+
+  /* Sidebar active */
+  .nav-item { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:8px; cursor:pointer; transition:all 0.15s; color:#434655; font-size:14px; font-weight:500; }
+  .nav-item:hover { background:#e7e7f3; }
+  .nav-item.active { background:#dbeafe; color:#2563eb; font-weight:600; }
+  .nav-item .material-symbols-outlined { font-size:20px; }
+
+  /* Table hover */
+  tr.task-row:hover { background:#f8fafc; cursor:pointer; }
+
+  /* Modal */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; display:flex; align-items:center; justify-content:center; animation:fadeIn 0.15s ease; }
+  .modal-box { background:#fff; border-radius:12px; padding:28px; width:560px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
+
+  /* Calendar */
+  .cal-day { min-height:80px; padding:6px; border:1px solid #f1f5f9; cursor:pointer; transition:background 0.1s; }
+  .cal-day:hover { background:#f8fafc; }
+  .cal-day.today { background:#eff6ff; border-color:#93c5fd; }
+  .cal-day.other-month { opacity:0.4; }
+  .cal-event { font-size:11px; padding:2px 6px; border-radius:4px; margin-top:2px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+
+  /* AI Chatbot */
+  #chatbot-panel { position:fixed; bottom:24px; right:24px; z-index:300; }
+  .chat-window { width:360px; height:520px; background:#fff; border-radius:16px; box-shadow:0 16px 48px rgba(0,0,0,0.18); display:flex; flex-direction:column; overflow:hidden; border:1px solid #e2e8f0; }
+  .chat-msg { padding:10px 14px; border-radius:12px; max-width:82%; font-size:13px; line-height:1.5; }
+  .chat-msg.ai { background:#eff6ff; color:#1e40af; border-bottom-left-radius:4px; }
+  .chat-msg.user { background:#2563eb; color:#fff; border-bottom-right-radius:4px; margin-left:auto; }
+  .typing-dot { width:6px; height:6px; background:#94a3b8; border-radius:50%; animation:bounce 1.4s infinite ease-in-out; }
+  .typing-dot:nth-child(2) { animation-delay:0.2s; }
+  .typing-dot:nth-child(3) { animation-delay:0.4s; }
+  @keyframes bounce { 0%,80%,100%{transform:scale(0.6)} 40%{transform:scale(1)} }
+
+  /* Quick prompt chips */
+  .chip { display:inline-flex; align-items:center; padding:5px 12px; border-radius:999px; border:1px solid #c3c6d7; font-size:12px; cursor:pointer; transition:all 0.15s; background:#fff; color:#434655; }
+  .chip:hover { background:#eff6ff; border-color:#93c5fd; color:#2563eb; }
+
+  /* Event type chip active state */
+  label.chip:has(input[value="휴무"]:checked)  { background:#fee2e2 !important; border-color:#dc2626 !important; color:#dc2626 !important; font-weight:600; }
+  label.chip:has(input[value="출장"]:checked)  { background:#dbeafe !important; border-color:#1d4ed8 !important; color:#1d4ed8 !important; font-weight:600; }
+  label.chip:has(input[value="미팅"]:checked)  { background:#fef9c3 !important; border-color:#ca8a04 !important; color:#ca8a04 !important; font-weight:600; }
+  label.chip:has(input[value="기타"]:checked)  { background:#ede9fe !important; border-color:#7c3aed !important; color:#7c3aed !important; font-weight:600; }
+
+  /* Responsive sidebar */
+  @media (max-width: 1023px) {
+    #sidebar { position:fixed; top:0; left:0; height:100%; z-index:150; width:256px; transform:translateX(-100%); transition:transform 0.3s ease; }
+    #sidebar.open { transform:translateX(0); }
+    #sidebar-overlay { display:block !important; }
+    #main-content { margin-left:0 !important; }
+    #mobile-toggle { display:flex !important; }
+    .chat-window { width:calc(100vw - 32px); right:16px; }
+    #notif-panel { width:100% !important; }
+  }
+
+  /* Input focus */
+  input:focus, textarea:focus, select:focus { outline:none; border-color:#2563eb !important; box-shadow:0 0 0 3px rgba(37,99,235,0.1); }
+
+  /* Summary cards */
+  .stat-card { background:#fff; border-radius:12px; padding:20px 24px; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+
+  /* Center map pin */
+  .map-pin { position:absolute; width:12px; height:12px; border-radius:50%; border:2px solid #fff; cursor:pointer; transform:translate(-50%,-50%); transition:all 0.2s; box-shadow:0 2px 6px rgba(0,0,0,0.2); }
+  .map-pin:hover { width:16px; height:16px; z-index:10; }
+  .map-pin.issue { background:#ef4444; animation:pulse 2s infinite; }
+  .map-pin.normal { background:#2563eb; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.4)} 50%{box-shadow:0 0 0 8px rgba(239,68,68,0)} }
+
+  /* Notification badge */
+  .notif-badge { position:absolute; top:-2px; right:-2px; width:10px; height:10px; background:#ef4444; border-radius:50%; border:2px solid #fff; }
+
+  /* Priority indicator */
+  .priority-bar { width:3px; border-radius:2px; flex-shrink:0; }
+
+  /* NEW badge */
+  .new-badge { display:inline-flex; align-items:center; padding:1px 6px; border-radius:999px; background:#dbeafe; color:#1d4ed8; font-size:10px; font-weight:700; margin-left:5px; vertical-align:middle; }
+
+  /* Search dropdown */
+  #search-dropdown { position:absolute; top:calc(100% + 4px); left:0; width:320px; background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.14); border:1px solid #e2e8f0; z-index:500; max-height:360px; overflow-y:auto; }
+
+  /* Notification panel */
+  #notif-panel { position:fixed; top:0; right:0; height:100%; width:320px; background:#fff; box-shadow:-4px 0 24px rgba(0,0,0,0.12); z-index:400; transform:translateX(100%); transition:transform 0.3s ease; display:flex; flex-direction:column; }
+  #notif-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.2); z-index:390; display:none; }
+
+  /* Weekly grid */
+  .wk-table { border-collapse:collapse; width:100%; min-width:700px; }
+  .wk-table th, .wk-table td { border:1px solid #e2e8f0; padding:6px 8px; vertical-align:top; }
+  .wk-table th { background:#f8fafc; font-size:11px; text-align:center; font-weight:600; color:#505f76; }
+  .wk-cell { min-height:64px; }
+  .wk-event { font-size:11px; padding:2px 6px; border-radius:4px; margin-bottom:2px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; }
+  .wk-today { background:#eff6ff !important; }
+</style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+<!-- ===== LOADING OVERLAY ===== -->
+<div id="loading-overlay" class="fixed inset-0 z-[1000] flex items-center justify-center bg-white">
+  <div class="text-center">
+    <div class="text-2xl font-bold text-primary mb-2" style="font-family:'Hanken Grotesk'">W&V팀 내부관리</div>
+    <div class="text-sm text-secondary">데이터를 불러오는 중...</div>
+  </div>
+</div>
+
+<!-- ===== LOGIN OVERLAY ===== -->
+<div id="login-overlay" class="fixed inset-0 z-[999] flex items-center justify-center" style="background:rgba(15,23,42,0.93);display:none!important">
+  <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center"><span class="text-white font-bold text-sm" style="font-family:'Hanken Grotesk'">WV</span></div>
+      <div><div class="font-bold text-base text-on-surface" style="font-family:'Hanken Grotesk'">W&V팀 업무 Tool</div><div class="text-xs text-secondary">팀원 전용 로그인</div></div>
+    </div>
+    <div class="space-y-3" id="login-form-area">
+      <div>
+        <label class="text-xs font-semibold text-secondary block mb-1">이메일 앞부분</label>
+        <input id="login-username" type="text" placeholder="이메일 앞부분 입력" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-secondary block mb-1">비밀번호</label>
+        <input id="login-password" type="password" placeholder="비밀번호 입력" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <p id="login-msg" class="text-xs text-red-500 hidden"></p>
+      <button onclick="doLogin()" class="w-full bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700">로그인</button>
+    </div>
+    <div class="space-y-3 hidden" id="set-pw-area">
+      <p class="text-sm text-on-surface font-medium">처음 로그인입니다. 비밀번호를 설정하세요.</p>
+      <div>
+        <label class="text-xs font-semibold text-secondary block mb-1">새 비밀번호</label>
+        <input id="new-password" type="password" placeholder="비밀번호" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-secondary block mb-1">비밀번호 확인</label>
+        <input id="new-password-confirm" type="password" placeholder="비밀번호 확인" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')doSetPassword()">
+      </div>
+      <p id="set-pw-msg" class="text-xs text-red-500 hidden"></p>
+      <button onclick="doSetPassword()" class="w-full bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700">비밀번호 설정 후 로그인</button>
+      <button onclick="document.getElementById('set-pw-area').classList.add('hidden');document.getElementById('login-form-area').classList.remove('hidden')" class="w-full border border-outline-variant rounded-lg py-2 text-sm text-secondary hover:bg-surface-container">뒤로</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SIDEBAR ===== -->
+<aside id="sidebar" class="w-64 h-screen flex-shrink-0 border-r border-outline-variant bg-white flex flex-col" style="min-width:256px;">
+  <div class="p-4 pb-2">
+    <div class="flex items-center gap-3 px-1 pt-1 mb-6">
+      <div class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+        <span class="text-white font-bold text-sm" style="font-family:'Hanken Grotesk'">WV</span>
+      </div>
+      <div>
+        <div class="font-bold text-sm leading-tight text-on-surface" style="font-family:'Hanken Grotesk'">W&V팀</div>
+        <div class="text-xs text-secondary">업무 현황 보고</div>
+      </div>
+    </div>
+    <nav class="flex flex-col gap-1">
+      <div class="nav-item active" onclick="showPage('overview')" id="nav-overview">
+        <span class="material-symbols-outlined fill-icon">home</span> 개요
+      </div>
+      <div class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard">
+        <span class="material-symbols-outlined fill-icon">dashboard</span> 업무 현황
+      </div>
+      <div class="nav-item" onclick="showPage('calendar')" id="nav-calendar">
+        <span class="material-symbols-outlined">calendar_month</span> 캘린더
+      </div>
+      <div class="nav-item" onclick="showPage('weekly')" id="nav-weekly">
+        <span class="material-symbols-outlined">view_week</span> 주간 일정
+      </div>
+      <div class="nav-item" onclick="showPage('team')" id="nav-team">
+        <span class="material-symbols-outlined">group</span> 팀원
+      </div>
+      <div class="nav-item" onclick="showPage('centers')" id="nav-centers">
+        <span class="material-symbols-outlined">map</span> 센터별 현황
+      </div>
+      <div class="nav-item" onclick="showPage('settings')" id="nav-settings">
+        <span class="material-symbols-outlined">settings</span> 설정
+      </div>
+    </nav>
+  </div>
+  <div class="mt-auto p-4 border-t border-outline-variant">
+    <button onclick="toggleChat()" class="w-full flex items-center justify-center gap-2 bg-primary text-white py-2.5 rounded-lg hover:bg-blue-700 transition-all text-sm font-semibold relative">
+      <span class="material-symbols-outlined text-base">chat</span> AI 챗봇
+      <span class="notif-badge"></span>
+    </button>
+  </div>
+</aside>
+<div id="sidebar-overlay" class="fixed inset-0 bg-black/40 z-[140]" style="display:none" onclick="toggleSidebar()"></div>
+
+<!-- ===== MAIN CONTENT ===== -->
+<div id="main-content" class="flex-1 flex flex-col overflow-hidden">
+
+  <!-- Top bar -->
+  <header class="h-14 border-b border-outline-variant bg-white flex items-center justify-between px-6 flex-shrink-0 shadow-sm z-10">
+    <div class="flex items-center gap-3">
+      <button id="mobile-toggle" class="hidden p-1 rounded text-secondary hover:bg-surface-container" onclick="toggleSidebar()">
+        <span class="material-symbols-outlined">menu</span>
+      </button>
+      <div class="relative">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm">search</span>
+        <input type="text" placeholder="검색..." class="pl-9 pr-4 py-1.5 bg-surface-container border border-outline-variant rounded-full text-sm w-64 transition-all" id="global-search" oninput="globalSearch(this.value)" onblur="setTimeout(hideSearchDrop,250)" onkeydown="if(event.key==='Escape')hideSearchDrop()">
+        <div id="search-dropdown" class="hidden"></div>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button onclick="toggleNotifPanel()" class="relative p-2 rounded-full hover:bg-surface-container text-secondary" id="notif-bell-btn">
+        <span class="material-symbols-outlined text-xl">notifications</span>
+        <span class="notif-badge" id="notif-count-badge" style="display:none"></span>
+      </button>
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-secondary" id="user-display-name"></span>
+        <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold cursor-pointer" id="user-avatar" onclick="doLogout()" title="로그아웃">나</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Page content area -->
+  <main class="flex-1 overflow-y-auto bg-background p-6">
+
+    <!-- ====== PAGE: OVERVIEW ====== -->
+    <div id="page-overview" class="page active">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="overview-greeting">안녕하세요 👋</h1>
+          <p class="text-sm text-secondary mt-0.5" id="overview-date"></p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+
+        <!-- Panel 1: 업무 현황 -->
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-primary text-base">work</span>업무 현황</h2>
+            <button onclick="showPage('dashboard')" class="text-xs text-primary hover:underline">전체 보기</button>
+          </div>
+          <div id="ov-task-stats" class="grid grid-cols-2 gap-2"></div>
+        </div>
+
+        <!-- Panel 2: 공지사항 -->
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-red-500 text-base">campaign</span>공지사항</h2>
+            <button onclick="openAddNoticeModal()" class="text-xs bg-primary text-white px-2.5 py-1 rounded hover:bg-blue-700">+ 작성</button>
+          </div>
+          <div id="ov-notices" class="space-y-2 max-h-48 overflow-y-auto"></div>
+        </div>
+
+        <!-- Panel 3: 센터 이슈 -->
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-orange-500 text-base">warning</span>센터 이슈</h2>
+            <button onclick="showPage('centers')" class="text-xs text-primary hover:underline">센터 보기</button>
+          </div>
+          <div id="ov-center-issues" class="space-y-1.5 text-sm"></div>
+        </div>
+
+        <!-- Panel 4: 내 업무 목록 -->
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-green-600 text-base">checklist</span>내 업무 목록</h2>
+            <button onclick="showPage('dashboard')" class="text-xs text-primary hover:underline">전체 보기</button>
+          </div>
+          <div id="ov-my-tasks" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
+        </div>
+
+        <!-- Panel 5: 개인 메모장 -->
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5 flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-yellow-500 text-base">sticky_note_2</span>개인 메모장</h2>
+            <span class="text-xs text-secondary" id="memo-saved-indicator"></span>
+          </div>
+          <textarea id="personal-memo" rows="6" class="flex-1 w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none text-on-surface placeholder:text-secondary" placeholder="개인 메모를 입력하세요... (자동 저장)" oninput="scheduleMemoSave()"></textarea>
+        </div>
+
+        <!-- Panel 6: 오늘 일정 -->
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-blue-500 text-base">calendar_today</span>오늘 일정</h2>
+            <button onclick="showPage('weekly')" class="text-xs text-primary hover:underline">주간 보기</button>
+          </div>
+          <div id="ov-today-schedule" class="space-y-1.5 text-sm"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ====== PAGE: DASHBOARD ====== -->
+    <div id="page-dashboard" class="page">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">업무 현황 대시보드</h1>
+          <p class="text-sm text-secondary mt-0.5" id="today-date"></p>
+        </div>
+        <button onclick="openAddTaskModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
+          <span class="material-symbols-outlined text-base">add</span> 새 업무 추가
+        </button>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="summary-cards"></div>
+
+      <!-- Filter row -->
+      <div class="bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden">
+        <div class="flex items-center justify-between p-4 border-b border-outline-variant flex-wrap gap-3">
+          <div class="flex gap-2 flex-wrap" id="status-filters">
+            <button class="filter-btn active px-4 py-1.5 rounded-full text-sm font-medium transition-all bg-primary text-white" data-filter="all" onclick="filterTasks('all')">전체</button>
+            <button class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary" data-filter="완료" onclick="filterTasks('완료')">완료</button>
+            <button class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary" data-filter="진행중" onclick="filterTasks('진행중')">진행중</button>
+            <button class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary" data-filter="지연" onclick="filterTasks('지연')">지연</button>
+            <button class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary" data-filter="대기" onclick="filterTasks('대기')">대기</button>
+          </div>
+          <div class="flex gap-2">
+            <select onchange="filterByAssignee(this.value)" class="border border-outline-variant rounded-lg px-3 py-1.5 text-sm text-secondary bg-white">
+              <option value="">담당자 (전체)</option>
+            </select>
+            <select onchange="filterByPriority(this.value)" class="border border-outline-variant rounded-lg px-3 py-1.5 text-sm text-secondary bg-white">
+              <option value="">우선순위 (전체)</option>
+              <option value="높음">높음</option>
+              <option value="보통">보통</option>
+              <option value="낮음">낮음</option>
+            </select>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-slate-50 text-xs uppercase text-secondary font-semibold">
+                <th class="px-4 py-3 text-left w-12">NO.</th>
+                <th class="px-4 py-3 text-left">업무명</th>
+                <th class="px-4 py-3 text-left">담당자</th>
+                <th class="px-4 py-3 text-left">우선순위</th>
+                <th class="px-4 py-3 text-left">마감일</th>
+                <th class="px-4 py-3 text-left">상태</th>
+                <th class="px-4 py-3 text-left w-20">관리</th>
+              </tr>
+            </thead>
+            <tbody id="task-table-body"></tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between px-4 py-3 border-t border-outline-variant text-xs text-secondary">
+          <span id="task-count-info"></span>
+          <div class="flex gap-1" id="pagination"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== PAGE: CALENDAR ====== -->
+    <div id="page-calendar" class="page">
+      <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">팀 일정 캘린더</h1>
+        <button onclick="openAddEventModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
+          <span class="material-symbols-outlined text-base">add</span> 일정 추가
+        </button>
+      </div>
+      <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-6">
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center gap-4">
+            <button onclick="changeMonth(-1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">chevron_left</span></button>
+            <h2 class="text-xl font-bold text-on-surface" id="cal-month-label" style="font-family:'Hanken Grotesk'"></h2>
+            <button onclick="changeMonth(1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">chevron_right</span></button>
+            <button onclick="goToToday()" class="px-3 py-1 border border-outline-variant rounded-lg text-sm text-secondary hover:bg-surface-container">오늘</button>
+          </div>
+          <div class="flex gap-4 text-xs text-secondary">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm inline-block" style="background:#fee2e2"></span>휴무</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm inline-block" style="background:#dbeafe"></span>출장/외근</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm inline-block" style="background:#fef9c3"></span>미팅/회의</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm inline-block" style="background:#ede9fe"></span>기타</span>
+          </div>
+        </div>
+        <div class="grid grid-cols-7 text-center text-xs font-semibold text-secondary mb-1">
+          <div class="py-2 text-red-500">일</div><div class="py-2">월</div><div class="py-2">화</div>
+          <div class="py-2">수</div><div class="py-2">목</div><div class="py-2">금</div>
+          <div class="py-2 text-blue-500">토</div>
+        </div>
+        <div class="grid grid-cols-7 border-l border-t border-outline-variant" id="cal-grid"></div>
+      </div>
+    </div>
+
+    <!-- ====== PAGE: WEEKLY ====== -->
+    <div id="page-weekly" class="page">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">주간 출장/휴가 현황</h1>
+          <p class="text-sm text-secondary mt-0.5" id="weekly-range-label"></p>
+        </div>
+        <button onclick="openAddEventModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
+          <span class="material-symbols-outlined text-base">add</span> 일정 추가
+        </button>
+      </div>
+      <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-4">
+        <div class="flex items-center gap-3 mb-4 flex-wrap">
+          <button onclick="changeWeek(-1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">chevron_left</span></button>
+          <button onclick="changeWeek(1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">chevron_right</span></button>
+          <button onclick="goToThisWeek()" class="px-3 py-1 border border-outline-variant rounded-lg text-sm text-secondary hover:bg-surface-container">이번 주</button>
+          <div class="flex gap-3 text-xs text-secondary ml-2">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm inline-block" style="background:#fee2e2"></span>휴무</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm inline-block" style="background:#dbeafe"></span>출장/외근</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm inline-block" style="background:#fef9c3"></span>미팅/회의</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm inline-block" style="background:#ede9fe"></span>기타</span>
+          </div>
+        </div>
+        <div class="overflow-x-auto" id="weekly-content"></div>
+      </div>
+    </div>
+
+    <!-- ====== PAGE: TEAM ====== -->
+    <div id="page-team" class="page">
+      <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">팀원 목록</h1>
+        <button onclick="openAddMemberModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
+          <span class="material-symbols-outlined text-base">person_add</span> 팀원 추가
+        </button>
+      </div>
+      <div class="bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-outline-variant">
+          <div class="flex gap-2 flex-wrap mb-2" id="member-part-filters">
+            <button class="chip active !bg-primary !text-white !border-primary" data-part="all" onclick="filterMembersByPart('all')">전체 파트</button>
+            <button class="chip" data-part="W파트" onclick="filterMembersByPart('W파트')">W파트</button>
+            <button class="chip" data-part="U파트" onclick="filterMembersByPart('U파트')">U파트</button>
+            <button class="chip" data-part="KAM파트" onclick="filterMembersByPart('KAM파트')">KAM파트</button>
+          </div>
+          <div class="flex gap-2 flex-wrap" id="member-status-filters">
+            <button class="chip active !bg-primary !text-white !border-primary" data-filter="all" onclick="filterMembers('all')">전체</button>
+            <button class="chip" data-filter="온라인" onclick="filterMembers('온라인')">온라인</button>
+            <button class="chip" data-filter="자리비움" onclick="filterMembers('자리비움')">자리비움</button>
+            <button class="chip" data-filter="휴가" onclick="filterMembers('휴가')">휴가</button>
+          </div>
+        </div>
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 text-xs uppercase text-secondary font-semibold">
+              <th class="px-4 py-3 text-left">이름</th>
+              <th class="px-4 py-3 text-left">직급</th>
+              <th class="px-4 py-3 text-left">파트</th>
+              <th class="px-4 py-3 text-left">담당 센터</th>
+              <th class="px-4 py-3 text-left">이메일</th>
+              <th class="px-4 py-3 text-left">상태</th>
+              <th class="px-4 py-3 text-left">진행 업무</th>
+              <th class="px-4 py-3 text-left w-20">관리</th>
+            </tr>
+          </thead>
+          <tbody id="team-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ====== PAGE: CENTERS ====== -->
+    <div id="page-centers" class="page">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">센터별 현황</h1>
+          <p class="text-sm text-secondary mt-0.5">관리 센터의 이슈 및 특이사항을 관리합니다</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="openAddCenterModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
+            <span class="material-symbols-outlined text-base">add_location</span> 센터 추가
+          </button>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Center list -->
+        <div class="lg:col-span-1 bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-outline-variant">
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm">search</span>
+              <input type="text" placeholder="센터 검색..." class="pl-9 pr-4 py-1.5 bg-surface-container border border-outline-variant rounded-lg text-sm w-full" oninput="searchCenters(this.value)">
+            </div>
+          </div>
+          <div class="overflow-y-auto" style="max-height:600px;" id="center-list"></div>
+        </div>
+        <!-- Center detail -->
+        <div class="lg:col-span-2" id="center-detail">
+          <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-8 flex flex-col items-center justify-center text-center" style="min-height:400px;">
+            <span class="material-symbols-outlined text-5xl text-secondary mb-3">apartment</span>
+            <p class="text-secondary text-sm">센터를 선택하면 상세 정보가 표시됩니다</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== PAGE: SETTINGS ====== -->
+    <div id="page-settings" class="page">
+      <h1 class="text-2xl font-bold text-on-surface mb-6" style="font-family:'Hanken Grotesk'">설정</h1>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-6">
+          <h3 class="font-bold text-on-surface mb-4 flex items-center gap-2"><span class="material-symbols-outlined text-primary text-base">person</span> 내 프로필</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-secondary mb-1.5">이름</label>
+              <input type="text" id="my-name" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="이름 입력">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-secondary mb-1.5">이메일</label>
+              <input type="email" id="my-email" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="이메일 입력">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-secondary mb-1.5">직급</label>
+              <input type="text" id="my-rank" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="직급 입력">
+            </div>
+            <button onclick="saveProfile()" class="w-full bg-primary text-white py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all">저장</button>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-6">
+          <h3 class="font-bold text-on-surface mb-4 flex items-center gap-2"><span class="material-symbols-outlined text-primary text-base">notifications</span> 알림 설정</h3>
+          <div class="space-y-4">
+            <label class="flex items-center justify-between cursor-pointer">
+              <span class="text-sm text-on-surface">지연 업무 알림</span>
+              <input type="checkbox" class="w-4 h-4 accent-primary" checked id="notif-delayed">
+            </label>
+            <label class="flex items-center justify-between cursor-pointer">
+              <span class="text-sm text-on-surface">마감일 알림 (D-1)</span>
+              <input type="checkbox" class="w-4 h-4 accent-primary" checked id="notif-deadline">
+            </label>
+            <label class="flex items-center justify-between cursor-pointer">
+              <span class="text-sm text-on-surface">센터 이슈 알림</span>
+              <input type="checkbox" class="w-4 h-4 accent-primary" id="notif-center">
+            </label>
+            <div class="pt-2 border-t border-outline-variant">
+              <p class="text-xs text-secondary mb-2">Webex 연동</p>
+              <input type="text" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm mb-2" placeholder="Webex Webhook URL (추후 설정)" disabled>
+              <p class="text-xs text-secondary">Outlook/Webex 연동은 IT 관리자에게 문의하세요</p>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-6">
+          <h3 class="font-bold text-on-surface mb-4 flex items-center gap-2"><span class="material-symbols-outlined text-primary text-base">lock</span> 비밀번호 변경</h3>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-semibold text-secondary mb-1.5">현재 비밀번호</label>
+              <input type="password" id="pw-current" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="현재 비밀번호">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-secondary mb-1.5">새 비밀번호</label>
+              <input type="password" id="pw-new" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="새 비밀번호 (4자 이상)">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-secondary mb-1.5">새 비밀번호 확인</label>
+              <input type="password" id="pw-new-confirm" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="새 비밀번호 재입력">
+            </div>
+            <p id="pw-change-msg" class="text-xs hidden"></p>
+            <button onclick="changePassword()" class="w-full bg-primary text-white py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all">비밀번호 변경</button>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-6 md:col-span-2">
+          <h3 class="font-bold text-on-surface mb-4 flex items-center gap-2"><span class="material-symbols-outlined text-primary text-base">data_usage</span> 데이터 관리</h3>
+          <div class="flex gap-3 flex-wrap">
+            <button onclick="exportData()" class="flex items-center gap-2 border border-outline-variant rounded-lg px-4 py-2 text-sm text-secondary hover:bg-surface-container">
+              <span class="material-symbols-outlined text-base">download</span> 데이터 내보내기 (JSON)
+            </button>
+            <button onclick="document.getElementById('import-file').click()" class="flex items-center gap-2 border border-outline-variant rounded-lg px-4 py-2 text-sm text-secondary hover:bg-surface-container">
+              <span class="material-symbols-outlined text-base">upload</span> 데이터 가져오기
+            </button>
+            <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(event)">
+            <button onclick="if(confirm('모든 데이터를 초기화하겠습니까?')){resetData()}" class="flex items-center gap-2 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+              <span class="material-symbols-outlined text-base">delete_forever</span> 데이터 초기화
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ===== NOTIFICATION PANEL ===== -->
+<div id="notif-overlay" onclick="toggleNotifPanel()"></div>
+<div id="notif-panel">
+  <div class="px-5 py-4 border-b border-outline-variant flex items-center justify-between flex-shrink-0">
+    <h3 class="font-bold text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-primary text-base">notifications</span> 알림</h3>
+    <button onclick="toggleNotifPanel()" class="p-1 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined text-sm">close</span></button>
+  </div>
+  <div id="notif-content" class="flex-1 overflow-y-auto"></div>
+</div>
+
+<!-- ===== AI CHATBOT ===== -->
+<div id="chatbot-panel">
+  <div id="chat-window" class="chat-window hidden flex-col">
+    <div class="px-4 py-3 bg-primary flex items-center justify-between flex-shrink-0">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-white text-base fill-icon">smart_toy</span>
+        <div>
+          <div class="text-white font-semibold text-sm">AI 어시스턴트</div>
+          <div class="text-blue-200 text-xs">온라인 · 무엇이든 물어보세요</div>
+        </div>
+      </div>
+      <div class="flex gap-1">
+        <button onclick="clearChat()" class="text-white hover:bg-blue-700 p-1 rounded" title="대화 초기화"><span class="material-symbols-outlined text-base">restart_alt</span></button>
+        <button onclick="toggleChat()" class="text-white hover:bg-blue-700 p-1 rounded"><span class="material-symbols-outlined text-base">close</span></button>
+      </div>
+    </div>
+    <div id="chat-messages" class="flex-1 overflow-y-auto p-4 flex flex-col gap-3"></div>
+    <div class="p-3 border-t border-outline-variant flex-shrink-0">
+      <div class="flex flex-wrap gap-1.5 mb-2" id="quick-chips"></div>
+      <div class="flex gap-2">
+        <input type="text" id="chat-input" placeholder="메시지를 입력하세요..." class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')sendChat()">
+        <button onclick="sendChat()" class="bg-primary text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-all">
+          <span class="material-symbols-outlined text-base">send</span>
+        </button>
+      </div>
+      <p class="text-xs text-secondary mt-1.5 text-center">AI는 실수할 수 있으므로 중요한 정보는 확인해 주세요</p>
+    </div>
+  </div>
+  <button onclick="toggleChat()" id="chat-toggle-btn" class="bg-primary text-white p-3.5 rounded-full shadow-lg hover:bg-blue-700 transition-all relative">
+    <span class="material-symbols-outlined">chat</span>
+    <span class="notif-badge"></span>
+  </button>
+</div>
+
+<!-- ===== MODALS ===== -->
+<!-- Add Task Modal -->
+<div id="modal-add-task" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="task-modal-title">새 업무 추가</h3>
+      <button onclick="document.getElementById('modal-add-task').classList.add('hidden')" class="text-secondary hover:text-on-surface p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="space-y-4">
+      <input type="hidden" id="editing-task-id">
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">업무명 *</label>
+        <input type="text" id="task-name" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="업무명을 입력하세요">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">담당자 * <span class="font-normal text-secondary">(Ctrl+클릭으로 복수 선택)</span></label>
+          <div class="flex gap-1.5 flex-wrap mb-1.5">
+            <button type="button" id="btn-taskpart-W" onclick="selectTaskPart('W파트')" class="text-xs px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 text-blue-700">W파트 전체</button>
+            <button type="button" id="btn-taskpart-U" onclick="selectTaskPart('U파트')" class="text-xs px-2 py-1 rounded border border-green-200 hover:bg-green-50 text-green-700">U파트 전체</button>
+            <button type="button" id="btn-taskpart-KAM" onclick="selectTaskPart('KAM파트')" class="text-xs px-2 py-1 rounded border border-purple-200 hover:bg-purple-50 text-purple-700">KAM파트 전체</button>
+          </div>
+          <select id="task-assignee" multiple class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white" style="height:110px" onchange="updateTaskPartBtns()"></select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">상태</label>
+          <select id="task-status" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="대기">대기</option>
+            <option value="진행중">진행중</option>
+            <option value="완료">완료</option>
+            <option value="지연">지연</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">우선순위</label>
+          <select id="task-priority" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="높음">🔴 높음</option>
+            <option value="보통" selected>🟡 보통</option>
+            <option value="낮음">🟢 낮음</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">마감일</label>
+          <input type="date" id="task-deadline" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">관련 센터 <span class="font-normal text-secondary">(선택)</span></label>
+        <select id="task-center" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+          <option value="">없음</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">상세 내용</label>
+        <textarea id="task-desc" rows="3" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none" placeholder="업무 상세 내용을 입력하세요..."></textarea>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-6">
+      <button onclick="document.getElementById('modal-add-task').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2.5 text-sm text-secondary hover:bg-surface-container transition-all">취소</button>
+      <button onclick="saveTask()" class="flex-1 bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700 transition-all">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Task Detail Modal -->
+<div id="modal-task-detail" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:640px;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="detail-task-name"></h3>
+      <div class="flex gap-2">
+        <button onclick="editTask(currentDetailTaskId)" class="flex items-center gap-1 text-sm text-secondary border border-outline-variant rounded-lg px-3 py-1.5 hover:bg-surface-container"><span class="material-symbols-outlined text-sm">edit</span>수정</button>
+        <button onclick="document.getElementById('modal-task-detail').classList.add('hidden')" class="p-1 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">close</span></button>
+      </div>
+    </div>
+    <div id="detail-content"></div>
+    <div class="mt-5 border-t border-outline-variant pt-4">
+      <h4 class="text-sm font-semibold text-on-surface mb-3 flex items-center gap-1.5"><span class="material-symbols-outlined text-sm text-secondary">comment</span>댓글</h4>
+      <div id="detail-comments" class="space-y-3 mb-3 max-h-40 overflow-y-auto"></div>
+      <div class="flex gap-2">
+        <input type="text" id="comment-input" placeholder="댓글을 입력하세요..." class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')addComment()">
+        <button onclick="addComment()" class="bg-primary text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"><span class="material-symbols-outlined text-sm">send</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Event Detail Modal -->
+<div id="modal-event-detail" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:420px;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-on-surface" id="ev-detail-title" style="font-family:'Hanken Grotesk'"></h3>
+      <button onclick="document.getElementById('modal-event-detail').classList.add('hidden')" class="p-1 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <input type="hidden" id="ev-detail-id">
+    <div id="ev-detail-content"></div>
+    <div class="flex gap-3 mt-6">
+      <button onclick="deleteEvent(parseInt(document.getElementById('ev-detail-id').value))" class="flex items-center gap-1.5 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-500 hover:bg-red-50"><span class="material-symbols-outlined text-sm">delete</span>삭제</button>
+      <button onclick="openEditEventModal(parseInt(document.getElementById('ev-detail-id').value))" class="flex-1 bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700 flex items-center justify-center gap-1"><span class="material-symbols-outlined text-sm">edit</span>수정</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Event Modal -->
+<div id="modal-add-event" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:460px;">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="event-modal-title">일정 추가</h3>
+      <button onclick="document.getElementById('modal-add-event').classList.add('hidden')" class="text-secondary hover:text-on-surface p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="space-y-4">
+      <input type="hidden" id="editing-event-id">
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">제목 *</label>
+        <input type="text" id="event-title" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="일정 제목">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">시작일 *</label>
+          <input type="date" id="event-date" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">종료일 <span class="font-normal text-secondary">(다일 경우)</span></label>
+          <input type="date" id="event-date-end" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">담당자 <span class="font-normal text-secondary">(Ctrl+클릭으로 복수 선택)</span></label>
+        <div class="flex gap-1.5 flex-wrap mb-1.5">
+          <button type="button" onclick="selectEventPart('all')" class="text-xs px-2 py-1 rounded border border-outline-variant hover:bg-surface-container text-secondary">팀 전체</button>
+          <button type="button" onclick="selectEventPart('W파트')" class="text-xs px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 text-blue-700">W파트</button>
+          <button type="button" onclick="selectEventPart('U파트')" class="text-xs px-2 py-1 rounded border border-green-200 hover:bg-green-50 text-green-700">U파트</button>
+          <button type="button" onclick="selectEventPart('KAM파트')" class="text-xs px-2 py-1 rounded border border-purple-200 hover:bg-purple-50 text-purple-700">KAM파트</button>
+        </div>
+        <select id="event-person" multiple class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white" style="height:110px"></select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">유형</label>
+        <div class="flex gap-2 flex-wrap">
+          <label class="chip cursor-pointer"><input type="radio" name="event-type" value="휴무" class="hidden"> <span>🔴 휴무</span></label>
+          <label class="chip cursor-pointer"><input type="radio" name="event-type" value="출장" class="hidden"> <span>🔵 출장/외근</span></label>
+          <label class="chip cursor-pointer"><input type="radio" name="event-type" value="미팅" class="hidden"> <span>🟡 미팅/회의</span></label>
+          <label class="chip cursor-pointer"><input type="radio" name="event-type" value="기타" class="hidden"> <span>🟣 기타</span></label>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">메모</label>
+        <input type="text" id="event-memo" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="추가 메모">
+      </div>
+    </div>
+    <div class="flex gap-3 mt-6">
+      <button onclick="document.getElementById('modal-add-event').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2.5 text-sm text-secondary hover:bg-surface-container">취소</button>
+      <button onclick="saveEvent()" class="flex-1 bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Member Modal -->
+<div id="modal-add-member" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:460px;">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="member-modal-title">팀원 추가</h3>
+      <button onclick="document.getElementById('modal-add-member').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="space-y-4">
+      <input type="hidden" id="editing-member-id">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">이름 *</label>
+          <input type="text" id="member-name" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="홍길동">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">직급</label>
+          <input type="text" id="member-rank" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="과장">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">이메일</label>
+        <input type="email" id="member-email" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="hong@company.com">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">담당 센터</label>
+        <input type="text" id="member-center" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="담당 센터명">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">상태</label>
+        <select id="member-status" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+          <option value="온라인">온라인</option>
+          <option value="자리비움">자리비움</option>
+          <option value="휴가">휴가 중</option>
+          <option value="미팅중">미팅 중</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">파트</label>
+        <select id="member-part" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+          <option value="">없음</option>
+          <option value="W파트">W파트</option>
+          <option value="U파트">U파트</option>
+          <option value="KAM파트">KAM파트</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-6">
+      <button onclick="document.getElementById('modal-add-member').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2.5 text-sm text-secondary hover:bg-surface-container">취소</button>
+      <button onclick="saveMember()" class="flex-1 bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Center Modal -->
+<div id="modal-add-center" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:500px;">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="center-modal-title">센터 추가</h3>
+      <button onclick="document.getElementById('modal-add-center').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="space-y-4">
+      <input type="hidden" id="editing-center-id">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">센터명 *</label>
+          <input type="text" id="center-name" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="OO 센터">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">센터 코드</label>
+          <input type="text" id="center-code" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="W-OO-01">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">주소</label>
+        <input type="text" id="center-address" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="센터 주소">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">본사 담당자</label>
+          <select id="center-manager" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white"></select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">상태</label>
+          <select id="center-status" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="정상">정상 가동</option>
+            <option value="이슈">이슈 발생</option>
+            <option value="점검">점검 중</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">특이사항/이슈</label>
+        <textarea id="center-issue" rows="2" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none" placeholder="현재 이슈나 특이사항을 입력하세요..."></textarea>
+      </div>
+      <div class="border-t border-outline-variant pt-4">
+        <p class="text-xs font-bold text-secondary mb-2">센터장 정보</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-secondary mb-1.5">센터장 이름</label>
+            <input type="text" id="center-director-name" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="홍길동">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-secondary mb-1.5">연락처</label>
+            <input type="text" id="center-director-phone" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="010-0000-0000">
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-outline-variant pt-4">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs font-bold text-secondary">센터원</p>
+          <button type="button" onclick="addStaffRow()" class="text-xs text-primary font-semibold hover:underline">+ 추가</button>
+        </div>
+        <div id="staff-list" class="space-y-2"></div>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-6">
+      <button onclick="document.getElementById('modal-add-center').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2.5 text-sm text-secondary hover:bg-surface-container">취소</button>
+      <button onclick="saveCenter()" class="flex-1 bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Member Tasks Modal -->
+<div id="modal-member-tasks" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:560px;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-on-surface" id="member-tasks-title" style="font-family:'Hanken Grotesk'"></h3>
+      <button onclick="document.getElementById('modal-member-tasks').classList.add('hidden')" class="p-1 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div id="member-tasks-list"></div>
+  </div>
+</div>
+
+<!-- Add Notice Modal -->
+<div id="modal-add-notice" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:480px;">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'">공지사항 작성</h3>
+      <button onclick="document.getElementById('modal-add-notice').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">제목 *</label>
+        <input type="text" id="notice-title" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="공지 제목을 입력하세요">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">내용 *</label>
+        <textarea id="notice-content" rows="4" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none" placeholder="공지 내용을 입력하세요..."></textarea>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="document.getElementById('modal-add-notice').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2.5 text-sm text-secondary hover:bg-surface-container">취소</button>
+      <button onclick="saveNotice()" class="flex-1 bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700">등록</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-500 hidden">
+  <div class="bg-on-surface text-white px-5 py-3 rounded-full text-sm font-medium shadow-xl flex items-center gap-2">
+    <span class="material-symbols-outlined text-base text-green-400">check_circle</span>
+    <span id="toast-msg"></span>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  FIREBASE INIT
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBnnhjxj9iP2rl1n6W1xpjuo-Gni-_6o6M",
+  authDomain: "wv-team-tool.firebaseapp.com",
+  projectId: "wv-team-tool",
+  storageBucket: "wv-team-tool.firebasestorage.app",
+  messagingSenderId: "797604058348",
+  appId: "1:797604058348:web:27437f4f4dc0d9371381c9"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+db.enablePersistence().catch(err => {
+  if (err.code === 'failed-precondition') {
+    console.warn('Firestore 오프라인 지속성: 탭이 여러 개 열려 있으면 하나만 지원됩니다.');
+  } else if (err.code === 'unimplemented') {
+    console.warn('이 브라우저는 오프라인 지속성을 지원하지 않습니다.');
+  }
+});
+
+const FS_COLLS = ['tasks', 'members', 'centers', 'events', 'notices', 'users', 'memos'];
+
+// ============================================================
+//  DATA STORE (localStorage persistence)
+// ============================================================
+let DB = {
+  tasks: [],
+  members: [],
+  centers: [],
+  events: [],
+  users: [],
+  notices: [],
+  todos: [],
+  memos: [],
+  myProfile: { name: '나', email: '', rank: '' },
+};
+let currentUser = null;
+
+async function loadDB() {
+  try {
+    const snapshots = await Promise.all(
+      FS_COLLS.map(coll => db.collection(coll).get())
+    );
+    FS_COLLS.forEach((coll, i) => {
+      DB[coll] = snapshots[i].docs.map(d => d.data());
+    });
+  } catch(e) {
+    console.error('Firestore 로드 실패, 로컬 캐시 사용:', e);
+    const saved = localStorage.getItem('wvteam_db');
+    if (saved) { try { DB = JSON.parse(saved); } catch(e2) {} }
+  }
+}
+
+function saveDB() {
+  const ARRAY_COLLS = ['tasks', 'members', 'centers', 'events', 'notices', 'users', 'memos'];
+  const batch = db.batch();
+  ARRAY_COLLS.forEach(coll => {
+    if (!DB[coll] || !DB[coll].length) return;
+    DB[coll].forEach(item => {
+      const docId = String(item.id || item.memberId || item.userId);
+      if (!docId || docId === 'undefined') return;
+      batch.set(db.collection(coll).doc(docId), item);
+    });
+  });
+  batch.commit().catch(e => console.error('Firestore 저장 실패:', e));
+}
+
+// ============================================================
+//  REALTIME LISTENERS
+// ============================================================
+let activePage = 'overview';
+
+function refreshCurrentPage() {
+  if (activePage === 'overview') { try { renderOverview(); } catch(e) {} }
+  else if (activePage === 'dashboard') { try { renderDashboard(); } catch(e) {} }
+  else if (activePage === 'team') { try { renderTeam(); } catch(e) {} }
+  else if (activePage === 'centers') { try { renderCenters(); } catch(e) {} }
+  else if (activePage === 'calendar') { try { renderCalendar(); } catch(e) {} }
+  else if (activePage === 'weekly') { try { if(typeof renderWeekly === 'function') renderWeekly(); } catch(e) {} }
+  try { updateNotifBadge(); } catch(e) {}
+}
+
+function setupListeners() {
+  const LISTEN_COLLS = ['tasks', 'notices', 'users', 'events'];
+  LISTEN_COLLS.forEach(coll => {
+    db.collection(coll).onSnapshot(snapshot => {
+      DB[coll] = snapshot.docs.map(d => d.data());
+      if (currentUser) refreshCurrentPage();
+    }, err => console.error('onSnapshot 오류 (' + coll + '):', err));
+  });
+
+  db.collection('members').onSnapshot(snapshot => {
+    DB.members = snapshot.docs.map(d => d.data())
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+    if (currentUser) refreshCurrentPage();
+  }, err => console.error('onSnapshot 오류 (members):', err));
+
+  db.collection('centers').onSnapshot(snapshot => {
+    DB.centers = snapshot.docs.map(d => d.data())
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+    if (currentUser) refreshCurrentPage();
+  }, err => console.error('onSnapshot 오류 (centers):', err));
+}
+
+function initDemoData() {
+  DB.members = [
+    {id:1, name:'김철수', rank:'수석', email:'kim.cs@company.com', center:'덕평 센터', status:'온라인'},
+    {id:2, name:'이영희', rank:'과장', email:'lee.yh@company.com', center:'이천 센터', status:'미팅중'},
+    {id:3, name:'박지민', rank:'대리', email:'park.jm@company.com', center:'광주 센터', status:'자리비움'},
+    {id:4, name:'최유진', rank:'사원', email:'choi.yj@company.com', center:'부산 센터', status:'온라인'},
+    {id:5, name:'정호석', rank:'과장', email:'jung.hs@company.com', center:'대전 센터', status:'휴가'},
+    {id:6, name:'강민지', rank:'대리', email:'kang.mj@company.com', center:'인천 센터', status:'온라인'},
+    {id:7, name:'윤성훈', rank:'수석', email:'yoon.sh@company.com', center:'수원 센터', status:'온라인'},
+    {id:8, name:'임지수', rank:'사원', email:'lim.js@company.com', center:'성남 센터', status:'자리비움'},
+  ];
+
+  DB.tasks = [
+    {id:1, name:'서버 보안 패치 업데이트', assigneeId:1, status:'진행중', priority:'높음', deadline:'2024-11-15', desc:'시스템 안정성을 위해 주요 보안 취약점을 점검하고 최신 패치를 적용합니다.', comments:[]},
+    {id:2, name:'마케팅 캠페인 기획안 작성', assigneeId:2, status:'완료', priority:'보통', deadline:'2024-11-01', desc:'Q4 마케팅 방향 수립', comments:[]},
+    {id:3, name:'신규 API 문서화', assigneeId:3, status:'지연', priority:'높음', deadline:'2024-10-20', desc:'신규 서비스 API 연동 가이드 작성', comments:[{author:'이영희',text:'문서 검토 완료했습니다',time:'2024-10-19 14:30'}]},
+    {id:4, name:'연말 결산 보고서 준비', assigneeId:4, status:'진행중', priority:'낮음', deadline:'2024-12-15', desc:'연간 실적 취합 및 보고서 초안 작성', comments:[]},
+    {id:5, name:'UI 디자인 시스템 고도화', assigneeId:5, status:'완료', priority:'보통', deadline:'2024-10-28', desc:'컴포넌트 라이브러리 업데이트', comments:[]},
+    {id:6, name:'센터 현장 점검 보고', assigneeId:6, status:'대기', priority:'높음', deadline:'2024-11-20', desc:'월간 센터 운영 현황 점검', comments:[]},
+  ];
+
+  DB.centers = [
+    {id:1, name:'덕평 센터', code:'W-DKP-01', address:'경기도 이천시 덕평로 123', managerId:1, status:'정상', issue:'야간 파트타이머 충원율 85% — 단기 대책 수립 중', issues:[]},
+    {id:2, name:'이천 센터', code:'W-ICH-02', address:'경기도 이천시 중리동 456', managerId:2, status:'이슈', issue:'A동 컨베이어 벨트 정기점검 예정 (11/15)', issues:[]},
+    {id:3, name:'광주 센터', code:'W-GJU-03', address:'전라남도 광주시 서구 789', managerId:3, status:'정상', issue:'', issues:[]},
+    {id:4, name:'부산 센터', code:'W-BSN-04', address:'부산광역시 해운대구 101', managerId:4, status:'정상', issue:'', issues:[]},
+    {id:5, name:'대전 센터', code:'W-DJN-05', address:'대전광역시 유성구 202', managerId:5, status:'점검', issue:'소화 설비 정기 점검 중', issues:[]},
+    {id:6, name:'인천 센터', code:'W-ICN-06', address:'인천광역시 남동구 303', managerId:6, status:'정상', issue:'', issues:[]},
+    {id:7, name:'수원 센터', code:'W-SWN-07', address:'경기도 수원시 권선구 404', managerId:7, status:'정상', issue:'', issues:[]},
+    {id:8, name:'성남 센터', code:'W-SNG-08', address:'경기도 성남시 분당구 505', managerId:8, status:'이슈', issue:'주차장 CCTV 교체 작업 중', issues:[]},
+  ];
+
+  const today = new Date();
+  DB.events = [
+    {id:1, title:'이영희 팀장 부산출장', date:formatDate(new Date(today.getFullYear(), today.getMonth(), 5)), personId:2, type:'출장', memo:'부산센터 현장 방문'},
+    {id:2, title:'김철수 연차', date:formatDate(new Date(today.getFullYear(), today.getMonth(), 12)), personId:1, type:'휴무', memo:'연차'},
+    {id:3, title:'박지민 교육', date:formatDate(new Date(today.getFullYear(), today.getMonth(), 14)), personId:3, type:'기타', memo:'외부 교육 14:00-18:00'},
+    {id:4, title:'팀 월례 미팅', date:formatDate(new Date(today.getFullYear(), today.getMonth(), 20)), personId:0, type:'미팅', memo:'전체 팀원'},
+  ];
+  saveDB();
+}
+
+function getAssigneeIds(t) { return t.assigneeIds || (t.assigneeId ? [t.assigneeId] : []); }
+function getEventPersonIds(e) { if (e.personIds && e.personIds.length) return e.personIds; if (e.personId && e.personId !== 0) return [e.personId]; return []; }
+function isTeamEvent(e) { return getEventPersonIds(e).length === 0; }
+function populateEventPersonSelect(sel, selectedIds) {
+  const parts = ['W파트','U파트','KAM파트'];
+  let html = '<option value="0">팀 전체</option>';
+  parts.forEach(p => {
+    const ms = DB.members.filter(m => m.part === p);
+    if (!ms.length) return;
+    html += `<optgroup label="${p}">${ms.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`;
+  });
+  const others = DB.members.filter(m => !m.part);
+  if (others.length) html += `<optgroup label="기타">${others.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`;
+  sel.innerHTML = html;
+  if (selectedIds && selectedIds.length) {
+    [...sel.options].forEach(o => { o.selected = selectedIds.map(String).includes(o.value); });
+  }
+}
+function selectEventPart(part) {
+  const sel = document.getElementById('event-person');
+  [...sel.options].forEach(o => o.selected = false);
+  if (part === 'all') { sel.options[0].selected = true; return; }
+  const ids = DB.members.filter(m => m.part === part).map(m => String(m.id));
+  [...sel.options].forEach(o => { if (ids.includes(o.value)) o.selected = true; });
+}
+
+function selectTaskPart(part) {
+  const sel = document.getElementById('task-assignee');
+  [...sel.options].forEach(o => o.selected = false);
+  const ids = DB.members.filter(m => m.part === part).map(m => String(m.id));
+  [...sel.options].forEach(o => { if (ids.includes(o.value)) o.selected = true; });
+  updateTaskPartBtns();
+}
+
+function updateTaskPartBtns() {
+  const sel = document.getElementById('task-assignee');
+  if (!sel) return;
+  const selected = new Set([...sel.selectedOptions].map(o => o.value));
+  const cfg = [
+    {part:'W파트', id:'btn-taskpart-W', active:'text-xs px-2 py-1 rounded border bg-blue-600 text-white border-blue-600 font-semibold', inactive:'text-xs px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 text-blue-700'},
+    {part:'U파트', id:'btn-taskpart-U', active:'text-xs px-2 py-1 rounded border bg-green-600 text-white border-green-600 font-semibold', inactive:'text-xs px-2 py-1 rounded border border-green-200 hover:bg-green-50 text-green-700'},
+    {part:'KAM파트', id:'btn-taskpart-KAM', active:'text-xs px-2 py-1 rounded border bg-purple-600 text-white border-purple-600 font-semibold', inactive:'text-xs px-2 py-1 rounded border border-purple-200 hover:bg-purple-50 text-purple-700'},
+  ];
+  cfg.forEach(({part, id, active, inactive}) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const memberIds = DB.members.filter(m => m.part === part).map(m => String(m.id));
+    const allActive = memberIds.length > 0 && memberIds.every(id => selected.has(id));
+    btn.className = allActive ? active : inactive;
+  });
+}
+
+function formatDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ============================================================
+//  NAVIGATION
+// ============================================================
+function showPage(name) {
+  activePage = name;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  const navEl = document.getElementById('nav-' + name);
+  if (navEl) navEl.classList.add('active');
+  if (name === 'overview') renderOverview();
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'calendar') renderCalendar();
+  if (name === 'weekly') renderWeekly();
+  if (name === 'team') renderTeam();
+  if (name === 'centers') renderCenters();
+  if (name === 'settings') loadSettings();
+}
+
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebar-overlay');
+  const isOpen = sb.classList.contains('open');
+  sb.classList.toggle('open');
+  ov.style.display = isOpen ? 'none' : 'block';
+}
+
+// ============================================================
+//  DASHBOARD
+// ============================================================
+let currentFilter = 'all';
+let assigneeFilter = '';
+let priorityFilter = '';
+let currentPage = 1;
+const PAGE_SIZE = 8;
+
+function renderDashboard() {
+  // Today's date
+  const now = new Date();
+  document.getElementById('today-date').textContent = now.toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric', weekday:'long'});
+
+  // Summary cards
+  const total = DB.tasks.length;
+  const completed = DB.tasks.filter(t=>t.status==='완료').length;
+  const delayed = DB.tasks.filter(t=>t.status==='지연').length;
+  const urgent = DB.tasks.filter(t=>t.priority==='높음' && t.status!=='완료').length;
+  const pct = total ? Math.round(completed/total*100) : 0;
+
+  document.getElementById('summary-cards').innerHTML = `
+    <div class="stat-card">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold text-secondary uppercase">전체 업무</span>
+        <span class="material-symbols-outlined text-primary">work</span>
+      </div>
+      <div class="text-3xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">${total} <span class="text-base font-medium text-secondary">건</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold text-secondary uppercase">완료율</span>
+        <span class="material-symbols-outlined text-green-600">check_circle</span>
+      </div>
+      <div class="text-3xl font-bold text-green-600" style="font-family:'Hanken Grotesk'">${pct}<span class="text-base font-medium">%</span></div>
+      <div class="text-xs text-secondary mt-1">${completed}건 완료</div>
+    </div>
+    <div class="stat-card">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold text-secondary uppercase">긴급 건수</span>
+        <span class="material-symbols-outlined text-red-500">warning</span>
+      </div>
+      <div class="text-3xl font-bold text-red-500" style="font-family:'Hanken Grotesk'">${urgent} <span class="text-base font-medium text-secondary">건</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold text-secondary uppercase">지연</span>
+        <span class="material-symbols-outlined text-orange-500">schedule</span>
+      </div>
+      <div class="text-3xl font-bold text-orange-500" style="font-family:'Hanken Grotesk'">${delayed} <span class="text-base font-medium text-secondary">건</span></div>
+    </div>
+  `;
+
+  // Populate assignee filter
+  const assigneeSelect = document.querySelector('select[onchange="filterByAssignee(this.value)"]');
+  if (assigneeSelect) {
+    assigneeSelect.innerHTML = '<option value="">담당자 (전체)</option>' +
+      DB.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+    if (assigneeFilter) assigneeSelect.value = assigneeFilter;
+  }
+
+  renderTaskTable();
+}
+
+function checkOverdueTasks() {
+  const today = formatDate(new Date());
+  DB.tasks.forEach(t => {
+    if (t.deadline && t.deadline < today && t.status !== '완료' && t.status !== '지연') {
+      t.status = '지연';
+      t.updatedAt = Date.now();
+      db.collection('tasks').doc(String(t.id)).update({ status: '지연', updatedAt: t.updatedAt }).catch(()=>{});
+    }
+  });
+}
+
+function getFilteredTasks() {
+  return DB.tasks
+    .filter(t => {
+      if (currentFilter !== 'all' && t.status !== currentFilter) return false;
+      if (assigneeFilter && !getAssigneeIds(t).map(String).includes(String(assigneeFilter))) return false;
+      if (priorityFilter && t.priority !== priorityFilter) return false;
+      return true;
+    })
+    .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+}
+
+function renderTaskTable() {
+  const filtered = getFilteredTasks();
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const paged = filtered.slice(start, start + PAGE_SIZE);
+
+  const tbody = document.getElementById('task-table-body');
+  if (!paged.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-12 text-secondary text-sm">업무가 없습니다.</td></tr>';
+  } else {
+    tbody.innerHTML = paged.map((t, i) => {
+      const assignees = getAssigneeIds(t).map(id => DB.members.find(m=>m.id===id)).filter(Boolean);
+      const member = assignees[0];
+      const assigneeLabel = assignees.length ? assignees.map(m=>m.name).join(', ') : '미배정';
+      const isOverdue = t.deadline && new Date(t.deadline) < new Date() && t.status !== '완료';
+      return `
+        <tr class="task-row border-b border-outline-variant" onclick="showTaskDetail(${t.id})">
+          <td class="px-4 py-3 text-secondary text-xs">${start + i + 1}</td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-2">
+              <div class="priority-bar h-8 ${t.priority==='높음'?'bg-red-400':t.priority==='낮음'?'bg-green-400':'bg-yellow-400'}"></div>
+              <span class="font-medium text-on-surface text-sm">${t.name}</span>${isNew(t)?'<span class="new-badge">NEW</span>':''}
+            </div>
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-2 flex-wrap">
+              ${assignees.length ? assignees.map(m=>`<div class="flex items-center gap-1"><div class="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${m.name[0]}</div><span class="text-sm">${m.name}</span></div>`).join('') : '<span class="text-sm text-secondary">미배정</span>'}
+            </div>
+          </td>
+          <td class="px-4 py-3">
+            <span class="text-xs px-2 py-0.5 rounded-full font-medium ${t.priority==='높음'?'badge-high':t.priority==='낮음'?'badge-low':'badge-normal'}">${t.priority}</span>
+          </td>
+          <td class="px-4 py-3 text-sm ${isOverdue?'text-red-500 font-medium':''}">${t.deadline || '-'}</td>
+          <td class="px-4 py-3">
+            <span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge(t.status)}">${t.status}</span>
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex gap-1">
+              <button onclick="event.stopPropagation();editTask(${t.id})" class="p-1 rounded hover:bg-surface-container text-secondary" title="수정"><span class="material-symbols-outlined text-sm">edit</span></button>
+              <button onclick="event.stopPropagation();deleteTask(${t.id})" class="p-1 rounded hover:bg-red-50 text-red-400" title="삭제"><span class="material-symbols-outlined text-sm">delete</span></button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // Count & pagination
+  document.getElementById('task-count-info').textContent = `총 ${filtered.length}건 중 ${start+1}-${Math.min(start+PAGE_SIZE, filtered.length)}건`;
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const pag = document.getElementById('pagination');
+  pag.innerHTML = '';
+  for (let p = 1; p <= totalPages; p++) {
+    const btn = document.createElement('button');
+    btn.textContent = p;
+    btn.className = `px-3 py-1 rounded text-sm font-medium transition-all ${p === currentPage ? 'bg-primary text-white' : 'border border-outline-variant text-secondary hover:bg-surface-container'}`;
+    btn.onclick = () => { currentPage = p; renderTaskTable(); };
+    pag.appendChild(btn);
+  }
+}
+
+function statusBadge(s) {
+  return s==='완료'?'badge-complete':s==='진행중'?'badge-progress':s==='지연'?'badge-delayed':'badge-pending';
+}
+
+function filterTasks(f) {
+  currentFilter = f; currentPage = 1;
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.className = b.dataset.filter === f
+      ? 'filter-btn active px-4 py-1.5 rounded-full text-sm font-medium transition-all bg-primary text-white'
+      : 'filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary';
+  });
+  renderTaskTable();
+}
+
+function filterByAssignee(v) { assigneeFilter = v; currentPage = 1; renderTaskTable(); }
+function filterByPriority(v) { priorityFilter = v; currentPage = 1; renderTaskTable(); }
+
+function openAddTaskModal(prefill) {
+  document.getElementById('editing-task-id').value = '';
+  document.getElementById('task-name').value = '';
+  document.getElementById('task-desc').value = '';
+  document.getElementById('task-deadline').value = '';
+  document.getElementById('task-status').value = '대기';
+  document.getElementById('task-priority').value = '보통';
+  document.getElementById('task-modal-title').textContent = '새 업무 추가';
+  // Populate assignee select grouped by part
+  const sel = document.getElementById('task-assignee');
+  const parts = ['W파트','U파트','KAM파트'];
+  const grouped = parts.map(p => {
+    const members = DB.members.filter(m => m.part === p);
+    if (!members.length) return '';
+    return `<optgroup label="${p}">${members.map(m => { const cnt = DB.tasks.filter(t=>getAssigneeIds(t).includes(m.id)&&t.status!=='완료').length; return `<option value="${m.id}">${m.name}${cnt?` (${cnt}건)`:''}`;}).join('')}</optgroup>`;
+  }).join('');
+  const noPart = DB.members.filter(m => !m.part);
+  const noPartHtml = noPart.length ? `<optgroup label="기타">${noPart.map(m => { const cnt = DB.tasks.filter(t=>getAssigneeIds(t).includes(m.id)&&t.status!=='완료').length; return `<option value="${m.id}">${m.name}${cnt?` (${cnt}건)`:''}`;}).join('')}</optgroup>` : '';
+  sel.innerHTML = grouped + noPartHtml;
+  // Populate center select
+  const cSel = document.getElementById('task-center');
+  cSel.innerHTML = '<option value="">없음</option>' + DB.centers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  updateTaskPartBtns();
+  document.getElementById('modal-add-task').classList.remove('hidden');
+}
+
+function editTask(id) {
+  const t = DB.tasks.find(t => t.id === id);
+  if (!t) return;
+  document.getElementById('modal-task-detail').classList.add('hidden');
+  document.getElementById('editing-task-id').value = id;
+  document.getElementById('task-name').value = t.name;
+  document.getElementById('task-desc').value = t.desc || '';
+  document.getElementById('task-deadline').value = t.deadline || '';
+  document.getElementById('task-status').value = t.status;
+  document.getElementById('task-priority').value = t.priority;
+  document.getElementById('task-modal-title').textContent = '업무 수정';
+  const sel = document.getElementById('task-assignee');
+  const parts2 = ['W파트','U파트','KAM파트'];
+  const grouped2 = parts2.map(p => { const ms = DB.members.filter(m=>m.part===p); if(!ms.length) return ''; return `<optgroup label="${p}">${ms.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`; }).join('');
+  const noPart2 = DB.members.filter(m=>!m.part);
+  sel.innerHTML = grouped2 + (noPart2.length?`<optgroup label="기타">${noPart2.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`:'');
+  const ids = getAssigneeIds(t);
+  [...sel.options].forEach(o => { o.selected = ids.includes(parseInt(o.value)); });
+  // Populate & restore center select
+  const cSel = document.getElementById('task-center');
+  cSel.innerHTML = '<option value="">없음</option>' + DB.centers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  cSel.value = t.centerId || '';
+  updateTaskPartBtns();
+  document.getElementById('modal-add-task').classList.remove('hidden');
+}
+
+function saveTask() {
+  const name = document.getElementById('task-name').value.trim();
+  if (!name) { alert('업무명을 입력하세요.'); return; }
+  const status = document.getElementById('task-status').value;
+  const priority = document.getElementById('task-priority').value;
+  const deadline = document.getElementById('task-deadline').value;
+  const desc = document.getElementById('task-desc').value.trim();
+  const centerId = parseInt(document.getElementById('task-center').value) || null;
+  const assigneeIds = [...document.getElementById('task-assignee').selectedOptions].map(o=>parseInt(o.value));
+  if (!assigneeIds.length) { alert('담당자를 선택하세요.'); return; }
+  const editId = document.getElementById('editing-task-id').value;
+  if (editId) {
+    const t = DB.tasks.find(t => t.id === parseInt(editId));
+    Object.assign(t, {name, assigneeIds, centerId, status, priority, deadline, desc, updatedAt: Date.now()});
+    showToast('업무가 수정되었습니다');
+  } else {
+    const dup = DB.tasks.find(t => t.name === name && t.status !== '완료' && getAssigneeIds(t).some(id => assigneeIds.includes(id)));
+    if (dup) { if (!confirm('동일한 담당자에게 같은 업무명이 이미 존재합니다.\n그래도 추가하겠습니까?')) return; }
+    DB.tasks.push({id: Date.now(), name, assigneeIds, centerId, status, priority, deadline, desc, comments:[], createdAt: Date.now(), updatedAt: Date.now()});
+    showToast('업무가 추가되었습니다');
+  }
+  saveDB();
+  document.getElementById('modal-add-task').classList.add('hidden');
+  renderDashboard();
+}
+
+function deleteTask(id) {
+  if (!confirm('이 업무를 삭제하겠습니까?')) return;
+  DB.tasks = DB.tasks.filter(t => t.id !== id);
+  saveDB();
+  renderDashboard();
+  showToast('업무가 삭제되었습니다');
+}
+
+let currentDetailTaskId = null;
+function showTaskDetail(id) {
+  const t = DB.tasks.find(t => t.id === id);
+  if (!t) return;
+  currentDetailTaskId = id;
+  const detailAssignees = getAssigneeIds(t).map(id=>DB.members.find(m=>m.id===id)).filter(Boolean);
+  document.getElementById('detail-task-name').textContent = t.name;
+  document.getElementById('detail-content').innerHTML = `
+    <div class="grid grid-cols-2 gap-4 mb-4 pb-4 border-b border-outline-variant">
+      <div><span class="text-xs text-secondary block mb-1">담당자</span>
+        <div class="flex flex-wrap gap-2">${detailAssignees.length ? detailAssignees.map(m=>`<div class="flex items-center gap-1.5"><div class="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">${m.name[0]}</div><span class="text-sm font-medium">${m.name}</span></div>`).join('') : '<span class="text-sm text-secondary">미배정</span>'}</div>
+      </div>
+      <div><span class="text-xs text-secondary block mb-1">상태</span><span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge(t.status)}">${t.status}</span></div>
+      <div><span class="text-xs text-secondary block mb-1">우선순위</span><span class="text-xs px-2 py-0.5 rounded-full font-medium ${t.priority==='높음'?'badge-high':t.priority==='낮음'?'badge-low':'badge-normal'}">${t.priority}</span></div>
+      <div><span class="text-xs text-secondary block mb-1">마감일</span><span class="text-sm">${t.deadline||'-'}</span></div>
+      ${t.centerId ? `<div class="col-span-2"><span class="text-xs text-secondary block mb-1">관련 센터</span><span class="text-sm font-medium flex items-center gap-1"><span class="material-symbols-outlined text-sm text-primary">location_on</span>${DB.centers.find(c=>c.id===t.centerId)?.name||'-'}</span></div>` : ''}
+    </div>
+    ${t.desc ? `<div class="mb-4 pb-4 border-b border-outline-variant"><p class="text-xs text-secondary mb-1">상세 내용</p><p class="text-sm text-on-surface leading-relaxed">${t.desc}</p></div>` : ''}
+  `;
+  renderComments(id);
+  document.getElementById('modal-task-detail').classList.remove('hidden');
+}
+
+function renderComments(taskId) {
+  const t = DB.tasks.find(t => t.id === taskId);
+  const el = document.getElementById('detail-comments');
+  if (!t || !t.comments.length) { el.innerHTML = '<p class="text-xs text-secondary">댓글이 없습니다.</p>'; return; }
+  el.innerHTML = t.comments.map(c => `
+    <div class="flex gap-2.5">
+      <div class="w-6 h-6 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center text-xs font-bold flex-shrink-0">${c.author[0]}</div>
+      <div><div class="flex items-center gap-2"><span class="text-xs font-semibold text-on-surface">${c.author}</span><span class="text-xs text-secondary">${c.time}</span></div>
+      <p class="text-xs text-on-surface mt-0.5">${c.text}</p></div>
+    </div>
+  `).join('');
+}
+
+function addComment() {
+  const t = DB.tasks.find(t => t.id === currentDetailTaskId);
+  const input = document.getElementById('comment-input');
+  const text = input.value.trim();
+  if (!t || !text) return;
+  const now = new Date();
+  const timeStr = now.toLocaleDateString('ko-KR') + ' ' + now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+  t.comments.push({author: DB.myProfile.name || '나', text, time: timeStr});
+  saveDB();
+  input.value = '';
+  renderComments(currentDetailTaskId);
+  updateNotifBadge();
+}
+
+// ============================================================
+//  CALENDAR
+// ============================================================
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+
+function renderCalendar() {
+  const d = new Date(calYear, calMonth, 1);
+  document.getElementById('cal-month-label').textContent = `${calYear}년 ${calMonth+1}월`;
+  const firstDay = d.getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const todayStr = formatDate(new Date());
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+  // 이전 달 날짜 채우기
+  const prevMonthDays = new Date(calYear, calMonth, 0).getDate();
+  for (let i = 0; i < firstDay; i++) {
+    const prevDay = prevMonthDays - firstDay + i + 1;
+    const prevY = calMonth === 0 ? calYear - 1 : calYear;
+    const prevM = calMonth === 0 ? 12 : calMonth;
+    const prevDateStr = `${prevY}-${String(prevM).padStart(2,'0')}-${String(prevDay).padStart(2,'0')}`;
+    const prevEvs = DB.events.filter(e => eventFallsOnDate(e, prevDateStr));
+    const isSun = i % 7 === 0; const isSat = i % 7 === 6;
+    const evHtml = prevEvs.map(e => {
+      const colors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 기타:'background:#ede9fe;color:#7c3aed'};
+      return `<div class="cal-event opacity-50" style="${colors[e.type]||colors['기타']}">${e.title}</div>`;
+    }).join('');
+    grid.innerHTML += `<div class="cal-day border-r border-b border-outline-variant other-month" onclick="openAddEventModal('${prevDateStr}')">
+      <div class="text-xs font-semibold mb-1 opacity-40 ${isSun?'text-red-400':isSat?'text-blue-400':''}">${prevDay}</div>${evHtml}</div>`;
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dayEvents = DB.events.filter(e => eventFallsOnDate(e, dateStr)).sort((a,b) => {
+      const ai = Math.min(...(getEventPersonIds(a).map(id => DB.members.findIndex(m=>m.id===id)).filter(i=>i>=0)), isTeamEvent(a)?-1:999);
+      const bi = Math.min(...(getEventPersonIds(b).map(id => DB.members.findIndex(m=>m.id===id)).filter(i=>i>=0)), isTeamEvent(b)?-1:999);
+      return ai - bi;
+    });
+    const isToday = dateStr === todayStr;
+    const isSun = (firstDay + day - 1) % 7 === 0;
+    const isSat = (firstDay + day - 1) % 7 === 6;
+    const evHtml = dayEvents.map(e => {
+      const colors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 기타:'background:#ede9fe;color:#7c3aed'};
+      const s = colors[e.type] || colors.기타;
+      const eIds = getEventPersonIds(e);
+      const eNames = eIds.map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean);
+      const prefix = eNames.length ? eNames.join('·')+' ' : '';
+      const nb = isNew(e) ? '<span class="new-badge">NEW</span>' : '';
+      return `<div class="cal-event" style="${s}" onclick="event.stopPropagation();openEventDetail(${e.id})">${prefix}${e.title}${nb}</div>`;
+    }).join('');
+    grid.innerHTML += `
+      <div class="cal-day border-r border-b border-outline-variant ${isToday?'today':''}" onclick="openAddEventModal('${dateStr}')">
+        <div class="text-xs font-semibold mb-1 ${isSun?'text-red-500':isSat?'text-blue-500':''} ${isToday?'bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center':''}">${day}</div>
+        ${evHtml}
+      </div>`;
+  }
+  // 다음 달 날짜 채우기
+  const totalCells = firstDay + daysInMonth;
+  const trailing = (7 - totalCells % 7) % 7;
+  const nextY = calMonth === 11 ? calYear + 1 : calYear;
+  const nextM = calMonth === 11 ? 1 : calMonth + 2;
+  for (let i = 1; i <= trailing; i++) {
+    const nextDateStr = `${nextY}-${String(nextM).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+    const nextEvs = DB.events.filter(e => eventFallsOnDate(e, nextDateStr));
+    const col = (totalCells + i - 1) % 7;
+    const isSun = col === 0; const isSat = col === 6;
+    const evHtml = nextEvs.map(e => {
+      const colors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 기타:'background:#ede9fe;color:#7c3aed'};
+      return `<div class="cal-event opacity-50" style="${colors[e.type]||colors['기타']}">${e.title}</div>`;
+    }).join('');
+    grid.innerHTML += `<div class="cal-day border-r border-b border-outline-variant other-month" onclick="openAddEventModal('${nextDateStr}')">
+      <div class="text-xs font-semibold mb-1 opacity-40 ${isSun?'text-red-400':isSat?'text-blue-400':''}">${i}</div>${evHtml}</div>`;
+  }
+}
+
+function changeMonth(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+function goToToday() {
+  calYear = new Date().getFullYear();
+  calMonth = new Date().getMonth();
+  renderCalendar();
+}
+
+function openAddEventModal(dateStr) {
+  document.getElementById('editing-event-id').value = '';
+  document.getElementById('event-modal-title').textContent = '일정 추가';
+  document.getElementById('event-title').value = '';
+  document.getElementById('event-date').value = dateStr || formatDate(new Date());
+  document.getElementById('event-date-end').value = '';
+  document.getElementById('event-memo').value = '';
+  const sel = document.getElementById('event-person');
+  populateEventPersonSelect(sel, []);
+  sel.options[0].selected = true;
+  const radios = document.querySelectorAll('input[name="event-type"]');
+  radios.forEach(r => r.checked = false);
+  document.getElementById('modal-add-event').classList.remove('hidden');
+}
+
+function openEditEventModal(id) {
+  const e = DB.events.find(ev => ev.id === id);
+  if (!e) return;
+  document.getElementById('modal-event-detail').classList.add('hidden');
+  document.getElementById('editing-event-id').value = id;
+  document.getElementById('event-modal-title').textContent = '일정 수정';
+  document.getElementById('event-title').value = e.title;
+  document.getElementById('event-date').value = e.date;
+  document.getElementById('event-date-end').value = e.dateEnd || '';
+  document.getElementById('event-memo').value = e.memo || '';
+  const sel = document.getElementById('event-person');
+  const existingIds = getEventPersonIds(e).map(String);
+  populateEventPersonSelect(sel, existingIds.length ? existingIds : []);
+  if (!existingIds.length) sel.options[0].selected = true;
+  const radios = document.querySelectorAll('input[name="event-type"]');
+  radios.forEach(r => { r.checked = r.value === e.type; });
+  document.getElementById('modal-add-event').classList.remove('hidden');
+}
+
+function saveEvent() {
+  const title = document.getElementById('event-title').value.trim();
+  const date = document.getElementById('event-date').value;
+  if (!title || !date) { alert('제목과 시작일을 입력하세요.'); return; }
+  const dateEnd = document.getElementById('event-date-end').value || null;
+  const selOpts = [...document.getElementById('event-person').selectedOptions].map(o => o.value);
+  const isTeam = selOpts.includes('0') || selOpts.length === 0;
+  const personId = isTeam ? 0 : (selOpts.length === 1 ? parseInt(selOpts[0]) : 0);
+  const personIds = isTeam ? [] : selOpts.map(v => parseInt(v)).filter(Boolean);
+  const type = document.querySelector('input[name="event-type"]:checked')?.value || '기타';
+  const memo = document.getElementById('event-memo').value.trim();
+  const editId = parseInt(document.getElementById('editing-event-id').value);
+  if (editId) {
+    const ev = DB.events.find(e => e.id === editId);
+    if (ev) Object.assign(ev, {title, date, dateEnd, personId, personIds, type, memo});
+    showToast('일정이 수정되었습니다');
+  } else {
+    DB.events.push({id: Date.now(), title, date, dateEnd, personId, personIds, type, memo, createdAt: Date.now()});
+    showToast('일정이 추가되었습니다');
+  }
+  saveDB();
+  document.getElementById('modal-add-event').classList.add('hidden');
+  renderCalendar();
+  if (document.getElementById('page-weekly').classList.contains('active')) renderWeekly();
+  updateNotifBadge();
+}
+
+// ============================================================
+//  TEAM
+// ============================================================
+let memberFilter = 'all';
+let memberPartFilter = 'all';
+
+function renderTeam() {
+  let filtered = memberFilter === 'all' ? DB.members : DB.members.filter(m => m.status === memberFilter);
+  if (memberPartFilter !== 'all') filtered = filtered.filter(m => m.part === memberPartFilter);
+  const tbody = document.getElementById('team-table-body');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-12 text-secondary text-sm">팀원이 없습니다.</td></tr>';
+    return;
+  }
+  const partColors = {'W파트':'bg-blue-100 text-blue-700','U파트':'bg-green-100 text-green-700','KAM파트':'bg-purple-100 text-purple-700'};
+  tbody.innerHTML = filtered.map(m => {
+    const taskCount = DB.tasks.filter(t => getAssigneeIds(t).includes(m.id) && t.status !== '완료').length;
+    const statusColors = { 온라인:'badge-complete', 자리비움:'badge-pending', 휴가:'badge-delayed', 미팅중:'badge-progress' };
+    const partBadge = m.part ? `<span class="text-xs px-2 py-0.5 rounded-full font-medium ${partColors[m.part]||'bg-gray-100 text-gray-600'}">${m.part}</span>` : '<span class="text-secondary text-xs">-</span>';
+    return `
+      <tr class="border-b border-outline-variant hover:bg-surface-container-low transition-colors">
+        <td class="px-4 py-3">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">${m.name[0]}</div>
+            <span class="font-medium text-sm text-on-surface">${m.name}</span>
+          </div>
+        </td>
+        <td class="px-4 py-3 text-sm text-secondary">${m.rank||'-'}</td>
+        <td class="px-4 py-3">${partBadge}</td>
+        <td class="px-4 py-3 text-sm text-secondary">${m.center||'-'}</td>
+        <td class="px-4 py-3 text-sm text-secondary">${m.email||'-'}</td>
+        <td class="px-4 py-3"><span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[m.status]||'badge-normal'}">${m.status}</span></td>
+        <td class="px-4 py-3 text-sm">${taskCount > 0 ? `<span class="font-semibold text-primary cursor-pointer hover:underline" onclick="showMemberTasks(${m.id})">${taskCount}건</span>` : '<span class="text-secondary">없음</span>'}</td>
+        <td class="px-4 py-3">
+          <div class="flex gap-1">
+            <button onclick="moveMember(${m.id},-1)" class="p-1 rounded hover:bg-surface-container text-secondary" title="위로"><span class="material-symbols-outlined text-sm">arrow_upward</span></button>
+            <button onclick="moveMember(${m.id},1)" class="p-1 rounded hover:bg-surface-container text-secondary" title="아래로"><span class="material-symbols-outlined text-sm">arrow_downward</span></button>
+            <button onclick="editMember(${m.id})" class="p-1 rounded hover:bg-surface-container text-secondary"><span class="material-symbols-outlined text-sm">edit</span></button>
+            <button onclick="deleteMember(${m.id})" class="p-1 rounded hover:bg-red-50 text-red-400"><span class="material-symbols-outlined text-sm">delete</span></button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+function filterMembers(f) {
+  memberFilter = f;
+  document.querySelectorAll('#member-status-filters .chip').forEach(c => {
+    c.className = c.dataset.filter === f ? 'chip active !bg-primary !text-white !border-primary' : 'chip';
+  });
+  renderTeam();
+}
+
+function filterMembersByPart(p) {
+  memberPartFilter = p;
+  document.querySelectorAll('#member-part-filters .chip').forEach(c => {
+    c.className = c.dataset.part === p ? 'chip active !bg-primary !text-white !border-primary' : 'chip';
+  });
+  renderTeam();
+}
+
+function openAddMemberModal() {
+  document.getElementById('editing-member-id').value = '';
+  document.getElementById('member-name').value = '';
+  document.getElementById('member-rank').value = '';
+  document.getElementById('member-email').value = '';
+  document.getElementById('member-center').value = '';
+  document.getElementById('member-status').value = '온라인';
+  document.getElementById('member-part').value = '';
+  document.getElementById('member-modal-title').textContent = '팀원 추가';
+  document.getElementById('modal-add-member').classList.remove('hidden');
+}
+
+function editMember(id) {
+  const m = DB.members.find(m => m.id === id);
+  if (!m) return;
+  document.getElementById('editing-member-id').value = id;
+  document.getElementById('member-name').value = m.name;
+  document.getElementById('member-rank').value = m.rank || '';
+  document.getElementById('member-email').value = m.email || '';
+  document.getElementById('member-center').value = m.center || '';
+  document.getElementById('member-status').value = m.status;
+  document.getElementById('member-part').value = m.part || '';
+  document.getElementById('member-modal-title').textContent = '팀원 수정';
+  document.getElementById('modal-add-member').classList.remove('hidden');
+}
+
+function saveMember() {
+  const name = document.getElementById('member-name').value.trim();
+  if (!name) { alert('이름을 입력하세요.'); return; }
+  const rank = document.getElementById('member-rank').value.trim();
+  const email = document.getElementById('member-email').value.trim();
+  const center = document.getElementById('member-center').value.trim();
+  const status = document.getElementById('member-status').value;
+  const part = document.getElementById('member-part').value;
+  const editId = parseInt(document.getElementById('editing-member-id').value);
+  if (editId) {
+    const m = DB.members.find(m => m.id === editId);
+    Object.assign(m, {name, rank, email, center, status, part});
+    showToast('팀원 정보가 수정되었습니다');
+  } else {
+    DB.members.push({id: Date.now(), name, rank, email, center, status, part, order: DB.members.length, createdAt: Date.now()});
+    showToast('팀원이 추가되었습니다');
+  }
+  saveDB();
+  document.getElementById('modal-add-member').classList.add('hidden');
+  renderTeam();
+  // update assignee selects
+  const sel = document.querySelector('select[onchange="filterByAssignee(this.value)"]');
+  if (sel) sel.innerHTML = '<option value="">담당자 (전체)</option>' + DB.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+}
+
+function moveMember(id, dir) {
+  const idx = DB.members.findIndex(m => m.id === id);
+  const swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= DB.members.length) return;
+  const a = DB.members[idx];
+  const b = DB.members[swapIdx];
+  const tempOrder = a.order ?? idx;
+  a.order = b.order ?? swapIdx;
+  b.order = tempOrder;
+  [DB.members[idx], DB.members[swapIdx]] = [DB.members[swapIdx], DB.members[idx]];
+  db.collection('members').doc(String(a.id)).update({ order: a.order })
+    .catch(e => console.error(e));
+  db.collection('members').doc(String(b.id)).update({ order: b.order })
+    .catch(e => console.error(e));
+  renderTeam();
+}
+
+function deleteMember(id) {
+  if (!confirm('이 팀원을 삭제하겠습니까?')) return;
+  DB.members = DB.members.filter(m => m.id !== id);
+  saveDB();
+  renderTeam();
+  showToast('팀원이 삭제되었습니다');
+}
+
+// ============================================================
+//  CENTERS
+// ============================================================
+let selectedCenterId = null;
+
+function moveCenter(id, dir) {
+  const idx = DB.centers.findIndex(c => c.id === id);
+  const swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= DB.centers.length) return;
+  const a = DB.centers[idx];
+  const b = DB.centers[swapIdx];
+  const tempOrder = a.order ?? idx;
+  a.order = b.order ?? swapIdx;
+  b.order = tempOrder;
+  [DB.centers[idx], DB.centers[swapIdx]] = [DB.centers[swapIdx], DB.centers[idx]];
+  db.collection('centers').doc(String(a.id)).update({ order: a.order })
+    .catch(e => console.error(e));
+  db.collection('centers').doc(String(b.id)).update({ order: b.order })
+    .catch(e => console.error(e));
+  renderCenters();
+}
+
+function renderCenters() {
+  const list = document.getElementById('center-list');
+  const issueCenters = DB.centers.filter(c => c.status !== '정상');
+  list.innerHTML = DB.centers.map(c => {
+    const statusColors = {정상:'badge-complete', 이슈:'badge-delayed', 점검:'badge-pending'};
+    return `
+      <div class="px-4 py-3 border-b border-outline-variant transition-all ${selectedCenterId===c.id?'bg-primary-container border-l-4 border-l-primary':''} hover:bg-surface-container-low">
+        <div class="flex items-start gap-1">
+          <div class="flex flex-col gap-0.5 pt-0.5 shrink-0">
+            <button onclick="event.stopPropagation();moveCenter(${c.id},-1)" class="p-0.5 rounded hover:bg-surface-container text-secondary" title="위로"><span class="material-symbols-outlined" style="font-size:14px">arrow_upward</span></button>
+            <button onclick="event.stopPropagation();moveCenter(${c.id},1)" class="p-0.5 rounded hover:bg-surface-container text-secondary" title="아래로"><span class="material-symbols-outlined" style="font-size:14px">arrow_downward</span></button>
+          </div>
+          <div class="flex-1 cursor-pointer" onclick="selectCenter(${c.id})">
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-semibold text-sm text-on-surface">${c.name}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[c.status]||'badge-normal'}">${c.status}</span>
+            </div>
+            <div class="text-xs text-secondary">${c.code || ''}</div>
+            ${c.issue ? `<div class="text-xs text-orange-600 mt-1 truncate">⚠ ${c.issue}</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('') || '<div class="text-center py-8 text-secondary text-sm">센터가 없습니다</div>';
+
+  // Update manager selects
+  populateCenterManagerSelect();
+
+  if (selectedCenterId) selectCenter(selectedCenterId);
+}
+
+function selectCenter(id) {
+  selectedCenterId = id;
+  const c = DB.centers.find(c => c.id === id);
+  if (!c) return;
+  const manager = DB.members.find(m => m.id === c.managerId);
+  const statusColors = {정상:'badge-complete', 이슈:'badge-delayed', 점검:'badge-pending'};
+  document.getElementById('center-detail').innerHTML = `
+    <div class="bg-white rounded-xl border border-outline-variant shadow-sm">
+      <div class="p-6 border-b border-outline-variant">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <div class="flex items-center gap-3 mb-2">
+              <span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[c.status]||'badge-normal'}">${c.status}</span>
+              <span class="text-xs text-secondary font-mono">${c.code||''}</span>
+            </div>
+            <h2 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">${c.name}</h2>
+            <p class="text-sm text-secondary mt-1">${c.address||''}</p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="editCenter(${c.id})" class="flex items-center gap-1.5 border border-outline-variant rounded-lg px-3 py-2 text-sm text-secondary hover:bg-surface-container"><span class="material-symbols-outlined text-sm">edit</span>수정</button>
+            <button onclick="deleteCenter(${c.id})" class="flex items-center gap-1.5 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-500 hover:bg-red-50"><span class="material-symbols-outlined text-sm">delete</span>삭제</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="bg-surface-container-low rounded-lg p-4">
+            <div class="text-xs text-secondary mb-1">본사 담당자</div>
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">${manager?manager.name[0]:'?'}</div>
+              <span class="font-semibold text-sm">${manager?manager.name:'미배정'}</span>
+              ${manager?`<span class="text-xs text-secondary">${manager.rank||''}</span>`:''}
+            </div>
+          </div>
+          <div class="bg-surface-container-low rounded-lg p-4">
+            <div class="text-xs text-secondary mb-1">관련 업무</div>
+            <div class="font-semibold text-sm">${DB.tasks.filter(t => getAssigneeIds(t).some(id => { const m=DB.members.find(m=>m.id===id); return m && m.center===c.name; })).length}건 진행 중</div>
+          </div>
+        </div>
+        ${c.director ? `
+        <div class="mt-4 bg-surface-container-low rounded-lg p-4">
+          <div class="text-xs text-secondary mb-2 font-semibold">센터장</div>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-xs font-bold">${c.director.name[0]}</div>
+              <span class="font-semibold text-sm">${c.director.name}</span>
+            </div>
+            ${c.director.phone ? `<span class="text-xs text-secondary">${c.director.phone}</span>` : ''}
+          </div>
+        </div>` : ''}
+        ${c.staff && c.staff.length ? `
+        <div class="mt-4">
+          <div class="text-xs text-secondary mb-2 font-semibold">센터원 (${c.staff.length}명)</div>
+          <div class="grid grid-cols-2 gap-2">
+            ${c.staff.map(s => `<div class="flex items-center gap-2 bg-surface-container-low rounded-lg px-3 py-2">
+              <div class="w-6 h-6 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center text-xs font-bold">${s.name[0]}</div>
+              <div><div class="text-xs font-semibold">${s.name}</div><div class="text-xs text-secondary">${s.role||''}</div></div>
+            </div>`).join('')}
+          </div>
+        </div>` : ''}
+      </div>
+      <div class="p-6">
+        <h3 class="font-bold text-sm text-on-surface mb-3 flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm ${c.issue?'text-orange-500':'text-secondary'}">report_problem</span>
+          실시간 주요 이슈 및 특이사항
+        </h3>
+        ${c.issue ? `
+          <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+            <p class="text-sm text-orange-800 leading-relaxed">${c.issue}</p>
+          </div>
+        ` : `
+          <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-green-600 text-sm">check_circle</span>
+            <p class="text-sm text-green-700">현재 특이사항 없음</p>
+          </div>
+        `}
+        <div class="flex gap-2">
+          <input type="text" id="center-issue-input-${c.id}" placeholder="새 이슈 또는 특이사항 입력..." class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')addCenterIssue(${c.id})">
+          <button onclick="addCenterIssue(${c.id})" class="bg-primary text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">추가</button>
+          ${c.issue ? `<button onclick="clearCenterIssue(${c.id})" class="border border-outline-variant rounded-lg px-3 py-2 text-sm text-secondary hover:bg-surface-container">이슈 해소</button>` : ''}
+        </div>
+        ${c.issueHistory && c.issueHistory.length ? `
+        <div class="mt-4">
+          <div class="text-xs font-semibold text-secondary mb-2 flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">history</span>
+            이슈 이력 (${c.issueHistory.length}건)
+          </div>
+          <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
+            ${c.issueHistory.map((h,idx)=>`
+              <div class="rounded-lg px-3 py-2 border ${h.resolved ? 'bg-surface-container-low border-outline-variant opacity-70' : 'bg-orange-50 border-orange-200'}">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs text-secondary">${h.date}</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none" onclick="event.stopPropagation()">
+                      <input type="checkbox" ${h.resolved?'checked':''} onchange="toggleIssueResolved(${c.id},${idx})" class="w-3.5 h-3.5 accent-green-600 cursor-pointer">
+                      <span class="text-xs ${h.resolved?'text-green-600':'text-orange-600'}">${h.resolved?`해소 ${h.resolvedDate||''}`:'미해소'}</span>
+                    </label>
+                    <button onclick="event.stopPropagation();deleteIssueHistory(${c.id},${idx})" class="p-0.5 rounded hover:bg-red-100 text-red-400" title="삭제"><span class="material-symbols-outlined" style="font-size:14px">delete</span></button>
+                  </div>
+                </div>
+                <p class="text-xs text-on-surface ${h.resolved?'line-through text-secondary':''}">${h.text}</p>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+      </div>
+    </div>
+  `;
+  // Re-render list to highlight selected
+  const listItems = document.querySelectorAll('#center-list > div');
+  listItems.forEach((el, i) => {
+    el.className = DB.centers[i]?.id === id
+      ? 'px-4 py-3 border-b border-outline-variant cursor-pointer transition-all bg-primary-container border-l-4 border-l-primary hover:bg-surface-container-low'
+      : 'px-4 py-3 border-b border-outline-variant cursor-pointer transition-all hover:bg-surface-container-low';
+  });
+}
+
+function addCenterIssue(id) {
+  const c = DB.centers.find(c => c.id === id);
+  const input = document.getElementById(`center-issue-input-${id}`);
+  if (!c || !input || !input.value.trim()) return;
+  if (!c.issueHistory) c.issueHistory = [];
+  const now = new Date().toLocaleDateString('ko-KR') + ' ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  c.issueHistory.unshift({text: input.value.trim(), date: now, resolved: false});
+  c.issue = input.value.trim();
+  if (c.status === '정상') c.status = '이슈';
+  saveDB();
+  renderCenters();
+  showToast('이슈가 등록되었습니다');
+}
+
+function deleteIssueHistory(centerId, idx) {
+  const c = DB.centers.find(c => c.id === centerId);
+  if (!c || !c.issueHistory) return;
+  c.issueHistory.splice(idx, 1);
+  const hasActive = c.issueHistory.some(h => !h.resolved);
+  if (!hasActive) { c.issue = ''; if (c.status === '이슈') c.status = '정상'; }
+  saveDB(); renderCenters();
+}
+
+function toggleIssueResolved(centerId, idx) {
+  const c = DB.centers.find(c => c.id === centerId);
+  if (!c || !c.issueHistory || !c.issueHistory[idx]) return;
+  const h = c.issueHistory[idx];
+  h.resolved = !h.resolved;
+  if (h.resolved) {
+    h.resolvedDate = new Date().toLocaleDateString('ko-KR') + ' ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  } else {
+    delete h.resolvedDate;
+  }
+  // 미해소 항목이 하나도 없으면 c.issue 초기화
+  const hasActive = c.issueHistory.some(h => !h.resolved);
+  if (!hasActive) { c.issue = ''; c.status = '정상'; }
+  saveDB(); renderCenters();
+}
+
+function clearCenterIssue(id) {
+  const c = DB.centers.find(c => c.id === id);
+  if (!c) return;
+  if (c.issueHistory) {
+    const active = c.issueHistory.find(h => !h.resolved);
+    if (active) {
+      active.resolved = true;
+      active.resolvedDate = new Date().toLocaleDateString('ko-KR') + ' ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    }
+  }
+  c.issue = '';
+  if (c.status === '이슈') c.status = '정상';
+  saveDB();
+  renderCenters();
+  showToast('이슈가 해소되었습니다');
+}
+
+function openAddCenterModal() {
+  document.getElementById('editing-center-id').value = '';
+  document.getElementById('center-name').value = '';
+  document.getElementById('center-code').value = '';
+  document.getElementById('center-address').value = '';
+  document.getElementById('center-issue').value = '';
+  document.getElementById('center-status').value = '정상';
+  document.getElementById('center-director-name').value = '';
+  document.getElementById('center-director-phone').value = '';
+  document.getElementById('staff-list').innerHTML = '';
+  document.getElementById('center-modal-title').textContent = '센터 추가';
+  populateCenterManagerSelect();
+  document.getElementById('modal-add-center').classList.remove('hidden');
+}
+
+function editCenter(id) {
+  const c = DB.centers.find(c => c.id === id);
+  if (!c) return;
+  document.getElementById('editing-center-id').value = id;
+  document.getElementById('center-name').value = c.name;
+  document.getElementById('center-code').value = c.code || '';
+  document.getElementById('center-address').value = c.address || '';
+  document.getElementById('center-issue').value = c.issue || '';
+  document.getElementById('center-status').value = c.status;
+  document.getElementById('center-director-name').value = c.director?.name || '';
+  document.getElementById('center-director-phone').value = c.director?.phone || '';
+  document.getElementById('staff-list').innerHTML = '';
+  (c.staff || []).forEach(s => addStaffRow(s.name, s.role));
+  document.getElementById('center-modal-title').textContent = '센터 수정';
+  populateCenterManagerSelect();
+  document.getElementById('center-manager').value = c.managerId;
+  document.getElementById('modal-add-center').classList.remove('hidden');
+}
+
+function saveCenter() {
+  const name = document.getElementById('center-name').value.trim();
+  if (!name) { alert('센터명을 입력하세요.'); return; }
+  const code = document.getElementById('center-code').value.trim();
+  const address = document.getElementById('center-address').value.trim();
+  const managerId = parseInt(document.getElementById('center-manager').value) || null;
+  const status = document.getElementById('center-status').value;
+  const issue = document.getElementById('center-issue').value.trim();
+  const dirName = document.getElementById('center-director-name').value.trim();
+  const dirPhone = document.getElementById('center-director-phone').value.trim();
+  const director = dirName ? {name: dirName, phone: dirPhone} : null;
+  const staff = getStaffData();
+  const editId = parseInt(document.getElementById('editing-center-id').value);
+  if (editId) {
+    const c = DB.centers.find(c => c.id === editId);
+    Object.assign(c, {name, code, address, managerId, status, issue, director, staff});
+    showToast('센터 정보가 수정되었습니다');
+  } else {
+    DB.centers.push({id: Date.now(), name, code, address, managerId, status, issue, director, staff, issues:[], order: DB.centers.length, createdAt: Date.now()});
+    showToast('센터가 추가되었습니다');
+  }
+  saveDB();
+  document.getElementById('modal-add-center').classList.add('hidden');
+  renderCenters();
+}
+
+function deleteCenter(id) {
+  if (!confirm('이 센터를 삭제하겠습니까?')) return;
+  DB.centers = DB.centers.filter(c => c.id !== id);
+  if (selectedCenterId === id) {
+    selectedCenterId = null;
+    document.getElementById('center-detail').innerHTML = `<div class="bg-white rounded-xl border border-outline-variant shadow-sm p-8 flex flex-col items-center justify-center text-center" style="min-height:400px;"><span class="material-symbols-outlined text-5xl text-secondary mb-3">apartment</span><p class="text-secondary text-sm">센터를 선택하면 상세 정보가 표시됩니다</p></div>`;
+  }
+  saveDB();
+  renderCenters();
+  showToast('센터가 삭제되었습니다');
+}
+
+function populateCenterManagerSelect() {
+  const sel = document.getElementById('center-manager');
+  if (sel) sel.innerHTML = '<option value="">미배정</option>' + DB.members.map(m => `<option value="${m.id}">${m.name} ${m.rank||''}</option>`).join('');
+}
+
+// ============================================================
+//  SEARCH
+// ============================================================
+function globalSearch(q) {
+  const dd = document.getElementById('search-dropdown');
+  if (!q.trim()) { dd.classList.add('hidden'); return; }
+  const lq = q.toLowerCase();
+  const tasks = DB.tasks.filter(t => t.name.toLowerCase().includes(lq)).slice(0,4);
+  const members = DB.members.filter(m => m.name.includes(q) || (m.email||'').includes(lq)).slice(0,3);
+  const centers = DB.centers.filter(c => c.name.includes(q) || (c.code||'').includes(lq)).slice(0,3);
+  if (!tasks.length && !members.length && !centers.length) {
+    dd.innerHTML = '<div class="px-4 py-5 text-sm text-secondary text-center">검색 결과가 없습니다</div>';
+    dd.classList.remove('hidden'); return;
+  }
+  let html = '';
+  const sec = (label) => `<div class="px-3 py-1.5 text-xs font-bold text-secondary uppercase bg-surface-container-low border-b border-outline-variant">${label}</div>`;
+  if (tasks.length) {
+    html += sec('업무');
+    html += tasks.map(t => { const m = getAssigneeIds(t).map(id=>DB.members.find(mb=>mb.id===id)).filter(Boolean); const mLabel = m.map(mb=>mb.name).join(', ')||'미배정';
+      return `<div class="px-4 py-2.5 hover:bg-surface-container cursor-pointer flex items-center gap-3 border-b border-outline-variant" onclick="searchGoTask(${t.id})">
+        <span class="material-symbols-outlined text-sm text-primary">work</span>
+        <div><div class="text-sm font-medium">${t.name}</div><div class="text-xs text-secondary">${mLabel} · ${t.status}</div></div>
+      </div>`; }).join('');
+  }
+  if (members.length) {
+    html += sec('팀원');
+    html += members.map(m => `<div class="px-4 py-2.5 hover:bg-surface-container cursor-pointer flex items-center gap-3 border-b border-outline-variant" onclick="searchGoMember(${m.id})">
+      <div class="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">${m.name[0]}</div>
+      <div><div class="text-sm font-medium">${m.name}</div><div class="text-xs text-secondary">${m.rank||''} · ${m.center||''}</div></div>
+    </div>`).join('');
+  }
+  if (centers.length) {
+    html += sec('센터');
+    html += centers.map(c => `<div class="px-4 py-2.5 hover:bg-surface-container cursor-pointer flex items-center gap-3" onclick="searchGoCenter(${c.id})">
+      <span class="material-symbols-outlined text-sm text-secondary">apartment</span>
+      <div><div class="text-sm font-medium">${c.name}</div><div class="text-xs text-secondary">${c.code||''}</div></div>
+    </div>`).join('');
+  }
+  dd.innerHTML = html;
+  dd.classList.remove('hidden');
+}
+function hideSearchDrop() { document.getElementById('search-dropdown').classList.add('hidden'); document.getElementById('global-search').value=''; }
+function searchGoTask(id) { hideSearchDrop(); showPage('dashboard'); setTimeout(()=>showTaskDetail(id),100); }
+function searchGoMember(id) { hideSearchDrop(); showPage('team'); }
+function searchGoCenter(id) { hideSearchDrop(); showPage('centers'); setTimeout(()=>selectCenter(id),100); }
+// legacy stub kept for compatibility
+function _globalSearchOld(q) {
+}
+
+// ============================================================
+//  SETTINGS
+// ============================================================
+function loadSettings() {
+  document.getElementById('my-name').value = DB.myProfile.name || '';
+  document.getElementById('my-email').value = DB.myProfile.email || '';
+  document.getElementById('my-rank').value = DB.myProfile.rank || '';
+}
+
+function saveProfile() {
+  DB.myProfile.name = document.getElementById('my-name').value.trim();
+  DB.myProfile.email = document.getElementById('my-email').value.trim();
+  DB.myProfile.rank = document.getElementById('my-rank').value.trim();
+  const avatar = document.getElementById('user-avatar');
+  if (avatar && DB.myProfile.name) avatar.textContent = DB.myProfile.name[0];
+  saveDB();
+  showToast('프로필이 저장되었습니다');
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(DB, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `wvteam_data_${formatDate(new Date())}.json`;
+  a.click();
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const imported = JSON.parse(ev.target.result);
+      DB = { ...DB, ...imported };
+
+      const UPLOAD_COLLS = ['tasks', 'members', 'centers', 'events', 'notices', 'users', 'memos'];
+      for (const coll of UPLOAD_COLLS) {
+        const items = imported[coll];
+        if (!items || !items.length) continue;
+        if (coll === 'members' || coll === 'centers') {
+          items.forEach((item, i) => {
+            if (item.order === undefined) item.order = i;
+            if (coll === 'members') item.status = '오프라인';
+          });
+        }
+        const batch = db.batch();
+        items.forEach(item => {
+          const docId = String(item.id || item.memberId || item.userId);
+          if (!docId || docId === 'undefined') return;
+          batch.set(db.collection(coll).doc(docId), item);
+        });
+        await batch.commit();
+      }
+
+      renderDashboard();
+      showToast('데이터를 Firestore에 업로드했습니다');
+    } catch(err) {
+      console.error(err);
+      alert('파일 형식이 올바르지 않습니다.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function resetData() {
+  localStorage.removeItem('wvteam_db');
+  DB = { tasks:[], members:[], centers:[], events:[], myProfile:{name:'나',email:'',rank:''} };
+  initDemoData();
+  renderDashboard();
+  showToast('데이터가 초기화되었습니다');
+}
+
+// ============================================================
+//  AI CHATBOT
+// ============================================================
+let chatOpen = false;
+let chatHistory = [];
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  const win = document.getElementById('chat-window');
+  const btn = document.getElementById('chat-toggle-btn');
+  win.classList.toggle('hidden', !chatOpen);
+  btn.classList.toggle('hidden', chatOpen);
+  if (chatOpen && chatHistory.length === 0) {
+    initChat();
+  }
+}
+
+function initChat() {
+  addAIMessage('안녕하세요! 👋 W&V팀 AI 어시스턴트입니다.\n현재 팀 데이터를 파악하고 있어요. 무엇이든 물어보세요!');
+  renderQuickChips(['팀원 현황', '지연 업무 현황', '긴급한 업무 목록', '센터 이슈 현황']);
+}
+
+function renderQuickChips(chips) {
+  document.getElementById('quick-chips').innerHTML = chips.map(c => `<span class="chip" onclick="sendChatMsg('${c}')">${c}</span>`).join('');
+}
+
+function sendChatMsg(msg) {
+  document.getElementById('chat-input').value = msg;
+  sendChat();
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  document.getElementById('quick-chips').innerHTML = '';
+  addUserMessage(msg);
+  const typingId = addTypingIndicator();
+
+  // Build context from current DB data
+  const context = buildContext();
+
+  chatHistory.push({role:'user', content: msg});
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens: 800,
+        system: `당신은 W&V팀의 내부 업무 관리 AI 어시스턴트입니다. 팀의 실제 데이터를 바탕으로 간결하고 정확하게 답변하세요. 항상 한국어로 답변하고, 친근하면서도 전문적인 어투를 사용하세요.
+
+현재 팀 데이터:
+${context}
+
+규칙:
+- 데이터에 없는 내용은 추측하지 마세요
+- 숫자와 이름은 정확하게 인용하세요  
+- 답변은 3-4문장 내외로 간결하게
+- 이모지를 적절히 활용해 가독성 높이기`,
+        messages: chatHistory.slice(-8)
+      })
+    });
+    const data = await res.json();
+    removeTypingIndicator(typingId);
+    const reply = data.content?.[0]?.text || '죄송합니다. 잠시 후 다시 시도해주세요.';
+    chatHistory.push({role:'assistant', content: reply});
+    addAIMessage(reply);
+    renderQuickChips(['다른 질문하기', '업무 요약', '팀원 현황', '센터 이슈']);
+  } catch(e) {
+    removeTypingIndicator(typingId);
+    // Fallback: local answer
+    const answer = localAnswer(msg);
+    chatHistory.push({role:'assistant', content: answer});
+    addAIMessage(answer);
+    renderQuickChips(['업무 현황', '팀원 상태', '센터 이슈', '지연 업무']);
+  }
+}
+
+function buildContext() {
+  const today = formatDate(new Date());
+  const delayed = DB.tasks.filter(t => t.status === '지연');
+  const urgent = DB.tasks.filter(t => t.priority === '높음' && t.status !== '완료');
+  const inProgress = DB.tasks.filter(t => t.status === '진행중');
+  const todayEvents = DB.events.filter(e => e.date === today);
+  const todayOff = todayEvents.filter(e => e.type === '휴무');
+  const issueCenters = DB.centers.filter(c => c.status !== '정상');
+
+  const taskLoad = {};
+  DB.tasks.filter(t => t.status !== '완료').forEach(t => {
+    getAssigneeIds(t).forEach(id => { const m=DB.members.find(m=>m.id===id); if(m) taskLoad[m.name]=(taskLoad[m.name]||0)+1; });
+  });
+  const busiestPerson = Object.entries(taskLoad).sort((a,b)=>b[1]-a[1])[0];
+
+  return `
+팀원 수: ${DB.members.length}명
+전체 업무: ${DB.tasks.length}건 (완료: ${DB.tasks.filter(t=>t.status==='완료').length}, 진행중: ${inProgress.length}, 지연: ${delayed.length}, 대기: ${DB.tasks.filter(t=>t.status==='대기').length})
+긴급(높음 우선순위) 미완료: ${urgent.length}건
+지연 업무: ${delayed.map(t => { const names=getAssigneeIds(t).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean).join('·')||'미배정'; return `${t.name}(담당:${names})`; }).join(', ') || '없음'}
+오늘 휴무: ${todayOff.flatMap(e => getEventPersonIds(e).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean)).join(', ') || '없음'}
+오늘 일정: ${todayEvents.length}건
+가장 바쁜 담당자: ${busiestPerson ? `${busiestPerson[0]}(${busiestPerson[1]}건)` : '없음'}
+이슈 센터: ${issueCenters.length}개 (${issueCenters.map(c=>c.name).join(', ')||'없음'})
+전체 센터: ${DB.centers.length}개
+팀원 상태: ${DB.members.map(m=>`${m.name}(${m.status})`).join(', ')}`;
+}
+
+function clearChat() {
+  chatHistory = [];
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('quick-chips').innerHTML = '';
+  initChat();
+}
+
+function localAnswer(msg) {
+  const ctx = buildContext();
+  const today = formatDate(new Date());
+  const taskLoad = {};
+  DB.tasks.filter(t => t.status !== '완료').forEach(t => {
+    getAssigneeIds(t).forEach(id => { const m=DB.members.find(m=>m.id===id); if(m) taskLoad[m.name]=(taskLoad[m.name]||0)+1; });
+  });
+  const busiestPerson = Object.entries(taskLoad).sort((a,b)=>b[1]-a[1])[0];
+
+  if (msg.includes('바쁜') || msg.includes('담당자')) {
+    return busiestPerson ? `📊 현재 가장 바쁜 담당자는 **${busiestPerson[0]}** 님으로 미완료 업무가 **${busiestPerson[1]}건** 있습니다.` : '현재 미완료 업무가 없습니다.';
+  }
+  if (msg.includes('긴급') || msg.includes('높음')) {
+    const urgent = DB.tasks.filter(t => t.priority==='높음' && t.status!=='완료');
+    return `⚠️ 긴급(높음 우선순위) 미완료 업무는 **${urgent.length}건**입니다.\n${urgent.map(t=>`• ${t.name}`).join('\n')}`;
+  }
+  if (msg.includes('지연')) {
+    const delayed = DB.tasks.filter(t => t.status==='지연');
+    return delayed.length ? `🔴 지연 업무 **${delayed.length}건**:\n${delayed.map(t=>`• ${t.name} (마감: ${t.deadline||'미정'})`).join('\n')}` : '현재 지연 업무가 없습니다 ✅';
+  }
+  if (msg.includes('센터') || msg.includes('이슈')) {
+    const issues = DB.centers.filter(c => c.status !== '정상');
+    return issues.length ? `🏭 이슈 발생 센터 **${issues.length}개**:\n${issues.map(c=>`• ${c.name}: ${c.issue||c.status}`).join('\n')}` : '현재 모든 센터가 정상 운영 중입니다 ✅';
+  }
+  if (msg.includes('팀원') || msg.includes('상태') || msg.includes('현황')) {
+    const today = formatDate(new Date());
+    const total = DB.members.length;
+    const tripIds = DB.events.filter(e => eventFallsOnDate(e, today) && e.type === '출장').flatMap(e => getEventPersonIds(e));
+    const leaveIds = DB.events.filter(e => eventFallsOnDate(e, today) && e.type === '휴무').flatMap(e => getEventPersonIds(e));
+    const onTrip = [...new Set(tripIds)].filter(id => id !== 0).length;
+    const onLeave = [...new Set(leaveIds)].filter(id => id !== 0).length;
+    const current = Math.max(0, total - onTrip - onLeave);
+    const tripNames = [...new Set(tripIds)].filter(id=>id!==0).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean);
+    const leaveNames = [...new Set(leaveIds)].filter(id=>id!==0).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean);
+    return `👥 **팀원 현황 (오늘 기준)**\n• 총원: **${total}명**\n• 출장/외근: **${onTrip}명**${tripNames.length?` (${tripNames.join(', ')})`:''}\n• 휴무: **${onLeave}명**${leaveNames.length?` (${leaveNames.join(', ')})`:''}\n• 현재 근무: **${current}명**`;
+  }
+  if (msg.includes('휴무') || msg.includes('휴가') || msg.includes('오늘')) {
+    const todayEvents = DB.events.filter(e => e.date === today);
+    const off = todayEvents.filter(e => e.type==='휴무');
+    const names = off.flatMap(e => getEventPersonIds(e).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean));
+    return names.length ? `📅 오늘 휴무자: **${names.join(', ')}** (총 ${names.length}명)` : '오늘 휴무자가 없습니다.';
+  }
+  return `현재 팀 현황을 간략히 알려드릴게요:\n• 전체 업무: ${DB.tasks.length}건\n• 진행중: ${DB.tasks.filter(t=>t.status==='진행중').length}건, 지연: ${DB.tasks.filter(t=>t.status==='지연').length}건\n• 팀원: ${DB.members.length}명\n• 관리 센터: ${DB.centers.length}개`;
+}
+
+function addUserMessage(text) {
+  const el = document.createElement('div');
+  el.className = 'flex justify-end';
+  el.innerHTML = `<div class="chat-msg user">${text}</div>`;
+  document.getElementById('chat-messages').appendChild(el);
+  scrollChat();
+}
+
+function addAIMessage(text) {
+  const el = document.createElement('div');
+  el.className = 'flex gap-2 items-start';
+  const formatted = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+  el.innerHTML = `<div class="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-0.5"><span class="material-symbols-outlined text-white fill-icon" style="font-size:13px">smart_toy</span></div><div class="chat-msg ai">${formatted}</div>`;
+  document.getElementById('chat-messages').appendChild(el);
+  scrollChat();
+}
+
+function addTypingIndicator() {
+  const id = 'typing-' + Date.now();
+  const el = document.createElement('div');
+  el.id = id;
+  el.className = 'flex gap-2 items-start';
+  el.innerHTML = `<div class="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0"><span class="material-symbols-outlined text-white fill-icon" style="font-size:13px">smart_toy</span></div><div class="chat-msg ai flex items-center gap-1" style="padding:12px 14px"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
+  document.getElementById('chat-messages').appendChild(el);
+  scrollChat();
+  return id;
+}
+
+function removeTypingIndicator(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+function scrollChat() {
+  const el = document.getElementById('chat-messages');
+  el.scrollTop = el.scrollHeight;
+}
+
+// ============================================================
+//  TOAST
+// ============================================================
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  toast.classList.remove('hidden');
+  setTimeout(() => toast.classList.add('hidden'), 2500);
+}
+
+// ============================================================
+//  HELPERS
+// ============================================================
+function isNew(item) { const ago = Date.now() - 86400000; return (item.createdAt && item.createdAt > ago) || (item.updatedAt && item.updatedAt > ago); }
+
+function eventFallsOnDate(e, dateStr) {
+  if (!e.dateEnd) return e.date === dateStr;
+  return e.date <= dateStr && dateStr <= e.dateEnd;
+}
+
+
+// ============================================================
+//  EVENT DETAIL / DELETE
+// ============================================================
+function openEventDetail(id) {
+  const e = DB.events.find(ev => ev.id === id);
+  if (!e) return;
+  const evPersons = getEventPersonIds(e).map(id => DB.members.find(m=>m.id===id)).filter(Boolean);
+  const typeColors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 기타:'background:#ede9fe;color:#7c3aed'};
+  const tc = typeColors[e.type] || typeColors['기타'];
+  document.getElementById('ev-detail-title').textContent = e.title;
+  document.getElementById('ev-detail-id').value = id;
+  document.getElementById('ev-detail-content').innerHTML = `
+    <div class="space-y-3">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs px-2.5 py-1 rounded-full font-medium" style="${tc}">${e.type}</span>
+        ${isNew(e) ? '<span class="new-badge">NEW</span>' : ''}
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div><span class="text-xs text-secondary block mb-1">날짜</span>
+          <span class="text-sm font-medium">${e.date}${e.dateEnd && e.dateEnd !== e.date ? ' ~ ' + e.dateEnd : ''}</span></div>
+        <div><span class="text-xs text-secondary block mb-1">담당자</span>
+          <div class="flex flex-wrap gap-1.5">${evPersons.length ? evPersons.map(m=>`<div class="flex items-center gap-1"><div class="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">${m.name[0]}</div><span class="text-sm">${m.name}</span></div>`).join('') : '<span class="text-sm text-secondary">팀 전체</span>'}</div>
+        </div>
+      </div>
+      ${e.memo ? `<div><span class="text-xs text-secondary block mb-1">메모</span><p class="text-sm">${e.memo}</p></div>` : ''}
+    </div>`;
+  document.getElementById('modal-event-detail').classList.remove('hidden');
+}
+
+function deleteEvent(id) {
+  if (!confirm('이 일정을 삭제하겠습니까?')) return;
+  DB.events = DB.events.filter(e => e.id !== id);
+  saveDB();
+  document.getElementById('modal-event-detail').classList.add('hidden');
+  renderCalendar();
+  if (document.getElementById('page-weekly').classList.contains('active')) renderWeekly();
+  showToast('일정이 삭제되었습니다');
+}
+
+// ============================================================
+//  WEEKLY VIEW
+// ============================================================
+let weekStart = getWeekMonday(new Date());
+
+function getWeekMonday(d) {
+  const dt = new Date(d); const day = dt.getDay();
+  dt.setDate(dt.getDate() - (day === 0 ? 6 : day - 1));
+  dt.setHours(0,0,0,0); return dt;
+}
+
+function changeWeek(dir) { weekStart = new Date(weekStart); weekStart.setDate(weekStart.getDate() + dir*7); renderWeekly(); }
+function goToThisWeek() { weekStart = getWeekMonday(new Date()); renderWeekly(); }
+
+function renderWeekly() {
+  const days = Array.from({length:7}, (_,i) => { const d = new Date(weekStart); d.setDate(weekStart.getDate()+i); return d; });
+  const todayStr = formatDate(new Date());
+  const dayNames = ['월','화','수','목','금','토','일'];
+  const endD = days[6];
+  document.getElementById('weekly-range-label').textContent =
+    `${weekStart.getFullYear()}년 ${weekStart.getMonth()+1}월 ${weekStart.getDate()}일 - ${endD.getMonth()+1}월 ${endD.getDate()}일`;
+
+  const evColors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 기타:'background:#ede9fe;color:#7c3aed'};
+
+  const thead = `<tr>
+    <th class="px-3 py-2 text-left" style="min-width:90px">팀원</th>
+    ${days.map((d,i) => {
+      const ds = formatDate(d); const isToday = ds === todayStr;
+      const isSat = i===5; const isSun = i===6;
+      return `<th class="px-2 py-2 ${isToday?'wk-today':''}" style="min-width:110px">
+        <div class="text-xs font-semibold ${isSun?'text-red-500':isSat?'text-blue-500':isToday?'text-primary':''}">${dayNames[i]}</div>
+        <div class="text-xs font-normal text-secondary">${d.getMonth()+1}/${d.getDate()}</div>
+      </th>`;
+    }).join('')}
+  </tr>`;
+
+  const tbody = DB.members.map(m => {
+    const cells = days.map((d,i) => {
+      const ds = formatDate(d); const isToday = ds === todayStr; const isSat=i===5; const isSun=i===6;
+      const evs = DB.events.filter(e => eventFallsOnDate(e, ds) && (isTeamEvent(e) || getEventPersonIds(e).includes(m.id)));
+      const evHtml = evs.map(e => {
+        const s = evColors[e.type] || evColors['기타'];
+        const label = (e.personId===0?'(팀) ':'')+e.title;
+        return `<div class="wk-event" style="${s}" onclick="openEventDetail(${e.id})" title="${label}">${label}</div>`;
+      }).join('');
+      return `<td class="px-2 py-1 wk-cell ${isToday?'wk-today':isSat||isSun?'bg-slate-50':''}">${evHtml}</td>`;
+    }).join('');
+    return `<tr>
+      <td class="px-3 py-2 bg-white" style="vertical-align:middle">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">${m.name[0]}</div>
+          <div><div class="text-xs font-semibold">${m.name}</div><div class="text-xs text-secondary">${m.rank||''}</div></div>
+        </div>
+      </td>${cells}
+    </tr>`;
+  }).join('');
+
+  document.getElementById('weekly-content').innerHTML =
+    `<table class="wk-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+}
+
+// ============================================================
+//  NOTIFICATION PANEL
+// ============================================================
+function toggleNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  const overlay = document.getElementById('notif-overlay');
+  const isOpen = panel.dataset.open === '1';
+  if (isOpen) {
+    panel.style.transform = 'translateX(100%)'; panel.dataset.open = '0';
+    overlay.style.display = 'none';
+  } else {
+    panel.style.transform = 'translateX(0)'; panel.dataset.open = '1';
+    overlay.style.display = 'block';
+    renderNotifPanel();
+  }
+}
+
+function renderNotifPanel() {
+  const content = document.getElementById('notif-content');
+  let html = '';
+  const sec = (label, count) => `<div class="px-5 py-2 bg-surface-container-low border-b border-outline-variant flex items-center justify-between"><span class="text-xs font-bold text-secondary uppercase">${label}</span>${count?`<span class="text-xs bg-primary text-white rounded-full px-2 py-0.5">${count}</span>`:''}</div>`;
+
+  // Comments
+  const withComments = DB.tasks.filter(t => t.comments && t.comments.length);
+  if (withComments.length) {
+    html += sec('댓글', withComments.reduce((a,t)=>a+t.comments.length,0));
+    withComments.forEach(t => {
+      const last = t.comments[t.comments.length-1];
+      html += `<div class="px-5 py-3 border-b border-outline-variant hover:bg-surface-container-low cursor-pointer" onclick="document.getElementById('modal-task-detail').classList.remove('hidden');showTaskDetail(${t.id});toggleNotifPanel()">
+        <div class="text-xs font-semibold text-on-surface mb-1 truncate">${t.name}</div>
+        <div class="flex items-start gap-2">
+          <div class="w-5 h-5 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">${last.author[0]}</div>
+          <div><div class="text-xs font-medium">${last.author}</div><p class="text-xs text-secondary mt-0.5 line-clamp-2">${last.text}</p><p class="text-xs text-secondary mt-0.5">${last.time}</p></div>
+        </div>
+      </div>`;
+    });
+  }
+
+  // Delayed tasks
+  const delayed = DB.tasks.filter(t => t.status === '지연');
+  if (delayed.length) {
+    html += sec('지연 업무', delayed.length);
+    delayed.forEach(t => {
+      const mNames = getAssigneeIds(t).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean).join('·')||'미배정';
+      html += `<div class="px-5 py-3 border-b border-outline-variant hover:bg-surface-container-low cursor-pointer flex items-center gap-3" onclick="showTaskDetail(${t.id});toggleNotifPanel()">
+        <span class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></span>
+        <div><div class="text-sm font-medium">${t.name}</div><div class="text-xs text-secondary">${mNames} · 마감 ${t.deadline||'미정'}</div></div>
+      </div>`;
+    });
+  }
+
+  // Center issues
+  const issues = DB.centers.filter(c => c.status !== '정상');
+  if (issues.length) {
+    html += sec('센터 이슈', issues.length);
+    issues.forEach(c => {
+      html += `<div class="px-5 py-3 border-b border-outline-variant hover:bg-surface-container-low cursor-pointer flex items-center gap-3" onclick="showPage('centers');selectCenter(${c.id});toggleNotifPanel()">
+        <span class="material-symbols-outlined text-orange-500 text-sm">warning</span>
+        <div><div class="text-sm font-medium">${c.name}</div><div class="text-xs text-secondary truncate">${c.issue||c.status}</div></div>
+      </div>`;
+    });
+  }
+
+  if (!html) html = '<div class="flex flex-col items-center justify-center p-10 text-center"><span class="material-symbols-outlined text-4xl text-secondary mb-3">notifications_none</span><p class="text-sm text-secondary">새로운 알림이 없습니다</p></div>';
+  content.innerHTML = html;
+}
+
+function updateNotifBadge() {
+  const count = DB.tasks.filter(t=>t.comments&&t.comments.length).reduce((a,t)=>a+t.comments.length,0)
+    + DB.tasks.filter(t=>t.status==='지연').length
+    + DB.centers.filter(c=>c.status!=='정상').length;
+  const badge = document.getElementById('notif-count-badge');
+  if (badge) badge.style.display = count > 0 ? 'block' : 'none';
+}
+
+// ============================================================
+//  MEMBER TASKS
+// ============================================================
+function showMemberTasks(memberId) {
+  const m = DB.members.find(m => m.id === memberId);
+  if (!m) return;
+  const tasks = DB.tasks.filter(t => getAssigneeIds(t).includes(memberId) && t.status !== '완료');
+  const all = DB.tasks.filter(t => getAssigneeIds(t).includes(memberId));
+  document.getElementById('member-tasks-title').innerHTML =
+    `<div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold">${m.name[0]}</div>
+      <div><div>${m.name} 진행 업무</div><div class="text-sm font-normal text-secondary">${m.rank||''} · 전체 ${all.length}건 중 미완료 ${tasks.length}건</div></div>
+    </div>`;
+  document.getElementById('member-tasks-list').innerHTML = tasks.length
+    ? `<div class="space-y-2">${tasks.map(t => `
+        <div class="flex items-center gap-3 p-3 rounded-lg border border-outline-variant hover:bg-surface-container-low cursor-pointer transition-colors"
+             onclick="document.getElementById('modal-member-tasks').classList.add('hidden');showTaskDetail(${t.id})">
+          <div class="priority-bar h-10 flex-shrink-0 ${t.priority==='높음'?'bg-red-400':t.priority==='낮음'?'bg-green-400':'bg-yellow-400'}"></div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-on-surface flex items-center gap-1">
+              ${t.name}${isNew(t)?'<span class="new-badge">NEW</span>':''}
+            </div>
+            <div class="text-xs text-secondary mt-0.5">마감 ${t.deadline||'미정'} · ${t.priority} 우선순위</div>
+          </div>
+          <span class="text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${statusBadge(t.status)}">${t.status}</span>
+        </div>`).join('')}</div>`
+    : '<div class="text-center py-10 text-secondary"><span class="material-symbols-outlined text-4xl mb-2 block">task_alt</span><p class="text-sm">진행 중인 업무가 없습니다</p></div>';
+  document.getElementById('modal-member-tasks').classList.remove('hidden');
+}
+
+// ============================================================
+//  STAFF HELPERS (for center modal)
+// ============================================================
+function addStaffRow(name='', role='') {
+  const container = document.getElementById('staff-list');
+  const row = document.createElement('div');
+  row.className = 'flex gap-2 items-center';
+  row.innerHTML = `<input type="text" placeholder="이름" value="${name}" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm staff-name">
+    <input type="text" placeholder="직책" value="${role}" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm staff-role">
+    <button type="button" onclick="this.parentElement.remove()" class="p-1 text-red-400 hover:text-red-600"><span class="material-symbols-outlined text-sm">close</span></button>`;
+  container.appendChild(row);
+}
+
+function getStaffData() {
+  return Array.from(document.querySelectorAll('#staff-list > div')).map(row => ({
+    name: row.querySelector('.staff-name').value.trim(),
+    role: row.querySelector('.staff-role').value.trim()
+  })).filter(s => s.name);
+}
+
+// ============================================================
+//  AUTH
+// ============================================================
+function checkAuth() {
+  const saved = localStorage.getItem('wvteam_current_user');
+  if (saved) {
+    try { currentUser = JSON.parse(saved); } catch(e) { currentUser = null; }
+  }
+  if (!currentUser) {
+    showLoginOverlay();
+  } else {
+    hideLoginOverlay();
+    applyCurrentUser();
+  }
+}
+
+function showLoginOverlay() {
+  const el = document.getElementById('login-overlay');
+  el.style.cssText = 'display:flex!important;background:rgba(15,23,42,0.93);';
+}
+
+function hideLoginOverlay() {
+  document.getElementById('login-overlay').style.cssText = 'display:none!important;';
+}
+
+function doLogin() {
+  const username = document.getElementById('login-username').value.trim().toLowerCase();
+  const password = document.getElementById('login-password').value;
+  const msgEl = document.getElementById('login-msg');
+  if (!username || !password) { showMsg(msgEl, '이메일 앞부분과 비밀번호를 입력하세요.'); return; }
+
+  const member = DB.members.find(m => m.email && m.email.toLowerCase().startsWith(username + '@'));
+  if (!member) { showMsg(msgEl, '등록된 팀원 이메일과 일치하지 않습니다.'); return; }
+
+  if (!DB.users) DB.users = [];
+  const userRec = DB.users.find(u => u.memberId === member.id);
+  if (!userRec) {
+    document.getElementById('login-form-area').classList.add('hidden');
+    document.getElementById('set-pw-area').classList.remove('hidden');
+    document.getElementById('login-overlay').dataset.pendingMemberId = member.id;
+    document.getElementById('login-overlay').dataset.pendingUsername = username;
+    return;
+  }
+  if (userRec.password !== btoa(password)) { showMsg(msgEl, '비밀번호가 올바르지 않습니다.'); return; }
+
+  currentUser = { memberId: member.id, username, name: member.name, rank: member.rank || '' };
+  localStorage.setItem('wvteam_current_user', JSON.stringify(currentUser));
+  db.collection('members').doc(String(member.id)).update({ status: '온라인' }).catch(()=>{});
+  hideLoginOverlay();
+  applyCurrentUser();
+  showPage('overview');
+  renderOverview();
+}
+
+function doSetPassword() {
+  const pw = document.getElementById('new-password').value;
+  const pw2 = document.getElementById('new-password-confirm').value;
+  const msgEl = document.getElementById('set-pw-msg');
+  if (!pw || pw.length < 4) { showMsg(msgEl, '비밀번호는 4자 이상 입력하세요.'); return; }
+  if (pw !== pw2) { showMsg(msgEl, '비밀번호가 일치하지 않습니다.'); return; }
+
+  const overlay = document.getElementById('login-overlay');
+  const memberId = parseInt(overlay.dataset.pendingMemberId);
+  const username = overlay.dataset.pendingUsername;
+  const member = DB.members.find(m => m.id === memberId);
+  if (!DB.users) DB.users = [];
+  DB.users.push({ memberId, username, password: btoa(pw) });
+  saveDB();
+
+  currentUser = { memberId, username, name: member.name, rank: member.rank || '' };
+  localStorage.setItem('wvteam_current_user', JSON.stringify(currentUser));
+  db.collection('members').doc(String(memberId)).update({ status: '온라인' }).catch(()=>{});
+  hideLoginOverlay();
+  applyCurrentUser();
+  showPage('overview');
+  renderOverview();
+}
+
+function doLogout() {
+  if (!confirm('로그아웃하겠습니까?')) return;
+  if (currentUser) {
+    db.collection('members').doc(String(currentUser.memberId)).update({ status: '오프라인' }).catch(()=>{});
+  }
+  currentUser = null;
+  localStorage.removeItem('wvteam_current_user');
+  showLoginOverlay();
+  document.getElementById('login-form-area').classList.remove('hidden');
+  document.getElementById('set-pw-area').classList.add('hidden');
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-msg').classList.add('hidden');
+}
+
+function changePassword() {
+  const msgEl = document.getElementById('pw-change-msg');
+  const show = (msg, ok) => {
+    msgEl.textContent = msg;
+    msgEl.className = `text-xs ${ok ? 'text-green-600' : 'text-red-500'}`;
+    msgEl.classList.remove('hidden');
+    setTimeout(() => msgEl.classList.add('hidden'), 4000);
+  };
+  if (!currentUser) { show('로그인이 필요합니다.', false); return; }
+  const cur = document.getElementById('pw-current').value;
+  const nw = document.getElementById('pw-new').value;
+  const nw2 = document.getElementById('pw-new-confirm').value;
+  if (!cur || !nw || !nw2) { show('모든 항목을 입력하세요.', false); return; }
+  if (nw.length < 4) { show('새 비밀번호는 4자 이상이어야 합니다.', false); return; }
+  if (nw !== nw2) { show('새 비밀번호가 일치하지 않습니다.', false); return; }
+  if (!DB.users) DB.users = [];
+  const userRec = DB.users.find(u => u.memberId === currentUser.memberId);
+  if (!userRec) { show('비밀번호가 설정되지 않은 계정입니다.', false); return; }
+  if (userRec.password !== btoa(cur)) { show('현재 비밀번호가 올바르지 않습니다.', false); return; }
+  userRec.password = btoa(nw);
+  saveDB();
+  document.getElementById('pw-current').value = '';
+  document.getElementById('pw-new').value = '';
+  document.getElementById('pw-new-confirm').value = '';
+  show('비밀번호가 변경되었습니다.', true);
+}
+
+function applyCurrentUser() {
+  if (!currentUser) return;
+  const member = DB.members.find(m => m.id === currentUser.memberId);
+  const name = member ? member.name : currentUser.name;
+  const initial = name ? name[0] : '나';
+  document.getElementById('user-avatar').textContent = initial;
+  const disp = document.getElementById('user-display-name');
+  if (disp) disp.textContent = `${name}${member?.rank ? ' '+member.rank : ''}`;
+
+  // 개인 메모 실시간 동기화
+  if (currentUser) {
+    db.collection('memos').doc(String(currentUser.memberId)).onSnapshot(snap => {
+      if (!snap.exists) return;
+      const data = snap.data();
+      if (!DB.memos) DB.memos = [];
+      const idx = DB.memos.findIndex(m => m.userId === currentUser.memberId);
+      if (idx >= 0) DB.memos[idx] = data;
+      else DB.memos.push(data);
+      const memoEl = document.getElementById('personal-memo');
+      if (memoEl && document.activeElement !== memoEl) memoEl.value = data.content || '';
+    });
+  }
+}
+
+function showMsg(el, msg) {
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 4000);
+}
+
+// ============================================================
+//  OVERVIEW
+// ============================================================
+function renderOverview() {
+  const today = formatDate(new Date());
+  const d = new Date();
+  const weekdays = ['일','월','화','수','목','금','토'];
+  document.getElementById('overview-date').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${weekdays[d.getDay()]})`;
+
+  const member = currentUser ? DB.members.find(m => m.id === currentUser.memberId) : null;
+  if (member) document.getElementById('overview-greeting').textContent = `안녕하세요, ${member.name}님 👋`;
+
+  // Panel 1: 업무 현황
+  const stats = [
+    { label:'전체', val: DB.tasks.length, color:'text-primary' },
+    { label:'진행중', val: DB.tasks.filter(t=>t.status==='진행중').length, color:'text-blue-600' },
+    { label:'지연', val: DB.tasks.filter(t=>t.status==='지연').length, color:'text-red-500' },
+    { label:'완료', val: DB.tasks.filter(t=>t.status==='완료').length, color:'text-green-600' },
+  ];
+  document.getElementById('ov-task-stats').innerHTML = stats.map(s => `
+    <div class="bg-surface-container-low rounded-lg px-3 py-3 text-center cursor-pointer hover:bg-surface-container" onclick="showPage('dashboard')">
+      <div class="text-2xl font-bold ${s.color}">${s.val}</div>
+      <div class="text-xs text-secondary mt-0.5">${s.label}</div>
+    </div>`).join('');
+
+  // Panel 2: 오늘 일정
+  const todayEvents = DB.events.filter(e => eventFallsOnDate(e, today));
+  const trips = todayEvents.filter(e => e.type === '출장');
+  const leaves = todayEvents.filter(e => e.type === '휴무');
+  const schedEl = document.getElementById('ov-today-schedule');
+  let schedHtml = '';
+  if (!todayEvents.length) {
+    schedHtml = '<p class="text-secondary text-sm">오늘 일정 없음</p>';
+  } else {
+    const renderEventPeople = (evs, icon, color, label) => {
+      if (!evs.length) return '';
+      const names = evs.flatMap(e => {
+        const ids = getEventPersonIds(e);
+        return ids.length ? ids.map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean) : ['팀 전체'];
+      }).filter((v,i,a)=>a.indexOf(v)===i);
+      return `<div class="flex items-start gap-1.5"><span class="material-symbols-outlined text-sm ${color} mt-0.5">${icon}</span><div><span class="font-medium text-xs ${color}">${label}</span><div class="text-xs text-secondary">${names.join(', ')}</div></div></div>`;
+    };
+    schedHtml += renderEventPeople(trips, 'flight_takeoff', 'text-blue-600', '출장/외근');
+    schedHtml += renderEventPeople(leaves, 'beach_access', 'text-red-500', '휴무/휴가');
+    const others = todayEvents.filter(e => e.type !== '출장' && e.type !== '휴무');
+    others.forEach(e => {
+      schedHtml += `<div class="flex items-center gap-1.5 text-xs text-on-surface"><span class="material-symbols-outlined text-sm text-yellow-600">event</span>${e.title}</div>`;
+    });
+  }
+  schedEl.innerHTML = schedHtml;
+
+  // Panel 3: 센터 이슈
+  const issueEl = document.getElementById('ov-center-issues');
+  const issueCenters = DB.centers.filter(c => c.status !== '정상');
+  if (!issueCenters.length) {
+    issueEl.innerHTML = '<p class="text-secondary text-sm flex items-center gap-1"><span class="material-symbols-outlined text-green-500 text-sm">check_circle</span>모든 센터 정상 운영 중</p>';
+  } else {
+    issueEl.innerHTML = issueCenters.map(c => `
+      <div class="flex items-start gap-2 cursor-pointer hover:bg-surface-container-low rounded-lg px-2 py-1.5 -mx-2" onclick="showPage('centers');selectCenter(${c.id})">
+        <span class="material-symbols-outlined text-orange-500 text-sm mt-0.5">warning</span>
+        <div><div class="font-medium text-xs text-on-surface">${c.name}</div>
+        <div class="text-xs text-secondary truncate">${c.issue||c.status}</div></div>
+      </div>`).join('');
+  }
+
+  // Panel 4: 내 업무 목록
+  const myTasksEl = document.getElementById('ov-my-tasks');
+  const myId = currentUser?.memberId;
+  const myTasks = myId ? DB.tasks.filter(t => getAssigneeIds(t).includes(myId) && t.status !== '완료') : [];
+  const statusColors = {진행중:'text-blue-600',지연:'text-red-500',대기:'text-secondary'};
+  if (!myTasks.length) {
+    myTasksEl.innerHTML = '<p class="text-secondary text-sm">진행 중인 업무 없음</p>';
+  } else {
+    myTasksEl.innerHTML = myTasks.map(t => `
+      <div class="flex items-center justify-between gap-2 cursor-pointer hover:bg-surface-container-low rounded-lg px-2 py-1.5 -mx-2" onclick="showPage('dashboard');setTimeout(()=>showTaskDetail(${t.id}),100)">
+        <span class="text-xs text-on-surface truncate flex-1">${t.name}</span>
+        <span class="text-xs font-medium ${statusColors[t.status]||'text-secondary'} flex-shrink-0">${t.status}</span>
+      </div>`).join('');
+  }
+
+  // Panel 5: 메모
+  const memo = DB.memos ? DB.memos.find(m => m.userId === myId) : null;
+  const memoEl = document.getElementById('personal-memo');
+  if (memoEl) memoEl.value = memo ? memo.content : '';
+  document.getElementById('memo-saved-indicator').textContent = '';
+
+  // Panel 6: 공지사항
+  renderNotices();
+}
+
+let memoSaveTimer = null;
+function scheduleMemoSave() {
+  clearTimeout(memoSaveTimer);
+  document.getElementById('memo-saved-indicator').textContent = '입력 중...';
+  memoSaveTimer = setTimeout(saveMemo, 1500);
+}
+
+function saveMemo() {
+  if (!currentUser) return;
+  const content = document.getElementById('personal-memo').value;
+  const memoDoc = { userId: currentUser.memberId, content, updatedAt: Date.now() };
+
+  if (!DB.memos) DB.memos = [];
+  const existing = DB.memos.find(m => m.userId === currentUser.memberId);
+  if (existing) { existing.content = content; existing.updatedAt = memoDoc.updatedAt; }
+  else { DB.memos.push(memoDoc); }
+
+  db.collection('memos').doc(String(currentUser.memberId)).set(memoDoc)
+    .catch(e => console.error('메모 저장 실패:', e));
+
+  document.getElementById('memo-saved-indicator').textContent = '저장됨 ✓';
+  setTimeout(() => {
+    const el = document.getElementById('memo-saved-indicator');
+    if (el) el.textContent = '';
+  }, 2000);
+}
+
+// ============================================================
+//  NOTICES
+// ============================================================
+function renderNotices() {
+  if (!DB.notices) DB.notices = [];
+  const el = document.getElementById('ov-notices');
+  if (!el) return;
+  if (!DB.notices.length) {
+    el.innerHTML = '<p class="text-secondary text-sm">공지사항 없음</p>';
+    return;
+  }
+  el.innerHTML = DB.notices.slice().reverse().map(n => {
+    const author = DB.members.find(m => m.id === n.authorId);
+    return `
+      <div class="border border-outline-variant rounded-lg px-3 py-2.5 relative group">
+        <div class="flex items-start justify-between gap-2">
+          <div class="font-semibold text-xs text-on-surface leading-snug">${n.title}</div>
+          ${currentUser && currentUser.memberId === n.authorId ? `<button onclick="deleteNotice(${n.id})" class="opacity-0 group-hover:opacity-100 p-0.5 rounded text-red-400 hover:bg-red-50 flex-shrink-0" title="삭제"><span class="material-symbols-outlined" style="font-size:13px">delete</span></button>` : ''}
+        </div>
+        <p class="text-xs text-secondary mt-1 leading-relaxed">${n.content}</p>
+        <div class="text-xs text-secondary mt-1.5 opacity-60">${author?.name||'알수없음'} · ${new Date(n.createdAt).toLocaleDateString('ko-KR')}</div>
+      </div>`;
+  }).join('');
+}
+
+function openAddNoticeModal() {
+  if (!currentUser) { showToast('로그인이 필요합니다.'); return; }
+  document.getElementById('notice-title').value = '';
+  document.getElementById('notice-content').value = '';
+  document.getElementById('modal-add-notice').classList.remove('hidden');
+}
+
+function saveNotice() {
+  const title = document.getElementById('notice-title').value.trim();
+  const content = document.getElementById('notice-content').value.trim();
+  if (!title || !content) { alert('제목과 내용을 모두 입력하세요.'); return; }
+  if (!DB.notices) DB.notices = [];
+  DB.notices.push({ id: Date.now(), authorId: currentUser.memberId, title, content, createdAt: Date.now() });
+  saveDB();
+  document.getElementById('modal-add-notice').classList.add('hidden');
+  renderNotices();
+  showToast('공지사항이 등록되었습니다');
+}
+
+function deleteNotice(id) {
+  if (!confirm('이 공지를 삭제하겠습니까?')) return;
+  DB.notices = DB.notices.filter(n => n.id !== id);
+  saveDB();
+  renderNotices();
+  showToast('공지가 삭제되었습니다');
+}
+
+// ============================================================
+//  INIT
+// ============================================================
+async function initApp() {
+  await loadDB();
+  checkOverdueTasks();
+  document.getElementById('loading-overlay').style.display = 'none';
+  setupListeners();
+  checkAuth();
+  if (currentUser) {
+    renderOverview();
+    renderDashboard();
+    updateNotifBadge();
+  } else {
+    renderDashboard();
+    updateNotifBadge();
+  }
+}
+initApp();
+
+// Set today's date in calendar input defaults
+document.addEventListener('DOMContentLoaded', () => {
+  const today = formatDate(new Date());
+  const dateInputs = document.querySelectorAll('input[type="date"]');
+  dateInputs.forEach(i => { if (!i.value) i.value = today; });
+});
+</script>
+</body>
+</html>
