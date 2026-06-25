@@ -298,17 +298,17 @@ tailwind.config = {
   </header>
 
   <!-- Page content area -->
-  <main class="flex-1 overflow-y-auto bg-background p-6">
+  <main class="flex-1 overflow-y-auto bg-background p-3 lg:p-6">
 
     <!-- ====== PAGE: OVERVIEW ====== -->
     <div id="page-overview" class="page active">
-      <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center justify-between mb-4 lg:mb-6">
         <div>
-          <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="overview-greeting">안녕하세요 👋</h1>
+          <h1 class="text-xl lg:text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="overview-greeting">안녕하세요 👋</h1>
           <p class="text-sm text-secondary mt-0.5" id="overview-date"></p>
         </div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-4">
 
         <!-- Panel 1: 업무 현황 -->
         <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5">
@@ -371,7 +371,7 @@ tailwind.config = {
     <div id="page-dashboard" class="page">
       <div class="flex items-center justify-between mb-6">
         <div>
-          <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">업무 현황 대시보드</h1>
+          <h1 class="text-xl lg:text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">업무 현황 대시보드</h1>
           <p class="text-sm text-secondary mt-0.5" id="today-date"></p>
         </div>
         <button onclick="openAddTaskModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
@@ -430,7 +430,7 @@ tailwind.config = {
     <!-- ====== PAGE: CALENDAR ====== -->
     <div id="page-calendar" class="page">
       <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">팀 일정 캘린더</h1>
+        <h1 class="text-xl lg:text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">팀 일정 캘린더</h1>
         <button onclick="openAddEventModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
           <span class="material-symbols-outlined text-base">add</span> 일정 추가
         </button>
@@ -463,7 +463,7 @@ tailwind.config = {
     <div id="page-weekly" class="page">
       <div class="flex items-center justify-between mb-6">
         <div>
-          <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">주간 출장/휴가 현황</h1>
+          <h1 class="text-xl lg:text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">주간 출장/휴가 현황</h1>
           <p class="text-sm text-secondary mt-0.5" id="weekly-range-label"></p>
         </div>
         <button onclick="openAddEventModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
@@ -489,7 +489,7 @@ tailwind.config = {
     <!-- ====== PAGE: TEAM ====== -->
     <div id="page-team" class="page">
       <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">팀원 목록</h1>
+        <h1 class="text-xl lg:text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">팀원 목록</h1>
         <button onclick="openAddMemberModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
           <span class="material-symbols-outlined text-base">person_add</span> 팀원 추가
         </button>
@@ -531,7 +531,7 @@ tailwind.config = {
     <div id="page-centers" class="page">
       <div class="flex items-center justify-between mb-6">
         <div>
-          <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">센터별 현황</h1>
+          <h1 class="text-xl lg:text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">센터별 현황</h1>
           <p class="text-sm text-secondary mt-0.5">관리 센터의 이슈 및 특이사항을 관리합니다</p>
         </div>
         <div class="flex gap-2">
@@ -563,7 +563,7 @@ tailwind.config = {
 
     <!-- ====== PAGE: SETTINGS ====== -->
     <div id="page-settings" class="page">
-      <h1 class="text-2xl font-bold text-on-surface mb-6" style="font-family:'Hanken Grotesk'">설정</h1>
+      <h1 class="text-xl lg:text-2xl font-bold text-on-surface mb-6" style="font-family:'Hanken Grotesk'">설정</h1>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-6">
           <h3 class="font-bold text-on-surface mb-4 flex items-center gap-2"><span class="material-symbols-outlined text-primary text-base">person</span> 내 프로필</h3>
@@ -1900,7 +1900,7 @@ function selectCenter(id) {
               <span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[c.status]||'badge-normal'}">${c.status}</span>
               <span class="text-xs text-secondary font-mono">${c.code||''}</span>
             </div>
-            <h2 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">${c.name}</h2>
+            <h2 class="text-xl lg:text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">${c.name}</h2>
             <p class="text-sm text-secondary mt-1">${c.address||''}</p>
           </div>
           <div class="flex gap-2">
