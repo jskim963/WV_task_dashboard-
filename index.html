@@ -280,7 +280,7 @@ tailwind.config = {
         <!-- 데스크탑: 항상 표시 / 모바일: 활성화 시 표시 -->
         <div id="search-wrap" class="hidden lg:block relative">
           <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm">search</span>
-          <input type="text" placeholder="검색..." class="pl-9 pr-4 py-1.5 bg-surface-container border border-outline-variant rounded-full text-sm w-64 transition-all" id="global-search" oninput="globalSearch(this.value)" onblur="setTimeout(()=>{hideSearchDrop();closeMobileSearch()},250)" onkeydown="if(event.key==='Escape'){hideSearchDrop();closeMobileSearch()}">
+          <input type="text" placeholder="검색..." class="pl-9 pr-4 py-1.5 bg-surface-container border border-outline-variant rounded-full text-sm w-64 transition-all" id="global-search" oninput="globalSearch(this.value)" onblur="setTimeout(()=>{hideSearchDrop();closeMobileSearch()},350)" onkeydown="if(event.key==='Escape'){hideSearchDrop();closeMobileSearch()}">
           <div id="search-dropdown" class="hidden"></div>
         </div>
       </div>
@@ -2176,8 +2176,11 @@ function globalSearch(q) {
 function hideSearchDrop() { document.getElementById('search-dropdown').classList.add('hidden'); document.getElementById('global-search').value=''; }
 function toggleMobileSearch() {
   const wrap = document.getElementById('search-wrap');
+  if (wrap.classList.contains('mobile-open')) {
+    closeMobileSearch();
+    return;
+  }
   wrap.classList.add('mobile-open');
-  wrap.style.display = 'block';
   setTimeout(() => document.getElementById('global-search').focus(), 50);
 }
 function closeMobileSearch() {
