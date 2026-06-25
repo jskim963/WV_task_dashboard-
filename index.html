@@ -112,7 +112,7 @@ tailwind.config = {
   @media (max-width: 1023px) {
     #sidebar { position:fixed; top:0; left:0; height:100%; z-index:150; width:256px; transform:translateX(-100%); transition:transform 0.3s ease; }
     #sidebar.open { transform:translateX(0); }
-    #sidebar-overlay { display:block !important; }
+
     #main-content { margin-left:0 !important; }
     #mobile-toggle { display:flex !important; }
     .chat-window { width:calc(100vw - 32px); right:16px; }
@@ -1220,7 +1220,11 @@ function toggleSidebar() {
   const ov = document.getElementById('sidebar-overlay');
   const isOpen = sb.classList.contains('open');
   sb.classList.toggle('open');
-  ov.style.display = isOpen ? 'none' : 'block';
+  if (window.innerWidth < 1024) {
+    ov.style.display = isOpen ? 'none' : 'block';
+  } else {
+    ov.style.display = 'none';
+  }
 }
 
 // ============================================================
@@ -3017,6 +3021,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const today = formatDate(new Date());
   const dateInputs = document.querySelectorAll('input[type="date"]');
   dateInputs.forEach(i => { if (!i.value) i.value = today; });
+});
+
+window.addEventListener('resize', () => {
+  if (window.innerWidth >= 1024) {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').style.display = 'none';
+  }
 });
 </script>
 </body>
