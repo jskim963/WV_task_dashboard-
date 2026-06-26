@@ -569,8 +569,7 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
           <div class="flex gap-2 flex-wrap" id="member-status-filters">
             <button class="chip active !bg-primary !text-white !border-primary" data-filter="all" onclick="filterMembers('all')">전체</button>
             <button class="chip" data-filter="온라인" onclick="filterMembers('온라인')">온라인</button>
-            <button class="chip" data-filter="자리비움" onclick="filterMembers('자리비움')">자리비움</button>
-            <button class="chip" data-filter="휴가" onclick="filterMembers('휴가')">휴가</button>
+            <button class="chip" data-filter="오프라인" onclick="filterMembers('오프라인')">오프라인</button>
           </div>
         </div>
         <table class="hidden lg:table w-full text-sm">
@@ -948,15 +947,7 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
         <label class="block text-xs font-semibold text-secondary mb-1.5">담당 센터</label>
         <input type="text" id="member-center" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="담당 센터명">
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-secondary mb-1.5">상태</label>
-        <select id="member-status" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
-          <option value="온라인">온라인</option>
-          <option value="자리비움">자리비움</option>
-          <option value="휴가">휴가 중</option>
-          <option value="미팅중">미팅 중</option>
-        </select>
-      </div>
+      <input type="hidden" id="member-status" value="오프라인">
       <div>
         <label class="block text-xs font-semibold text-secondary mb-1.5">파트</label>
         <select id="member-part" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
@@ -1977,7 +1968,7 @@ Pages.team = (() => {
     const partColors = {'W파트':'bg-blue-100 text-blue-700','U파트':'bg-green-100 text-green-700','KAM파트':'bg-purple-100 text-purple-700'};
     tbody.innerHTML = filtered.map(m => {
       const taskCount = DB.tasks.filter(t => getAssigneeIds(t).includes(m.id) && t.status !== '완료').length;
-      const statusColors = { 온라인:'badge-complete', 자리비움:'badge-pending', 휴가:'badge-delayed', 미팅중:'badge-progress' };
+      const statusColors = { 온라인:'badge-complete', 오프라인:'badge-normal' };
       const partBadge = m.part ? `<span class="text-xs px-2 py-0.5 rounded-full font-medium ${partColors[m.part]||'bg-gray-100 text-gray-600'}">${m.part}</span>` : '<span class="text-secondary text-xs">-</span>';
       return `
         <tr class="border-b border-outline-variant hover:bg-surface-container-low transition-colors">
@@ -2007,7 +1998,7 @@ Pages.team = (() => {
     // 모바일 팀원 카드 렌더링
     const mobileList = document.getElementById('team-mobile-list');
     if (mobileList) {
-      const statusDotColors = { 온라인: '#22c55e', 오프라인: '#94a3b8', 자리비움: '#f59e0b', 휴가: '#ef4444', 미팅중: '#3b82f6' };
+      const statusDotColors = { 온라인: '#22c55e', 오프라인: '#94a3b8' };
       if (!filtered.length) {
         mobileList.innerHTML = '<div class="text-center py-12 text-secondary text-sm">팀원이 없습니다.</div>';
       } else {
@@ -2056,7 +2047,7 @@ Pages.team = (() => {
     document.getElementById('member-rank').value = '';
     document.getElementById('member-email').value = '';
     document.getElementById('member-center').value = '';
-    document.getElementById('member-status').value = '온라인';
+    document.getElementById('member-status').value = '오프라인';
     document.getElementById('member-part').value = '';
     document.getElementById('member-modal-title').textContent = '팀원 추가';
     document.getElementById('modal-add-member').classList.remove('hidden');
@@ -2070,7 +2061,7 @@ Pages.team = (() => {
     document.getElementById('member-rank').value = m.rank || '';
     document.getElementById('member-email').value = m.email || '';
     document.getElementById('member-center').value = m.center || '';
-    document.getElementById('member-status').value = m.status;
+    // status는 로그인/로그아웃으로만 자동 관리
     document.getElementById('member-part').value = m.part || '';
     document.getElementById('member-modal-title').textContent = '팀원 수정';
     document.getElementById('modal-add-member').classList.remove('hidden');
@@ -2082,15 +2073,14 @@ Pages.team = (() => {
     const rank = document.getElementById('member-rank').value.trim();
     const email = document.getElementById('member-email').value.trim();
     const center = document.getElementById('member-center').value.trim();
-    const status = document.getElementById('member-status').value;
     const part = document.getElementById('member-part').value;
     const editId = parseInt(document.getElementById('editing-member-id').value);
     if (editId) {
       const m = DB.members.find(m => m.id === editId);
-      Object.assign(m, {name, rank, email, center, status, part});
+      Object.assign(m, {name, rank, email, center, part});
       showToast('팀원 정보가 수정되었습니다');
     } else {
-      DB.members.push({id: Date.now(), name, rank, email, center, status, part, order: DB.members.length, createdAt: Date.now()});
+      DB.members.push({id: Date.now(), name, rank, email, center, status: '오프라인', part, order: DB.members.length, createdAt: Date.now()});
       showToast('팀원이 추가되었습니다');
     }
     saveDB();
@@ -3260,9 +3250,25 @@ function checkAuth() {
   }
   if (!currentUser) {
     showLoginOverlay();
+    // 로그인 전 상태이면 모든 멤버를 오프라인으로 초기화
+    db.collection('members').where('status', '==', '온라인').get().then(snap => {
+      const batch = db.batch();
+      snap.forEach(doc => batch.update(doc.ref, {status: '오프라인'}));
+      if (!snap.empty) batch.commit().catch(() => {});
+    }).catch(() => {});
   } else {
     hideLoginOverlay();
     applyCurrentUser();
+    // 현재 유저 제외 나머지 온라인 상태 초기화
+    db.collection('members').where('status', '==', '온라인').get().then(snap => {
+      const batch = db.batch();
+      snap.forEach(doc => {
+        if (doc.id !== String(currentUser.memberId)) {
+          batch.update(doc.ref, {status: '오프라인'});
+        }
+      });
+      if (!snap.empty) batch.commit().catch(() => {});
+    }).catch(() => {});
   }
 }
 
