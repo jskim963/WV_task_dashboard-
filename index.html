@@ -469,15 +469,15 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
                 </div>
               </div>
             </div>
-            <!-- 우선순위 -->
-            <div class="relative">
-              <select onchange="filterByPriority(this.value)" class="appearance-none border border-outline-variant rounded-lg pl-3 pr-7 py-1.5 text-sm text-secondary bg-white hover:border-primary transition-colors cursor-pointer" style="min-width:120px;">
-                <option value="">우선순위 (전체)</option>
-                <option value="높음">높음</option>
-                <option value="보통">보통</option>
-                <option value="낮음">낮음</option>
-              </select>
-              <span class="material-symbols-outlined pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-secondary" style="font-size:16px">expand_more</span>
+            <!-- 우선순위 커스텀 드롭박스 -->
+            <div class="relative" id="priority-dropdown-wrap">
+              <button onclick="togglePriorityDropdown()" id="priority-dropdown-btn" class="flex items-center gap-1 border border-outline-variant rounded-lg px-3 py-1.5 text-sm text-secondary bg-white hover:border-primary transition-colors" style="min-width:120px;">
+                <span id="priority-dropdown-label" class="truncate flex-1 text-left">우선순위 (전체)</span>
+                <span class="material-symbols-outlined flex-shrink-0" style="font-size:16px;line-height:1">expand_more</span>
+              </button>
+              <div id="priority-dropdown-panel" class="hidden absolute top-full left-0 mt-1 z-50 bg-white border border-outline-variant rounded-xl shadow-lg w-40 py-1.5">
+                <div id="priority-option-list"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -527,7 +527,6 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
           <div class="flex items-center gap-1.5 mb-2 flex-wrap">
             <button class="cal-filter-btn active" id="cal-filter-all" onclick="setCalFilter('all')">통합</button>
             <button class="cal-filter-btn" id="cal-filter-휴무" onclick="setCalFilter('휴무')">휴무</button>
-            <button class="cal-filter-btn" id="cal-filter-출장" onclick="setCalFilter('출장')">출장/외근</button>
             <button class="cal-filter-btn" id="cal-filter-미팅" onclick="setCalFilter('미팅')">미팅/회의</button>
             <button class="cal-filter-btn" id="cal-filter-업무보고" onclick="setCalFilter('업무보고')">업무보고</button>
             <button class="cal-filter-btn" id="cal-filter-기타" onclick="setCalFilter('기타')">기타</button>
@@ -907,7 +906,7 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
     <div class="flex items-center justify-between mb-4">
       <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="detail-task-name"></h3>
       <div class="flex gap-2">
-        <button onclick="editTask(currentDetailTaskId)" class="flex items-center gap-1 text-sm text-secondary border border-outline-variant rounded-lg px-3 py-1.5 hover:bg-surface-container"><span class="material-symbols-outlined text-sm">edit</span>수정</button>
+        <button onclick="editTask(window._dtid)" class="flex items-center gap-1 text-sm text-secondary border border-outline-variant rounded-lg px-3 py-1.5 hover:bg-surface-container"><span class="material-symbols-outlined text-sm">edit</span>수정</button>
         <button onclick="document.getElementById('modal-task-detail').classList.add('hidden')" class="p-1 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">close</span></button>
       </div>
     </div>
@@ -1502,10 +1501,9 @@ Pages.dashboard = (() => {
 
     // Summary cards
     const total = DB.tasks.length;
-    const completed = DB.tasks.filter(t=>t.status==='완료').length;
+    const inProgress = DB.tasks.filter(t=>t.status==='진행중').length;
     const delayed = DB.tasks.filter(t=>t.status==='지연').length;
     const urgent = DB.tasks.filter(t=>t.priority==='높음' && t.status!=='완료').length;
-    const pct = total ? Math.round(completed/total*100) : 0;
 
     document.getElementById('summary-cards').innerHTML = `
       <div class="stat-card">
@@ -1517,11 +1515,10 @@ Pages.dashboard = (() => {
       </div>
       <div class="stat-card">
         <div class="flex items-center justify-between mb-3">
-          <span class="text-xs font-semibold text-secondary uppercase">완료율</span>
-          <span class="material-symbols-outlined text-green-600">check_circle</span>
+          <span class="text-xs font-semibold text-secondary uppercase">진행중</span>
+          <span class="material-symbols-outlined text-blue-500">pending_actions</span>
         </div>
-        <div class="text-3xl font-bold text-green-600" style="font-family:'Hanken Grotesk'">${pct}<span class="text-base font-medium">%</span></div>
-        <div class="text-xs text-secondary mt-1">${completed}건 완료</div>
+        <div class="text-3xl font-bold text-blue-600" style="font-family:'Hanken Grotesk'">${inProgress} <span class="text-base font-medium text-secondary">건</span></div>
       </div>
       <div class="stat-card">
         <div class="flex items-center justify-between mb-3">
@@ -1626,16 +1623,18 @@ Pages.dashboard = (() => {
         const isOverdue = t.deadline && new Date(t.deadline) < new Date() && t.status !== '완료';
         return `
           <tr class="task-row border-b border-outline-variant" onclick="showTaskDetail(${t.id})">
-            <td class="px-4 py-3 text-secondary text-xs">${start + i + 1}</td>
-            <td class="px-4 py-3">
+            <td class="px-4 py-3 text-secondary text-xs whitespace-nowrap">${start + i + 1}</td>
+            <td class="px-4 py-3" style="min-width:220px">
               <div class="flex items-center gap-2">
-                <div class="priority-bar h-8 ${t.priority==='높음'?'bg-red-400':t.priority==='낮음'?'bg-green-400':'bg-yellow-400'}"></div>
-                <span class="font-medium text-on-surface text-sm">${t.name}</span>${isNew(t)?'<span class="new-badge">NEW</span>':''}
+                <div class="priority-bar h-8 flex-shrink-0 ${t.priority==='높음'?'bg-red-400':t.priority==='낮음'?'bg-green-400':'bg-yellow-400'}"></div>
+                ${t.status==='지연' ? '<span class="material-symbols-outlined text-orange-500 flex-shrink-0" style="font-size:16px" title="지연">schedule</span>' : ''}
+                ${t.priority==='높음' && t.status!=='완료' && t.status!=='지연' ? '<span class="material-symbols-outlined text-red-500 flex-shrink-0" style="font-size:16px" title="긴급">warning</span>' : ''}
+                <span class="font-medium text-on-surface text-sm whitespace-nowrap">${t.name}</span>${isNew(t)?'<span class="new-badge">NEW</span>':''}
               </div>
             </td>
-            <td class="px-4 py-3">
-              <div class="flex items-center gap-2 flex-wrap">
-                ${assignees.length ? assignees.map(m=>`<div class="flex items-center gap-1"><div class="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${m.name[0]}</div><span class="text-sm">${m.name}</span></div>`).join('') : '<span class="text-sm text-secondary">미배정</span>'}
+            <td class="px-4 py-3" style="min-width:140px">
+              <div class="flex items-center gap-2 flex-nowrap">
+                ${assignees.length ? assignees.map(m=>`<div class="flex items-center gap-1 whitespace-nowrap"><div class="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${m.name[0]}</div><span class="text-sm">${m.name}</span></div>`).join('') : '<span class="text-sm text-secondary">미배정</span>'}
               </div>
             </td>
             <td class="px-4 py-3">
@@ -1705,7 +1704,44 @@ Pages.dashboard = (() => {
     renderTaskTable();
   }
 
-  function filterByPriority_impl(v) { priorityFilter = v; page = 1; renderTaskTable(); }
+  const PRIORITY_OPTIONS = [
+    {value:'', label:'우선순위 (전체)'},
+    {value:'높음', label:'🔴 높음'},
+    {value:'보통', label:'🟡 보통'},
+    {value:'낮음', label:'🟢 낮음'},
+  ];
+
+  function renderPriorityDropdown() {
+    const list = document.getElementById('priority-option-list');
+    if (!list) return;
+    list.innerHTML = PRIORITY_OPTIONS.map(o => `
+      <button onclick="setPriorityFilter_fn('${o.value}')"
+              class="w-full text-left px-3 py-2 text-sm hover:bg-surface-container-low transition-colors ${priorityFilter === o.value ? 'font-semibold text-primary bg-primary-container' : 'text-on-surface'}">
+        ${o.label}
+      </button>`).join('');
+  }
+
+  function setPriorityFilter_fn(v) {
+    priorityFilter = v;
+    page = 1;
+    const found = PRIORITY_OPTIONS.find(o => o.value === v);
+    const label = document.getElementById('priority-dropdown-label');
+    if (label) label.textContent = found ? found.label.replace(/^[🔴🟡🟢]\s*/u,'') || '우선순위 (전체)' : '우선순위 (전체)';
+    const panel = document.getElementById('priority-dropdown-panel');
+    if (panel) panel.classList.add('hidden');
+    renderPriorityDropdown();
+    renderTaskTable();
+  }
+
+  function togglePriorityDropdown_fn() {
+    const panel = document.getElementById('priority-dropdown-panel');
+    if (!panel) return;
+    const isOpen = !panel.classList.contains('hidden');
+    panel.classList.toggle('hidden');
+    if (!isOpen) renderPriorityDropdown();
+  }
+
+  function filterByPriority_impl(v) { setPriorityFilter_fn(v); }
 
   function openAddTaskModal(prefill) {
     document.getElementById('editing-task-id').value = '';
@@ -1797,6 +1833,7 @@ Pages.dashboard = (() => {
     const t = DB.tasks.find(t => t.id === id);
     if (!t) return;
     detailTaskId = id;
+    window._dtid = id;
     const detailAssignees = getAssigneeIds(t).map(id=>DB.members.find(m=>m.id===id)).filter(Boolean);
     document.getElementById('detail-task-name').textContent = t.name;
     document.getElementById('detail-content').innerHTML = `
@@ -1860,6 +1897,8 @@ Pages.dashboard = (() => {
     renderAssigneeDropdown: renderAssigneeDropdown_impl,
     toggleAssigneeFilter: toggleAssigneeFilter_fn,
     clearAssigneeFilter: clearAssigneeFilter_fn,
+    togglePriorityDropdown: togglePriorityDropdown_fn,
+    setPriorityFilter: setPriorityFilter_fn,
   };
 })();
 
@@ -1872,6 +1911,8 @@ function statusBadge(s) {
 function renderDashboard() { Pages.dashboard.render(); }
 function filterTasks(f) { Pages.dashboard.filterTasks(f); }
 function filterByPriority(v) { Pages.dashboard.filterByPriority(v); }
+function togglePriorityDropdown() { Pages.dashboard.togglePriorityDropdown(); }
+function setPriorityFilter_fn(v) { Pages.dashboard.setPriorityFilter(v); }
 function toggleAssigneeDropdown() { Pages.dashboard.toggleAssigneeDropdown(); }
 function renderAssigneeDropdown(q) { Pages.dashboard.renderAssigneeDropdown(q); }
 function toggleAssigneeFilter_fn(id) { Pages.dashboard.toggleAssigneeFilter(id); }
@@ -1889,6 +1930,14 @@ document.addEventListener('click', function(e) {
   const wrap = document.getElementById('assignee-dropdown-wrap');
   if (wrap && !wrap.contains(e.target)) {
     document.getElementById('assignee-dropdown-panel')?.classList.remove('open');
+  }
+});
+
+// 우선순위 드롭다운 외부 클릭 시 닫기
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('priority-dropdown-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('priority-dropdown-panel')?.classList.add('hidden');
   }
 });
 
@@ -1915,8 +1964,9 @@ Pages.calendar = (() => {
     const maxVisible = isDesktop ? 4 : 2;
 
     function filterEvs(evs) {
-      if (typeFilters.has('all')) return evs;
-      return evs.filter(e => typeFilters.has(e.type));
+      const base = evs.filter(e => e.type !== '출장');
+      if (typeFilters.has('all')) return base;
+      return base.filter(e => typeFilters.has(e.type));
     }
 
     // 이전 달 날짜 채우기
@@ -2377,7 +2427,7 @@ Pages.centers = (() => {
     const statusColors = {정상:'badge-complete', 이슈:'badge-delayed', 점검:'badge-pending'};
     list.innerHTML = DB.centers.map(c => {
       const manager = DB.members.find(m => m.id === c.managerId);
-      const relatedTasks = DB.tasks.filter(t => getAssigneeIds(t).some(id => { const m=DB.members.find(m=>m.id===id); return m && m.center===c.name; }));
+      const relatedTasks = DB.tasks.filter(t => t.centerId === c.id && t.status !== '완료');
       const isOpen = selectedId === c.id;
       return `
       <div class="center-accordion-card border border-outline-variant rounded-xl mb-2 overflow-hidden bg-white shadow-sm" id="center-card-${c.id}">
@@ -2439,9 +2489,37 @@ Pages.centers = (() => {
               ${manager?`<span class="text-xs text-secondary">${manager.rank||''}</span>`:''}
             </div>
           </div>
-          <div class="bg-surface-container-low rounded-lg p-4">
-            <div class="text-xs text-secondary mb-1">관련 업무</div>
-            <div class="font-semibold text-sm">${DB.tasks.filter(t => getAssigneeIds(t).some(id => { const m=DB.members.find(m=>m.id===id); return m && m.center===c.name; })).length}건 진행 중</div>
+          <div class="bg-surface-container-low rounded-lg p-4 cursor-pointer select-none" onclick="toggleCenterTasks(${c.id},this)">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs text-secondary mb-0.5">관련 업무</div>
+                <div class="font-semibold text-sm">${DB.tasks.filter(t=>t.centerId===c.id&&t.status!=='완료').length}건 진행 중</div>
+              </div>
+              <span class="material-symbols-outlined text-secondary transition-transform duration-200" style="font-size:18px">expand_more</span>
+            </div>
+            <div class="center-task-list hidden mt-3 space-y-2">
+              ${DB.tasks.filter(t=>t.centerId===c.id&&t.status!=='완료').length===0
+                ? '<p class="text-xs text-secondary">관련 업무 없음</p>'
+                : DB.tasks.filter(t=>t.centerId===c.id&&t.status!=='완료').map(t=>{
+                    const assignees=getAssigneeIds(t).map(id=>DB.members.find(m=>m.id===id)).filter(Boolean);
+                    const isOverdue=t.deadline&&new Date(t.deadline)<new Date();
+                    return `<div class="bg-white rounded-lg px-3 py-2 border border-outline-variant cursor-pointer hover:border-primary transition-colors" onclick="event.stopPropagation();showTaskDetail(${t.id})">
+                      <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-1.5 min-w-0">
+                          ${t.status==='지연'?'<span class="material-symbols-outlined text-orange-500 flex-shrink-0" style="font-size:14px">schedule</span>':''}
+                          ${t.priority==='높음'&&t.status!=='지연'?'<span class="material-symbols-outlined text-red-500 flex-shrink-0" style="font-size:14px">warning</span>':''}
+                          <span class="text-xs font-semibold text-on-surface truncate">${t.name}</span>
+                        </div>
+                        <span class="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusBadge(t.status)}">${t.status}</span>
+                      </div>
+                      <div class="flex items-center justify-between mt-1">
+                        <span class="text-xs text-secondary">${assignees.map(m=>m.name).join(', ')||'미배정'}</span>
+                        <span class="text-xs ${isOverdue?'text-red-500 font-medium':'text-secondary'}">${t.deadline||'-'}</span>
+                      </div>
+                    </div>`;
+                  }).join('')
+              }
+            </div>
           </div>
         </div>
         ${c.director ? `
@@ -2706,6 +2784,14 @@ Pages.centers = (() => {
     saveCenter,
     deleteCenter,
     get selectedId() { return selectedId; },
+    toggleCenterTasks(centerId, cardEl) {
+      const list = cardEl.querySelector('.center-task-list');
+      const icon = cardEl.querySelector('.material-symbols-outlined');
+      if (!list) return;
+      const opening = list.classList.contains('hidden');
+      list.classList.toggle('hidden', !opening);
+      if (icon) icon.style.transform = opening ? 'rotate(180deg)' : '';
+    },
   };
 })();
 
@@ -2723,6 +2809,7 @@ function openAddCenterModal() { Pages.centers.openAddCenterModal(); }
 function editCenter(id) { Pages.centers.editCenter(id); }
 function saveCenter() { Pages.centers.saveCenter(); }
 function deleteCenter(id) { Pages.centers.deleteCenter(id); }
+function toggleCenterTasks(id, el) { Pages.centers.toggleCenterTasks(id, el); }
 
 // ============================================================
 //  SEARCH
