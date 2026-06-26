@@ -3488,11 +3488,18 @@ document.addEventListener('DOMContentLoaded', () => {
   dateInputs.forEach(i => { if (!i.value) i.value = today; });
 });
 
+// 모바일→데스크탑 경계를 실제로 넘어설 때만 사이드바 상태 초기화
+let _prevIsDesktop = window.innerWidth >= 1024;
 window.addEventListener('resize', () => {
-  if (window.innerWidth >= 1024) {
-    document.getElementById('sidebar').classList.remove('open');
-    document.getElementById('sidebar-overlay').style.display = 'none';
+  const isDesktop = window.innerWidth >= 1024;
+  if (isDesktop && !_prevIsDesktop) {
+    // 모바일에서 데스크탑으로 전환된 경우에만 초기화
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('sidebar-overlay');
+    if (sb) sb.classList.remove('open');
+    if (ov) ov.style.display = 'none';
   }
+  _prevIsDesktop = isDesktop;
 });
 </script>
 </body>
