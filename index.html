@@ -1127,6 +1127,7 @@ let DB = {
   myProfile: { name: '나', email: '', rank: '' },
 };
 let currentUser = null;
+const Pages = {};
 
 async function loadDB() {
   try {
@@ -1335,329 +1336,360 @@ function toggleSidebar() {
 }
 
 // ============================================================
-//  DASHBOARD
+//  PAGE: DASHBOARD
 // ============================================================
-let currentFilter = 'all';
-let assigneeFilter = '';
-let priorityFilter = '';
-let currentPage = 1;
-const PAGE_SIZE = 8;
+Pages.dashboard = (() => {
+  // --- 상태 ---
+  let filter = 'all';
+  let assigneeFilter = '';
+  let priorityFilter = '';
+  let page = 1;
+  const PAGE_SIZE = 8;
+  let detailTaskId = null;
 
-function renderDashboard() {
-  if (!requireAuth()) return;
-  // Today's date
-  const now = new Date();
-  document.getElementById('today-date').textContent = now.toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric', weekday:'long'});
+  function render() {
+    if (!requireAuth()) return;
+    // Today's date
+    const now = new Date();
+    document.getElementById('today-date').textContent = now.toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric', weekday:'long'});
 
-  // Summary cards
-  const total = DB.tasks.length;
-  const completed = DB.tasks.filter(t=>t.status==='완료').length;
-  const delayed = DB.tasks.filter(t=>t.status==='지연').length;
-  const urgent = DB.tasks.filter(t=>t.priority==='높음' && t.status!=='완료').length;
-  const pct = total ? Math.round(completed/total*100) : 0;
+    // Summary cards
+    const total = DB.tasks.length;
+    const completed = DB.tasks.filter(t=>t.status==='완료').length;
+    const delayed = DB.tasks.filter(t=>t.status==='지연').length;
+    const urgent = DB.tasks.filter(t=>t.priority==='높음' && t.status!=='완료').length;
+    const pct = total ? Math.round(completed/total*100) : 0;
 
-  document.getElementById('summary-cards').innerHTML = `
-    <div class="stat-card">
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-xs font-semibold text-secondary uppercase">전체 업무</span>
-        <span class="material-symbols-outlined text-primary">work</span>
+    document.getElementById('summary-cards').innerHTML = `
+      <div class="stat-card">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold text-secondary uppercase">전체 업무</span>
+          <span class="material-symbols-outlined text-primary">work</span>
+        </div>
+        <div class="text-3xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">${total} <span class="text-base font-medium text-secondary">건</span></div>
       </div>
-      <div class="text-3xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">${total} <span class="text-base font-medium text-secondary">건</span></div>
-    </div>
-    <div class="stat-card">
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-xs font-semibold text-secondary uppercase">완료율</span>
-        <span class="material-symbols-outlined text-green-600">check_circle</span>
+      <div class="stat-card">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold text-secondary uppercase">완료율</span>
+          <span class="material-symbols-outlined text-green-600">check_circle</span>
+        </div>
+        <div class="text-3xl font-bold text-green-600" style="font-family:'Hanken Grotesk'">${pct}<span class="text-base font-medium">%</span></div>
+        <div class="text-xs text-secondary mt-1">${completed}건 완료</div>
       </div>
-      <div class="text-3xl font-bold text-green-600" style="font-family:'Hanken Grotesk'">${pct}<span class="text-base font-medium">%</span></div>
-      <div class="text-xs text-secondary mt-1">${completed}건 완료</div>
-    </div>
-    <div class="stat-card">
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-xs font-semibold text-secondary uppercase">긴급 건수</span>
-        <span class="material-symbols-outlined text-red-500">warning</span>
+      <div class="stat-card">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold text-secondary uppercase">긴급 건수</span>
+          <span class="material-symbols-outlined text-red-500">warning</span>
+        </div>
+        <div class="text-3xl font-bold text-red-500" style="font-family:'Hanken Grotesk'">${urgent} <span class="text-base font-medium text-secondary">건</span></div>
       </div>
-      <div class="text-3xl font-bold text-red-500" style="font-family:'Hanken Grotesk'">${urgent} <span class="text-base font-medium text-secondary">건</span></div>
-    </div>
-    <div class="stat-card">
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-xs font-semibold text-secondary uppercase">지연</span>
-        <span class="material-symbols-outlined text-orange-500">schedule</span>
+      <div class="stat-card">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold text-secondary uppercase">지연</span>
+          <span class="material-symbols-outlined text-orange-500">schedule</span>
+        </div>
+        <div class="text-3xl font-bold text-orange-500" style="font-family:'Hanken Grotesk'">${delayed} <span class="text-base font-medium text-secondary">건</span></div>
       </div>
-      <div class="text-3xl font-bold text-orange-500" style="font-family:'Hanken Grotesk'">${delayed} <span class="text-base font-medium text-secondary">건</span></div>
-    </div>
-  `;
+    `;
 
-  // Populate assignee filter
-  const assigneeSelect = document.querySelector('select[onchange="filterByAssignee(this.value)"]');
-  if (assigneeSelect) {
-    assigneeSelect.innerHTML = '<option value="">담당자 (전체)</option>' +
-      DB.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
-    if (assigneeFilter) assigneeSelect.value = assigneeFilter;
-  }
-
-  renderTaskTable();
-}
-
-function checkOverdueTasks() {
-  const today = formatDate(new Date());
-  DB.tasks.forEach(t => {
-    if (t.deadline && t.deadline < today && t.status !== '완료' && t.status !== '지연') {
-      t.status = '지연';
-      t.updatedAt = Date.now();
-      db.collection('tasks').doc(String(t.id)).update({ status: '지연', updatedAt: t.updatedAt }).catch(()=>{});
+    // Populate assignee filter
+    const assigneeSelect = document.querySelector('select[onchange="filterByAssignee(this.value)"]');
+    if (assigneeSelect) {
+      assigneeSelect.innerHTML = '<option value="">담당자 (전체)</option>' +
+        DB.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+      if (assigneeFilter) assigneeSelect.value = assigneeFilter;
     }
-  });
-}
 
-function getFilteredTasks() {
-  return DB.tasks
-    .filter(t => {
-      if (currentFilter !== 'all' && t.status !== currentFilter) return false;
-      if (assigneeFilter && !getAssigneeIds(t).map(String).includes(String(assigneeFilter))) return false;
-      if (priorityFilter && t.priority !== priorityFilter) return false;
-      return true;
-    })
-    .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-}
+    renderTaskTable();
+  }
 
-function renderTaskTable() {
-  const filtered = getFilteredTasks();
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const paged = filtered.slice(start, start + PAGE_SIZE);
+  function checkOverdueTasks() {
+    const today = formatDate(new Date());
+    DB.tasks.forEach(t => {
+      if (t.deadline && t.deadline < today && t.status !== '완료' && t.status !== '지연') {
+        t.status = '지연';
+        t.updatedAt = Date.now();
+        db.collection('tasks').doc(String(t.id)).update({ status: '지연', updatedAt: t.updatedAt }).catch(()=>{});
+      }
+    });
+  }
 
-  const tbody = document.getElementById('task-table-body');
-  if (!paged.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-12 text-secondary text-sm">업무가 없습니다.</td></tr>';
-  } else {
-    tbody.innerHTML = paged.map((t, i) => {
-      const assignees = getAssigneeIds(t).map(id => DB.members.find(m=>m.id===id)).filter(Boolean);
-      const member = assignees[0];
-      const assigneeLabel = assignees.length ? assignees.map(m=>m.name).join(', ') : '미배정';
-      const isOverdue = t.deadline && new Date(t.deadline) < new Date() && t.status !== '완료';
-      return `
-        <tr class="task-row border-b border-outline-variant" onclick="showTaskDetail(${t.id})">
-          <td class="px-4 py-3 text-secondary text-xs">${start + i + 1}</td>
-          <td class="px-4 py-3">
-            <div class="flex items-center gap-2">
-              <div class="priority-bar h-8 ${t.priority==='높음'?'bg-red-400':t.priority==='낮음'?'bg-green-400':'bg-yellow-400'}"></div>
-              <span class="font-medium text-on-surface text-sm">${t.name}</span>${isNew(t)?'<span class="new-badge">NEW</span>':''}
-            </div>
-          </td>
-          <td class="px-4 py-3">
-            <div class="flex items-center gap-2 flex-wrap">
-              ${assignees.length ? assignees.map(m=>`<div class="flex items-center gap-1"><div class="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${m.name[0]}</div><span class="text-sm">${m.name}</span></div>`).join('') : '<span class="text-sm text-secondary">미배정</span>'}
-            </div>
-          </td>
-          <td class="px-4 py-3">
-            <span class="text-xs px-2 py-0.5 rounded-full font-medium ${t.priority==='높음'?'badge-high':t.priority==='낮음'?'badge-low':'badge-normal'}">${t.priority}</span>
-          </td>
-          <td class="px-4 py-3 text-sm ${isOverdue?'text-red-500 font-medium':''}">${t.deadline || '-'}</td>
-          <td class="px-4 py-3">
-            <span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge(t.status)}">${t.status}</span>
-          </td>
-          <td class="px-4 py-3">
-            <div class="flex gap-1">
-              <button onclick="event.stopPropagation();editTask(${t.id})" class="p-1 rounded hover:bg-surface-container text-secondary" title="수정"><span class="material-symbols-outlined text-sm">edit</span></button>
-              <button onclick="event.stopPropagation();deleteTask(${t.id})" class="p-1 rounded hover:bg-red-50 text-red-400" title="삭제"><span class="material-symbols-outlined text-sm">delete</span></button>
-            </div>
-          </td>
-        </tr>
-      `;
+  function getFilteredTasks() {
+    return DB.tasks
+      .filter(t => {
+        if (filter !== 'all' && t.status !== filter) return false;
+        if (assigneeFilter && !getAssigneeIds(t).map(String).includes(String(assigneeFilter))) return false;
+        if (priorityFilter && t.priority !== priorityFilter) return false;
+        return true;
+      })
+      .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+  }
+
+  function renderTaskTable() {
+    const filtered = getFilteredTasks();
+    const start = (page - 1) * PAGE_SIZE;
+    const paged = filtered.slice(start, start + PAGE_SIZE);
+
+    const tbody = document.getElementById('task-table-body');
+    if (!paged.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-12 text-secondary text-sm">업무가 없습니다.</td></tr>';
+    } else {
+      tbody.innerHTML = paged.map((t, i) => {
+        const assignees = getAssigneeIds(t).map(id => DB.members.find(m=>m.id===id)).filter(Boolean);
+        const member = assignees[0];
+        const assigneeLabel = assignees.length ? assignees.map(m=>m.name).join(', ') : '미배정';
+        const isOverdue = t.deadline && new Date(t.deadline) < new Date() && t.status !== '완료';
+        return `
+          <tr class="task-row border-b border-outline-variant" onclick="showTaskDetail(${t.id})">
+            <td class="px-4 py-3 text-secondary text-xs">${start + i + 1}</td>
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2">
+                <div class="priority-bar h-8 ${t.priority==='높음'?'bg-red-400':t.priority==='낮음'?'bg-green-400':'bg-yellow-400'}"></div>
+                <span class="font-medium text-on-surface text-sm">${t.name}</span>${isNew(t)?'<span class="new-badge">NEW</span>':''}
+              </div>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2 flex-wrap">
+                ${assignees.length ? assignees.map(m=>`<div class="flex items-center gap-1"><div class="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${m.name[0]}</div><span class="text-sm">${m.name}</span></div>`).join('') : '<span class="text-sm text-secondary">미배정</span>'}
+              </div>
+            </td>
+            <td class="px-4 py-3">
+              <span class="text-xs px-2 py-0.5 rounded-full font-medium ${t.priority==='높음'?'badge-high':t.priority==='낮음'?'badge-low':'badge-normal'}">${t.priority}</span>
+            </td>
+            <td class="px-4 py-3 text-sm ${isOverdue?'text-red-500 font-medium':''}">${t.deadline || '-'}</td>
+            <td class="px-4 py-3">
+              <span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge(t.status)}">${t.status}</span>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex gap-1">
+                <button onclick="event.stopPropagation();editTask(${t.id})" class="p-1 rounded hover:bg-surface-container text-secondary" title="수정"><span class="material-symbols-outlined text-sm">edit</span></button>
+                <button onclick="event.stopPropagation();deleteTask(${t.id})" class="p-1 rounded hover:bg-red-50 text-red-400" title="삭제"><span class="material-symbols-outlined text-sm">delete</span></button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // 모바일 카드 렌더링
+    const cardList = document.getElementById('task-card-list');
+    if (cardList) {
+      const statusColors = { '완료':'badge-complete', '진행중':'badge-progress', '지연':'badge-delayed', '대기':'badge-pending' };
+      const priColors = { '높음':'badge-high', '보통':'badge-normal', '낮음':'badge-low', '긴급':'badge-urgent' };
+      cardList.innerHTML = paged.map(t => {
+        const nb = isNew(t) ? '<span class="new-badge">NEW</span>' : '';
+        const sc = statusColors[t.status] || 'badge-normal';
+        const pc = priColors[t.priority] || 'badge-normal';
+        const assignees = getAssigneeIds(t).map(id => DB.members.find(m=>m.id===id)).filter(Boolean);
+        const assigneeLabel = assignees.length ? assignees.map(m=>m.name).join(', ') : '-';
+        return `<div class="p-4 hover:bg-surface-container-low cursor-pointer" onclick="showTaskDetail(${t.id})">
+          <div class="flex items-start justify-between gap-2 mb-1.5">
+            <span class="font-semibold text-sm text-on-surface leading-snug">${t.name}${nb}</span>
+            <span class="badge ${sc} text-xs px-2 py-0.5 rounded-full flex-shrink-0">${t.status}</span>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-secondary flex-wrap">
+            <span>👤 ${assigneeLabel}</span>
+            <span>📅 ${t.deadline || '-'}</span>
+            <span class="badge ${pc} text-xs px-2 py-0.5 rounded-full">${t.priority || '-'}</span>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // Count & pagination
+    document.getElementById('task-count-info').textContent = `총 ${filtered.length}건 중 ${start+1}-${Math.min(start+PAGE_SIZE, filtered.length)}건`;
+    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+    const pag = document.getElementById('pagination');
+    pag.innerHTML = '';
+    for (let p = 1; p <= totalPages; p++) {
+      const btn = document.createElement('button');
+      btn.textContent = p;
+      btn.className = `px-3 py-1 rounded text-sm font-medium transition-all ${p === page ? 'bg-primary text-white' : 'border border-outline-variant text-secondary hover:bg-surface-container'}`;
+      btn.onclick = () => { page = p; renderTaskTable(); };
+      pag.appendChild(btn);
+    }
+  }
+
+  function filterTasks_impl(f) {
+    filter = f; page = 1;
+    document.querySelectorAll('.filter-btn').forEach(b => {
+      b.className = b.dataset.filter === f
+        ? 'filter-btn active px-4 py-1.5 rounded-full text-sm font-medium transition-all bg-primary text-white'
+        : 'filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary';
+    });
+    renderTaskTable();
+  }
+
+  function filterByAssignee_impl(v) { assigneeFilter = v; page = 1; renderTaskTable(); }
+  function filterByPriority_impl(v) { priorityFilter = v; page = 1; renderTaskTable(); }
+
+  function openAddTaskModal(prefill) {
+    document.getElementById('editing-task-id').value = '';
+    document.getElementById('task-name').value = '';
+    document.getElementById('task-desc').value = '';
+    document.getElementById('task-deadline').value = '';
+    document.getElementById('task-status').value = '대기';
+    document.getElementById('task-priority').value = '보통';
+    document.getElementById('task-modal-title').textContent = '새 업무 추가';
+    // Populate assignee select grouped by part
+    const sel = document.getElementById('task-assignee');
+    const parts = ['W파트','U파트','KAM파트'];
+    const grouped = parts.map(p => {
+      const members = DB.members.filter(m => m.part === p);
+      if (!members.length) return '';
+      return `<optgroup label="${p}">${members.map(m => { const cnt = DB.tasks.filter(t=>getAssigneeIds(t).includes(m.id)&&t.status!=='완료').length; return `<option value="${m.id}">${m.name}${cnt?` (${cnt}건)`:''}`;}).join('')}</optgroup>`;
     }).join('');
+    const noPart = DB.members.filter(m => !m.part);
+    const noPartHtml = noPart.length ? `<optgroup label="기타">${noPart.map(m => { const cnt = DB.tasks.filter(t=>getAssigneeIds(t).includes(m.id)&&t.status!=='완료').length; return `<option value="${m.id}">${m.name}${cnt?` (${cnt}건)`:''}`;}).join('')}</optgroup>` : '';
+    sel.innerHTML = grouped + noPartHtml;
+    // Populate center select
+    const cSel = document.getElementById('task-center');
+    cSel.innerHTML = '<option value="">없음</option>' + DB.centers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    updateTaskPartBtns();
+    document.getElementById('modal-add-task').classList.remove('hidden');
   }
 
-  // 모바일 카드 렌더링
-  const cardList = document.getElementById('task-card-list');
-  if (cardList) {
-    const statusColors = { '완료':'badge-complete', '진행중':'badge-progress', '지연':'badge-delayed', '대기':'badge-pending' };
-    const priColors = { '높음':'badge-high', '보통':'badge-normal', '낮음':'badge-low', '긴급':'badge-urgent' };
-    cardList.innerHTML = paged.map(t => {
-      const nb = isNew(t) ? '<span class="new-badge">NEW</span>' : '';
-      const sc = statusColors[t.status] || 'badge-normal';
-      const pc = priColors[t.priority] || 'badge-normal';
-      const assignees = getAssigneeIds(t).map(id => DB.members.find(m=>m.id===id)).filter(Boolean);
-      const assigneeLabel = assignees.length ? assignees.map(m=>m.name).join(', ') : '-';
-      return `<div class="p-4 hover:bg-surface-container-low cursor-pointer" onclick="showTaskDetail(${t.id})">
-        <div class="flex items-start justify-between gap-2 mb-1.5">
-          <span class="font-semibold text-sm text-on-surface leading-snug">${t.name}${nb}</span>
-          <span class="badge ${sc} text-xs px-2 py-0.5 rounded-full flex-shrink-0">${t.status}</span>
+  function editTask(id) {
+    const t = DB.tasks.find(t => t.id === id);
+    if (!t) return;
+    document.getElementById('modal-task-detail').classList.add('hidden');
+    document.getElementById('editing-task-id').value = id;
+    document.getElementById('task-name').value = t.name;
+    document.getElementById('task-desc').value = t.desc || '';
+    document.getElementById('task-deadline').value = t.deadline || '';
+    document.getElementById('task-status').value = t.status;
+    document.getElementById('task-priority').value = t.priority;
+    document.getElementById('task-modal-title').textContent = '업무 수정';
+    const sel = document.getElementById('task-assignee');
+    const parts2 = ['W파트','U파트','KAM파트'];
+    const grouped2 = parts2.map(p => { const ms = DB.members.filter(m=>m.part===p); if(!ms.length) return ''; return `<optgroup label="${p}">${ms.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`; }).join('');
+    const noPart2 = DB.members.filter(m=>!m.part);
+    sel.innerHTML = grouped2 + (noPart2.length?`<optgroup label="기타">${noPart2.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`:'');
+    const ids = getAssigneeIds(t);
+    [...sel.options].forEach(o => { o.selected = ids.includes(parseInt(o.value)); });
+    // Populate & restore center select
+    const cSel = document.getElementById('task-center');
+    cSel.innerHTML = '<option value="">없음</option>' + DB.centers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    cSel.value = t.centerId || '';
+    updateTaskPartBtns();
+    document.getElementById('modal-add-task').classList.remove('hidden');
+  }
+
+  function saveTask() {
+    const name = document.getElementById('task-name').value.trim();
+    if (!name) { alert('업무명을 입력하세요.'); return; }
+    const status = document.getElementById('task-status').value;
+    const priority = document.getElementById('task-priority').value;
+    const deadline = document.getElementById('task-deadline').value;
+    const desc = document.getElementById('task-desc').value.trim();
+    const centerId = parseInt(document.getElementById('task-center').value) || null;
+    const assigneeIds = [...document.getElementById('task-assignee').selectedOptions].map(o=>parseInt(o.value));
+    if (!assigneeIds.length) { alert('담당자를 선택하세요.'); return; }
+    const editId = document.getElementById('editing-task-id').value;
+    if (editId) {
+      const t = DB.tasks.find(t => t.id === parseInt(editId));
+      Object.assign(t, {name, assigneeIds, centerId, status, priority, deadline, desc, updatedAt: Date.now()});
+      showToast('업무가 수정되었습니다');
+    } else {
+      const dup = DB.tasks.find(t => t.name === name && t.status !== '완료' && getAssigneeIds(t).some(id => assigneeIds.includes(id)));
+      if (dup) { if (!confirm('동일한 담당자에게 같은 업무명이 이미 존재합니다.\n그래도 추가하겠습니까?')) return; }
+      DB.tasks.push({id: Date.now(), name, assigneeIds, centerId, status, priority, deadline, desc, comments:[], createdAt: Date.now(), updatedAt: Date.now()});
+      showToast('업무가 추가되었습니다');
+    }
+    saveDB();
+    document.getElementById('modal-add-task').classList.add('hidden');
+    render();
+  }
+
+  function deleteTask(id) {
+    if (!confirm('이 업무를 삭제하겠습니까?')) return;
+    DB.tasks = DB.tasks.filter(t => t.id !== id);
+    saveDB();
+    render();
+    showToast('업무가 삭제되었습니다');
+  }
+
+  function showTaskDetail(id) {
+    const t = DB.tasks.find(t => t.id === id);
+    if (!t) return;
+    detailTaskId = id;
+    const detailAssignees = getAssigneeIds(t).map(id=>DB.members.find(m=>m.id===id)).filter(Boolean);
+    document.getElementById('detail-task-name').textContent = t.name;
+    document.getElementById('detail-content').innerHTML = `
+      <div class="grid grid-cols-2 gap-4 mb-4 pb-4 border-b border-outline-variant">
+        <div><span class="text-xs text-secondary block mb-1">담당자</span>
+          <div class="flex flex-wrap gap-2">${detailAssignees.length ? detailAssignees.map(m=>`<div class="flex items-center gap-1.5"><div class="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">${m.name[0]}</div><span class="text-sm font-medium">${m.name}</span></div>`).join('') : '<span class="text-sm text-secondary">미배정</span>'}</div>
         </div>
-        <div class="flex items-center gap-3 text-xs text-secondary flex-wrap">
-          <span>👤 ${assigneeLabel}</span>
-          <span>📅 ${t.deadline || '-'}</span>
-          <span class="badge ${pc} text-xs px-2 py-0.5 rounded-full">${t.priority || '-'}</span>
-        </div>
-      </div>`;
-    }).join('');
+        <div><span class="text-xs text-secondary block mb-1">상태</span><span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge(t.status)}">${t.status}</span></div>
+        <div><span class="text-xs text-secondary block mb-1">우선순위</span><span class="text-xs px-2 py-0.5 rounded-full font-medium ${t.priority==='높음'?'badge-high':t.priority==='낮음'?'badge-low':'badge-normal'}">${t.priority}</span></div>
+        <div><span class="text-xs text-secondary block mb-1">마감일</span><span class="text-sm">${t.deadline||'-'}</span></div>
+        ${t.centerId ? `<div class="col-span-2"><span class="text-xs text-secondary block mb-1">관련 센터</span><span class="text-sm font-medium flex items-center gap-1"><span class="material-symbols-outlined text-sm text-primary">location_on</span>${DB.centers.find(c=>c.id===t.centerId)?.name||'-'}</span></div>` : ''}
+      </div>
+      ${t.desc ? `<div class="mb-4 pb-4 border-b border-outline-variant"><p class="text-xs text-secondary mb-1">상세 내용</p><p class="text-sm text-on-surface leading-relaxed">${t.desc}</p></div>` : ''}
+    `;
+    renderComments(id);
+    document.getElementById('modal-task-detail').classList.remove('hidden');
   }
 
-  // Count & pagination
-  document.getElementById('task-count-info').textContent = `총 ${filtered.length}건 중 ${start+1}-${Math.min(start+PAGE_SIZE, filtered.length)}건`;
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const pag = document.getElementById('pagination');
-  pag.innerHTML = '';
-  for (let p = 1; p <= totalPages; p++) {
-    const btn = document.createElement('button');
-    btn.textContent = p;
-    btn.className = `px-3 py-1 rounded text-sm font-medium transition-all ${p === currentPage ? 'bg-primary text-white' : 'border border-outline-variant text-secondary hover:bg-surface-container'}`;
-    btn.onclick = () => { currentPage = p; renderTaskTable(); };
-    pag.appendChild(btn);
+  function renderComments(taskId) {
+    const t = DB.tasks.find(t => t.id === taskId);
+    const el = document.getElementById('detail-comments');
+    if (!t || !t.comments.length) { el.innerHTML = '<p class="text-xs text-secondary">댓글이 없습니다.</p>'; return; }
+    el.innerHTML = t.comments.map(c => `
+      <div class="flex gap-2.5">
+        <div class="w-6 h-6 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center text-xs font-bold flex-shrink-0">${c.author[0]}</div>
+        <div><div class="flex items-center gap-2"><span class="text-xs font-semibold text-on-surface">${c.author}</span><span class="text-xs text-secondary">${c.time}</span></div>
+        <p class="text-xs text-on-surface mt-0.5">${c.text}</p></div>
+      </div>
+    `).join('');
   }
-}
 
+  function addComment() {
+    const t = DB.tasks.find(t => t.id === detailTaskId);
+    const input = document.getElementById('comment-input');
+    const text = input.value.trim();
+    if (!t || !text) return;
+    const now = new Date();
+    const timeStr = now.toLocaleDateString('ko-KR') + ' ' + now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+    t.comments.push({author: DB.myProfile.name || '나', text, time: timeStr});
+    saveDB();
+    input.value = '';
+    renderComments(detailTaskId);
+    updateNotifBadge();
+  }
+
+  return {
+    render,
+    filterTasks: filterTasks_impl,
+    filterByAssignee: filterByAssignee_impl,
+    filterByPriority: filterByPriority_impl,
+    openAddTaskModal,
+    editTask,
+    saveTask,
+    deleteTask,
+    showTaskDetail,
+    addComment,
+    checkOverdueTasks,
+    renderTaskTable,
+  };
+})();
+
+// statusBadge는 전역 유지 (weekly에서도 사용)
 function statusBadge(s) {
   return s==='완료'?'badge-complete':s==='진행중'?'badge-progress':s==='지연'?'badge-delayed':'badge-pending';
 }
 
-function filterTasks(f) {
-  currentFilter = f; currentPage = 1;
-  document.querySelectorAll('.filter-btn').forEach(b => {
-    b.className = b.dataset.filter === f
-      ? 'filter-btn active px-4 py-1.5 rounded-full text-sm font-medium transition-all bg-primary text-white'
-      : 'filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary';
-  });
-  renderTaskTable();
-}
-
-function filterByAssignee(v) { assigneeFilter = v; currentPage = 1; renderTaskTable(); }
-function filterByPriority(v) { priorityFilter = v; currentPage = 1; renderTaskTable(); }
-
-function openAddTaskModal(prefill) {
-  document.getElementById('editing-task-id').value = '';
-  document.getElementById('task-name').value = '';
-  document.getElementById('task-desc').value = '';
-  document.getElementById('task-deadline').value = '';
-  document.getElementById('task-status').value = '대기';
-  document.getElementById('task-priority').value = '보통';
-  document.getElementById('task-modal-title').textContent = '새 업무 추가';
-  // Populate assignee select grouped by part
-  const sel = document.getElementById('task-assignee');
-  const parts = ['W파트','U파트','KAM파트'];
-  const grouped = parts.map(p => {
-    const members = DB.members.filter(m => m.part === p);
-    if (!members.length) return '';
-    return `<optgroup label="${p}">${members.map(m => { const cnt = DB.tasks.filter(t=>getAssigneeIds(t).includes(m.id)&&t.status!=='완료').length; return `<option value="${m.id}">${m.name}${cnt?` (${cnt}건)`:''}`;}).join('')}</optgroup>`;
-  }).join('');
-  const noPart = DB.members.filter(m => !m.part);
-  const noPartHtml = noPart.length ? `<optgroup label="기타">${noPart.map(m => { const cnt = DB.tasks.filter(t=>getAssigneeIds(t).includes(m.id)&&t.status!=='완료').length; return `<option value="${m.id}">${m.name}${cnt?` (${cnt}건)`:''}`;}).join('')}</optgroup>` : '';
-  sel.innerHTML = grouped + noPartHtml;
-  // Populate center select
-  const cSel = document.getElementById('task-center');
-  cSel.innerHTML = '<option value="">없음</option>' + DB.centers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-  updateTaskPartBtns();
-  document.getElementById('modal-add-task').classList.remove('hidden');
-}
-
-function editTask(id) {
-  const t = DB.tasks.find(t => t.id === id);
-  if (!t) return;
-  document.getElementById('modal-task-detail').classList.add('hidden');
-  document.getElementById('editing-task-id').value = id;
-  document.getElementById('task-name').value = t.name;
-  document.getElementById('task-desc').value = t.desc || '';
-  document.getElementById('task-deadline').value = t.deadline || '';
-  document.getElementById('task-status').value = t.status;
-  document.getElementById('task-priority').value = t.priority;
-  document.getElementById('task-modal-title').textContent = '업무 수정';
-  const sel = document.getElementById('task-assignee');
-  const parts2 = ['W파트','U파트','KAM파트'];
-  const grouped2 = parts2.map(p => { const ms = DB.members.filter(m=>m.part===p); if(!ms.length) return ''; return `<optgroup label="${p}">${ms.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`; }).join('');
-  const noPart2 = DB.members.filter(m=>!m.part);
-  sel.innerHTML = grouped2 + (noPart2.length?`<optgroup label="기타">${noPart2.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`:'');
-  const ids = getAssigneeIds(t);
-  [...sel.options].forEach(o => { o.selected = ids.includes(parseInt(o.value)); });
-  // Populate & restore center select
-  const cSel = document.getElementById('task-center');
-  cSel.innerHTML = '<option value="">없음</option>' + DB.centers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-  cSel.value = t.centerId || '';
-  updateTaskPartBtns();
-  document.getElementById('modal-add-task').classList.remove('hidden');
-}
-
-function saveTask() {
-  const name = document.getElementById('task-name').value.trim();
-  if (!name) { alert('업무명을 입력하세요.'); return; }
-  const status = document.getElementById('task-status').value;
-  const priority = document.getElementById('task-priority').value;
-  const deadline = document.getElementById('task-deadline').value;
-  const desc = document.getElementById('task-desc').value.trim();
-  const centerId = parseInt(document.getElementById('task-center').value) || null;
-  const assigneeIds = [...document.getElementById('task-assignee').selectedOptions].map(o=>parseInt(o.value));
-  if (!assigneeIds.length) { alert('담당자를 선택하세요.'); return; }
-  const editId = document.getElementById('editing-task-id').value;
-  if (editId) {
-    const t = DB.tasks.find(t => t.id === parseInt(editId));
-    Object.assign(t, {name, assigneeIds, centerId, status, priority, deadline, desc, updatedAt: Date.now()});
-    showToast('업무가 수정되었습니다');
-  } else {
-    const dup = DB.tasks.find(t => t.name === name && t.status !== '완료' && getAssigneeIds(t).some(id => assigneeIds.includes(id)));
-    if (dup) { if (!confirm('동일한 담당자에게 같은 업무명이 이미 존재합니다.\n그래도 추가하겠습니까?')) return; }
-    DB.tasks.push({id: Date.now(), name, assigneeIds, centerId, status, priority, deadline, desc, comments:[], createdAt: Date.now(), updatedAt: Date.now()});
-    showToast('업무가 추가되었습니다');
-  }
-  saveDB();
-  document.getElementById('modal-add-task').classList.add('hidden');
-  renderDashboard();
-}
-
-function deleteTask(id) {
-  if (!confirm('이 업무를 삭제하겠습니까?')) return;
-  DB.tasks = DB.tasks.filter(t => t.id !== id);
-  saveDB();
-  renderDashboard();
-  showToast('업무가 삭제되었습니다');
-}
-
-let currentDetailTaskId = null;
-function showTaskDetail(id) {
-  const t = DB.tasks.find(t => t.id === id);
-  if (!t) return;
-  currentDetailTaskId = id;
-  const detailAssignees = getAssigneeIds(t).map(id=>DB.members.find(m=>m.id===id)).filter(Boolean);
-  document.getElementById('detail-task-name').textContent = t.name;
-  document.getElementById('detail-content').innerHTML = `
-    <div class="grid grid-cols-2 gap-4 mb-4 pb-4 border-b border-outline-variant">
-      <div><span class="text-xs text-secondary block mb-1">담당자</span>
-        <div class="flex flex-wrap gap-2">${detailAssignees.length ? detailAssignees.map(m=>`<div class="flex items-center gap-1.5"><div class="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">${m.name[0]}</div><span class="text-sm font-medium">${m.name}</span></div>`).join('') : '<span class="text-sm text-secondary">미배정</span>'}</div>
-      </div>
-      <div><span class="text-xs text-secondary block mb-1">상태</span><span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge(t.status)}">${t.status}</span></div>
-      <div><span class="text-xs text-secondary block mb-1">우선순위</span><span class="text-xs px-2 py-0.5 rounded-full font-medium ${t.priority==='높음'?'badge-high':t.priority==='낮음'?'badge-low':'badge-normal'}">${t.priority}</span></div>
-      <div><span class="text-xs text-secondary block mb-1">마감일</span><span class="text-sm">${t.deadline||'-'}</span></div>
-      ${t.centerId ? `<div class="col-span-2"><span class="text-xs text-secondary block mb-1">관련 센터</span><span class="text-sm font-medium flex items-center gap-1"><span class="material-symbols-outlined text-sm text-primary">location_on</span>${DB.centers.find(c=>c.id===t.centerId)?.name||'-'}</span></div>` : ''}
-    </div>
-    ${t.desc ? `<div class="mb-4 pb-4 border-b border-outline-variant"><p class="text-xs text-secondary mb-1">상세 내용</p><p class="text-sm text-on-surface leading-relaxed">${t.desc}</p></div>` : ''}
-  `;
-  renderComments(id);
-  document.getElementById('modal-task-detail').classList.remove('hidden');
-}
-
-function renderComments(taskId) {
-  const t = DB.tasks.find(t => t.id === taskId);
-  const el = document.getElementById('detail-comments');
-  if (!t || !t.comments.length) { el.innerHTML = '<p class="text-xs text-secondary">댓글이 없습니다.</p>'; return; }
-  el.innerHTML = t.comments.map(c => `
-    <div class="flex gap-2.5">
-      <div class="w-6 h-6 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center text-xs font-bold flex-shrink-0">${c.author[0]}</div>
-      <div><div class="flex items-center gap-2"><span class="text-xs font-semibold text-on-surface">${c.author}</span><span class="text-xs text-secondary">${c.time}</span></div>
-      <p class="text-xs text-on-surface mt-0.5">${c.text}</p></div>
-    </div>
-  `).join('');
-}
-
-function addComment() {
-  const t = DB.tasks.find(t => t.id === currentDetailTaskId);
-  const input = document.getElementById('comment-input');
-  const text = input.value.trim();
-  if (!t || !text) return;
-  const now = new Date();
-  const timeStr = now.toLocaleDateString('ko-KR') + ' ' + now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
-  t.comments.push({author: DB.myProfile.name || '나', text, time: timeStr});
-  saveDB();
-  input.value = '';
-  renderComments(currentDetailTaskId);
-  updateNotifBadge();
-}
+// --- Dashboard shims (HTML onclick 호환) ---
+function renderDashboard() { Pages.dashboard.render(); }
+function filterTasks(f) { Pages.dashboard.filterTasks(f); }
+function filterByAssignee(v) { Pages.dashboard.filterByAssignee(v); }
+function filterByPriority(v) { Pages.dashboard.filterByPriority(v); }
+function openAddTaskModal(p) { Pages.dashboard.openAddTaskModal(p); }
+function editTask(id) { Pages.dashboard.editTask(id); }
+function saveTask() { Pages.dashboard.saveTask(); }
+function deleteTask(id) { Pages.dashboard.deleteTask(id); }
+function showTaskDetail(id) { Pages.dashboard.showTaskDetail(id); }
+function addComment() { Pages.dashboard.addComment(); }
 
 // ============================================================
 //  CALENDAR
