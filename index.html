@@ -122,7 +122,15 @@ tailwind.config = {
   label.chip:has(input[value="휴무"]:checked)  { background:#fee2e2 !important; border-color:#dc2626 !important; color:#dc2626 !important; font-weight:600; }
   label.chip:has(input[value="출장"]:checked)  { background:#dbeafe !important; border-color:#1d4ed8 !important; color:#1d4ed8 !important; font-weight:600; }
   label.chip:has(input[value="미팅"]:checked)  { background:#fef9c3 !important; border-color:#ca8a04 !important; color:#ca8a04 !important; font-weight:600; }
-  label.chip:has(input[value="기타"]:checked)  { background:#ede9fe !important; border-color:#7c3aed !important; color:#7c3aed !important; font-weight:600; }
+  label.chip:has(input[value="기타"]:checked)    { background:#ede9fe !important; border-color:#7c3aed !important; color:#7c3aed !important; font-weight:600; }
+  label.chip:has(input[value="업무보고"]:checked){ background:#dcfce7 !important; border-color:#16a34a !important; color:#16a34a !important; font-weight:600; }
+
+  /* Dashboard assignee custom dropdown */
+  #assignee-dropdown-panel { display:none; }
+  #assignee-dropdown-panel.open { display:block; }
+  .assignee-cb-row { display:flex; align-items:center; gap:8px; padding:5px 12px; cursor:pointer; font-size:13px; color:#475569; transition:background 0.1s; }
+  .assignee-cb-row:hover { background:#f1f5f9; }
+  .assignee-cb-row input[type=checkbox] { accent-color:#1d4ed8; width:14px; height:14px; flex-shrink:0; }
 
   /* Responsive sidebar */
   @media (max-width: 1023px) {
@@ -281,6 +289,9 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       <div class="nav-item" onclick="showPage('centers')" id="nav-centers">
         <span class="material-symbols-outlined">map</span> 센터별 현황
       </div>
+      <div class="nav-item" onclick="showPage('library')" id="nav-library">
+        <span class="material-symbols-outlined">folder_open</span> 자료실
+      </div>
       <div class="nav-item" onclick="showPage('settings')" id="nav-settings">
         <span class="material-symbols-outlined">settings</span> 설정
       </div>
@@ -432,16 +443,33 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
             <button class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary" data-filter="지연" onclick="filterTasks('지연')">지연</button>
             <button class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary" data-filter="대기" onclick="filterTasks('대기')">대기</button>
           </div>
-          <div class="hidden sm:flex gap-2">
-            <select onchange="filterByAssignee(this.value)" class="border border-outline-variant rounded-lg px-3 py-1.5 text-sm text-secondary bg-white">
-              <option value="">담당자 (전체)</option>
-            </select>
-            <select onchange="filterByPriority(this.value)" class="border border-outline-variant rounded-lg px-3 py-1.5 text-sm text-secondary bg-white">
-              <option value="">우선순위 (전체)</option>
-              <option value="높음">높음</option>
-              <option value="보통">보통</option>
-              <option value="낮음">낮음</option>
-            </select>
+          <div class="hidden sm:flex gap-2 items-center">
+            <!-- 담당자 커스텀 멀티셀렉트 -->
+            <div class="relative" id="assignee-dropdown-wrap">
+              <button onclick="toggleAssigneeDropdown()" id="assignee-dropdown-btn" class="flex items-center gap-1 border border-outline-variant rounded-lg px-3 py-1.5 text-sm text-secondary bg-white hover:border-primary transition-colors" style="min-width:130px;">
+                <span id="assignee-dropdown-label" class="truncate flex-1 text-left">담당자 (전체)</span>
+                <span class="material-symbols-outlined flex-shrink-0" style="font-size:16px;line-height:1">expand_more</span>
+              </button>
+              <div id="assignee-dropdown-panel" class="absolute top-full left-0 mt-1 z-50 bg-white border border-outline-variant rounded-xl shadow-lg w-56 py-2">
+                <div class="px-3 pb-2">
+                  <input type="text" id="assignee-search" placeholder="이름 검색..." class="w-full border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs" oninput="renderAssigneeDropdown(this.value)">
+                </div>
+                <div id="assignee-checkbox-list" class="max-h-44 overflow-y-auto"></div>
+                <div class="border-t border-outline-variant px-3 pt-2 mt-1">
+                  <button onclick="clearAssigneeFilter()" class="text-xs text-secondary hover:text-primary">전체 해제</button>
+                </div>
+              </div>
+            </div>
+            <!-- 우선순위 -->
+            <div class="relative">
+              <select onchange="filterByPriority(this.value)" class="appearance-none border border-outline-variant rounded-lg pl-3 pr-7 py-1.5 text-sm text-secondary bg-white hover:border-primary transition-colors cursor-pointer" style="min-width:120px;">
+                <option value="">우선순위 (전체)</option>
+                <option value="높음">높음</option>
+                <option value="보통">보통</option>
+                <option value="낮음">낮음</option>
+              </select>
+              <span class="material-symbols-outlined pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-secondary" style="font-size:16px">expand_more</span>
+            </div>
           </div>
         </div>
         <div class="overflow-x-auto hidden lg:block" id="task-table-wrap">
@@ -486,10 +514,14 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
             <button onclick="changeMonth(1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary flex-shrink-0"><span class="material-symbols-outlined">chevron_right</span></button>
             <button onclick="goToToday()" class="px-3 py-1 border border-outline-variant rounded-lg text-sm text-secondary hover:bg-surface-container flex-shrink-0">오늘</button>
           </div>
-          <!-- Row 2: 필터 버튼 -->
-          <div class="flex items-center gap-2 mb-2 flex-wrap">
+          <!-- Row 2: 필터 버튼 (중복 선택 가능) -->
+          <div class="flex items-center gap-1.5 mb-2 flex-wrap">
             <button class="cal-filter-btn active" id="cal-filter-all" onclick="setCalFilter('all')">통합</button>
+            <button class="cal-filter-btn" id="cal-filter-휴무" onclick="setCalFilter('휴무')">휴무</button>
+            <button class="cal-filter-btn" id="cal-filter-출장" onclick="setCalFilter('출장')">출장/외근</button>
+            <button class="cal-filter-btn" id="cal-filter-미팅" onclick="setCalFilter('미팅')">미팅/회의</button>
             <button class="cal-filter-btn" id="cal-filter-업무보고" onclick="setCalFilter('업무보고')">업무보고</button>
+            <button class="cal-filter-btn" id="cal-filter-기타" onclick="setCalFilter('기타')">기타</button>
           </div>
           <!-- Row 3: 범례 가로 나열 -->
           <div class="cal-legend flex items-center gap-x-3 gap-y-1 text-xs text-secondary flex-wrap">
@@ -613,6 +645,34 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       </div>
       <!-- Center accordion list -->
       <div id="center-list"></div>
+    </div>
+
+    <!-- ====== PAGE: LIBRARY ====== -->
+    <div id="page-library" class="page">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-xl lg:text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">자료실</h1>
+          <p class="text-sm text-secondary mt-0.5">공문·전결규정·자료 등 열람</p>
+        </div>
+        <button onclick="openAddLibraryModal()" id="library-add-btn" class="hidden items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
+          <span class="material-symbols-outlined text-base">add</span> 자료 추가
+        </button>
+      </div>
+      <!-- 카테고리 필터 -->
+      <div class="flex gap-2 flex-wrap mb-4" id="lib-cat-filters">
+        <button class="chip active !bg-primary !text-white !border-primary" data-cat="all" onclick="filterLibrary('all')">전체</button>
+        <button class="chip" data-cat="공문" onclick="filterLibrary('공문')">공문</button>
+        <button class="chip" data-cat="전결규정" onclick="filterLibrary('전결규정')">전결규정</button>
+        <button class="chip" data-cat="자료" onclick="filterLibrary('자료')">자료</button>
+        <button class="chip" data-cat="기타" onclick="filterLibrary('기타')">기타</button>
+      </div>
+      <!-- 검색 -->
+      <div class="relative mb-4 max-w-sm">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm">search</span>
+        <input type="text" id="lib-search" placeholder="자료 검색..." class="pl-9 pr-4 py-2 border border-outline-variant rounded-lg text-sm w-full" oninput="renderLibrary()">
+      </div>
+      <!-- 자료 목록 -->
+      <div id="lib-list" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"></div>
     </div>
 
     <!-- ====== PAGE: SETTINGS ====== -->
@@ -1069,6 +1129,63 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
   </div>
 </div>
 
+<!-- Notice Detail / Comment Modal -->
+<div id="modal-notice-detail" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:520px;max-height:80vh;display:flex;flex-direction:column;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-base font-bold text-on-surface" id="notice-detail-title"></h3>
+      <button onclick="document.getElementById('modal-notice-detail').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <p class="text-sm text-on-surface leading-relaxed mb-1" id="notice-detail-content"></p>
+    <p class="text-xs text-secondary mb-4" id="notice-detail-meta"></p>
+    <div class="border-t border-outline-variant pt-4 flex-1 overflow-y-auto">
+      <p class="text-xs font-semibold text-secondary mb-2">댓글</p>
+      <div id="notice-comment-list" class="space-y-2 mb-3"></div>
+      <div class="flex gap-2">
+        <input type="text" id="notice-comment-input" placeholder="댓글 입력..." class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')addNoticeComment()">
+        <button onclick="addNoticeComment()" class="bg-primary text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700">등록</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Library Add Modal -->
+<div id="modal-add-library" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:480px;">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'">자료 추가</h3>
+      <button onclick="document.getElementById('modal-add-library').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">제목 *</label>
+        <input type="text" id="lib-title" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="자료 제목">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">카테고리 *</label>
+        <select id="lib-category" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+          <option value="공문">공문</option>
+          <option value="전결규정">전결규정</option>
+          <option value="자료">자료</option>
+          <option value="기타">기타</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">URL / 링크</label>
+        <input type="url" id="lib-url" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="https://...">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">설명</label>
+        <textarea id="lib-desc" rows="3" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none" placeholder="자료에 대한 간단한 설명"></textarea>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="document.getElementById('modal-add-library').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2.5 text-sm text-secondary hover:bg-surface-container">취소</button>
+      <button onclick="saveLibraryItem()" class="flex-1 bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700">등록</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast notification -->
 <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-500 hidden">
   <div class="bg-on-surface text-white px-5 py-3 rounded-full text-sm font-medium shadow-xl flex items-center gap-2">
@@ -1101,7 +1218,7 @@ db.enablePersistence().catch(err => {
   }
 });
 
-const FS_COLLS = ['tasks', 'members', 'centers', 'events', 'notices', 'users', 'memos'];
+const FS_COLLS = ['tasks', 'members', 'centers', 'events', 'notices', 'users', 'memos', 'library'];
 
 // ============================================================
 //  DATA STORE (localStorage persistence)
@@ -1115,6 +1232,7 @@ let DB = {
   notices: [],
   todos: [],
   memos: [],
+  library: [],
   myProfile: { name: '나', email: '', rank: '' },
 };
 let currentUser = null;
@@ -1324,7 +1442,7 @@ function toggleSidebar() {
 Pages.dashboard = (() => {
   // --- 상태 ---
   let filter = 'all';
-  let assigneeFilter = '';
+  let assigneeFilters = [];   // 멀티 담당자 (ID 문자열 배열)
   let priorityFilter = '';
   let page = 1;
   const PAGE_SIZE = 8;
@@ -1375,14 +1493,7 @@ Pages.dashboard = (() => {
       </div>
     `;
 
-    // Populate assignee filter
-    const assigneeSelect = document.querySelector('select[onchange="filterByAssignee(this.value)"]');
-    if (assigneeSelect) {
-      assigneeSelect.innerHTML = '<option value="">담당자 (전체)</option>' +
-        DB.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
-      if (assigneeFilter) assigneeSelect.value = assigneeFilter;
-    }
-
+    renderAssigneeDropdown_impl('');
     renderTaskTable();
   }
 
@@ -1401,11 +1512,56 @@ Pages.dashboard = (() => {
     return DB.tasks
       .filter(t => {
         if (filter !== 'all' && t.status !== filter) return false;
-        if (assigneeFilter && !getAssigneeIds(t).map(String).includes(String(assigneeFilter))) return false;
+        if (assigneeFilters.length > 0) {
+          const ids = getAssigneeIds(t).map(String);
+          if (!assigneeFilters.some(id => ids.includes(String(id)))) return false;
+        }
         if (priorityFilter && t.priority !== priorityFilter) return false;
         return true;
       })
       .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+  }
+
+  function updateAssigneeLabel() {
+    const label = document.getElementById('assignee-dropdown-label');
+    if (!label) return;
+    if (assigneeFilters.length === 0) { label.textContent = '담당자 (전체)'; return; }
+    const names = assigneeFilters.map(id => {
+      const m = DB.members.find(m => String(m.id) === String(id));
+      return m ? m.name : '';
+    }).filter(Boolean);
+    label.textContent = names.length <= 2 ? names.join(', ') : `${names[0]} 외 ${names.length - 1}명`;
+  }
+
+  function renderAssigneeDropdown_impl(search) {
+    const list = document.getElementById('assignee-checkbox-list');
+    if (!list) return;
+    const q = (search || '').trim().toLowerCase();
+    const members = DB.members.filter(m => !q || m.name.includes(q));
+    list.innerHTML = members.map(m => `
+      <label class="assignee-cb-row" onclick="event.stopPropagation()">
+        <input type="checkbox" ${assigneeFilters.includes(String(m.id)) ? 'checked' : ''}
+          onchange="toggleAssigneeFilter_fn('${m.id}')">
+        <span>${m.name}</span><span class="text-xs text-secondary ml-auto">${m.rank||''}</span>
+      </label>`).join('');
+  }
+
+  function toggleAssigneeFilter_fn(id) {
+    const sid = String(id);
+    const idx = assigneeFilters.indexOf(sid);
+    if (idx >= 0) assigneeFilters.splice(idx, 1);
+    else assigneeFilters.push(sid);
+    page = 1;
+    updateAssigneeLabel();
+    renderTaskTable();
+  }
+
+  function clearAssigneeFilter_fn() {
+    assigneeFilters = [];
+    page = 1;
+    updateAssigneeLabel();
+    renderAssigneeDropdown_impl(document.getElementById('assignee-search')?.value || '');
+    renderTaskTable();
   }
 
   function renderTaskTable() {
@@ -1503,7 +1659,6 @@ Pages.dashboard = (() => {
     renderTaskTable();
   }
 
-  function filterByAssignee_impl(v) { assigneeFilter = v; page = 1; renderTaskTable(); }
   function filterByPriority_impl(v) { priorityFilter = v; page = 1; renderTaskTable(); }
 
   function openAddTaskModal(prefill) {
@@ -1644,7 +1799,6 @@ Pages.dashboard = (() => {
   return {
     render,
     filterTasks: filterTasks_impl,
-    filterByAssignee: filterByAssignee_impl,
     filterByPriority: filterByPriority_impl,
     openAddTaskModal,
     editTask,
@@ -1654,6 +1808,12 @@ Pages.dashboard = (() => {
     addComment,
     checkOverdueTasks,
     renderTaskTable,
+    toggleAssigneeDropdown() {
+      document.getElementById('assignee-dropdown-panel').classList.toggle('open');
+    },
+    renderAssigneeDropdown: renderAssigneeDropdown_impl,
+    toggleAssigneeFilter: toggleAssigneeFilter_fn,
+    clearAssigneeFilter: clearAssigneeFilter_fn,
   };
 })();
 
@@ -1665,8 +1825,11 @@ function statusBadge(s) {
 // --- Dashboard shims (HTML onclick 호환) ---
 function renderDashboard() { Pages.dashboard.render(); }
 function filterTasks(f) { Pages.dashboard.filterTasks(f); }
-function filterByAssignee(v) { Pages.dashboard.filterByAssignee(v); }
 function filterByPriority(v) { Pages.dashboard.filterByPriority(v); }
+function toggleAssigneeDropdown() { Pages.dashboard.toggleAssigneeDropdown(); }
+function renderAssigneeDropdown(q) { Pages.dashboard.renderAssigneeDropdown(q); }
+function toggleAssigneeFilter_fn(id) { Pages.dashboard.toggleAssigneeFilter(id); }
+function clearAssigneeFilter() { Pages.dashboard.clearAssigneeFilter(); }
 function openAddTaskModal(p) { Pages.dashboard.openAddTaskModal(p); }
 function editTask(id) { Pages.dashboard.editTask(id); }
 function saveTask() { Pages.dashboard.saveTask(); }
@@ -1675,13 +1838,21 @@ function showTaskDetail(id) { Pages.dashboard.showTaskDetail(id); }
 function addComment() { Pages.dashboard.addComment(); }
 function checkOverdueTasks() { Pages.dashboard.checkOverdueTasks(); }
 
+// 담당자 드롭다운 외부 클릭 시 닫기
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('assignee-dropdown-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('assignee-dropdown-panel')?.classList.remove('open');
+  }
+});
+
 // ============================================================
 //  PAGE: CALENDAR
 // ============================================================
 Pages.calendar = (() => {
   let year = new Date().getFullYear();
   let month = new Date().getMonth();
-  let typeFilter = 'all';
+  let typeFilters = new Set(['all']);
 
   function render() {
     if (!requireAuth()) return;
@@ -1698,8 +1869,8 @@ Pages.calendar = (() => {
     const maxVisible = isDesktop ? 4 : 2;
 
     function filterEvs(evs) {
-      if (typeFilter === 'all') return evs;
-      return evs.filter(e => e.type === typeFilter);
+      if (typeFilters.has('all')) return evs;
+      return evs.filter(e => typeFilters.has(e.type));
     }
 
     // 이전 달 날짜 채우기
@@ -1769,11 +1940,23 @@ Pages.calendar = (() => {
   }
 
   function setFilter(type) {
-    typeFilter = type;
+    if (type === 'all') {
+      typeFilters = new Set(['all']);
+    } else {
+      typeFilters.delete('all');
+      if (typeFilters.has(type)) {
+        typeFilters.delete(type);
+        if (typeFilters.size === 0) typeFilters.add('all');
+      } else {
+        typeFilters.add(type);
+      }
+    }
     document.querySelectorAll('.cal-filter-btn').forEach(btn => btn.classList.remove('active'));
-    const target = type === 'all' ? 'cal-filter-all' : `cal-filter-${type}`;
-    const el = document.getElementById(target);
-    if (el) el.classList.add('active');
+    typeFilters.forEach(t => {
+      const id = t === 'all' ? 'cal-filter-all' : `cal-filter-${t}`;
+      const el = document.getElementById(id);
+      if (el) el.classList.add('active');
+    });
     render();
   }
 
@@ -2086,9 +2269,6 @@ Pages.team = (() => {
     saveDB();
     document.getElementById('modal-add-member').classList.add('hidden');
     render();
-    // update assignee selects
-    const sel = document.querySelector('select[onchange="filterByAssignee(this.value)"]');
-    if (sel) sel.innerHTML = '<option value="">담당자 (전체)</option>' + DB.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
   }
 
   function moveMember(id, dir) {
@@ -3541,6 +3721,8 @@ function saveMemo() {
 // ============================================================
 //  NOTICES
 // ============================================================
+let _activeNoticeId = null;
+
 function renderNotices() {
   if (!DB.notices) DB.notices = [];
   const el = document.getElementById('ov-notices');
@@ -3551,16 +3733,85 @@ function renderNotices() {
   }
   el.innerHTML = DB.notices.slice().reverse().map(n => {
     const author = DB.members.find(m => m.id === n.authorId);
+    const cmtCount = (n.comments || []).length;
     return `
-      <div class="border border-outline-variant rounded-lg px-3 py-2.5 relative group">
+      <div class="border border-outline-variant rounded-lg px-3 py-2.5 relative group cursor-pointer hover:border-primary transition-colors" onclick="openNoticeDetail(${n.id})">
         <div class="flex items-start justify-between gap-2">
           <div class="font-semibold text-xs text-on-surface leading-snug">${n.title}</div>
-          ${currentUser && (currentUser.memberId === n.authorId || currentUser.username === 'jungsoo.kim') ? `<button onclick="deleteNotice(${n.id})" class="opacity-0 group-hover:opacity-100 p-0.5 rounded text-red-400 hover:bg-red-50 flex-shrink-0" title="삭제"><span class="material-symbols-outlined" style="font-size:13px">delete</span></button>` : ''}
+          ${currentUser && (currentUser.memberId === n.authorId || currentUser.username === 'jungsoo.kim') ? `<button onclick="event.stopPropagation();deleteNotice(${n.id})" class="opacity-0 group-hover:opacity-100 p-0.5 rounded text-red-400 hover:bg-red-50 flex-shrink-0" title="삭제"><span class="material-symbols-outlined" style="font-size:13px">delete</span></button>` : ''}
         </div>
-        <p class="text-xs text-secondary mt-1 leading-relaxed">${n.content}</p>
-        <div class="text-xs text-secondary mt-1.5 opacity-60">${author?.name||'알수없음'} · ${new Date(n.createdAt).toLocaleDateString('ko-KR')}</div>
+        <p class="text-xs text-secondary mt-1 leading-relaxed line-clamp-2">${n.content}</p>
+        <div class="flex items-center justify-between mt-1.5">
+          <div class="text-xs text-secondary opacity-60">${author?.name||'알수없음'} · ${new Date(n.createdAt).toLocaleDateString('ko-KR')}</div>
+          ${cmtCount > 0 ? `<span class="text-xs text-primary flex items-center gap-0.5"><span class="material-symbols-outlined" style="font-size:12px">chat_bubble</span>${cmtCount}</span>` : ''}
+        </div>
       </div>`;
   }).join('');
+}
+
+function openNoticeDetail(id) {
+  const n = DB.notices.find(n => n.id === id);
+  if (!n) return;
+  _activeNoticeId = id;
+  const author = DB.members.find(m => m.id === n.authorId);
+  document.getElementById('notice-detail-title').textContent = n.title;
+  document.getElementById('notice-detail-content').textContent = n.content;
+  document.getElementById('notice-detail-meta').textContent =
+    `${author?.name||'알수없음'} · ${new Date(n.createdAt).toLocaleDateString('ko-KR')}`;
+  document.getElementById('notice-comment-input').value = '';
+  renderNoticeComments(n);
+  document.getElementById('modal-notice-detail').classList.remove('hidden');
+}
+
+function renderNoticeComments(n) {
+  const list = document.getElementById('notice-comment-list');
+  if (!list) return;
+  const comments = n.comments || [];
+  if (!comments.length) {
+    list.innerHTML = '<p class="text-xs text-secondary">아직 댓글이 없습니다.</p>';
+    return;
+  }
+  list.innerHTML = comments.map(c => {
+    const cAuthor = DB.members.find(m => m.id === c.authorId);
+    const canDel = currentUser && (currentUser.memberId === c.authorId || currentUser.username === 'jungsoo.kim');
+    return `<div class="flex items-start gap-2 group">
+      <div class="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${(cAuthor?.name||'?')[0]}</div>
+      <div class="flex-1 bg-surface-container-low rounded-lg px-2.5 py-1.5">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-semibold text-on-surface">${cAuthor?.name||'알수없음'}</span>
+          <span class="text-xs text-secondary opacity-60">${new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>
+        </div>
+        <p class="text-xs text-on-surface mt-0.5">${c.text}</p>
+      </div>
+      ${canDel ? `<button onclick="deleteNoticeComment(${n.id},${c.id})" class="opacity-0 group-hover:opacity-100 p-0.5 text-red-400 hover:bg-red-50 rounded flex-shrink-0"><span class="material-symbols-outlined" style="font-size:13px">delete</span></button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function addNoticeComment() {
+  if (!currentUser) { showToast('로그인이 필요합니다.'); return; }
+  const input = document.getElementById('notice-comment-input');
+  const text = input.value.trim();
+  if (!text) return;
+  const n = DB.notices.find(n => n.id === _activeNoticeId);
+  if (!n) return;
+  if (!n.comments) n.comments = [];
+  const comment = { id: Date.now(), authorId: currentUser.memberId, text, createdAt: Date.now() };
+  n.comments.push(comment);
+  db.collection('notices').doc(String(n.id)).update({ comments: n.comments }).catch(() => {});
+  input.value = '';
+  renderNoticeComments(n);
+  renderNotices();
+  showToast('댓글이 등록되었습니다');
+}
+
+function deleteNoticeComment(noticeId, commentId) {
+  const n = DB.notices.find(n => n.id === noticeId);
+  if (!n) return;
+  n.comments = (n.comments || []).filter(c => c.id !== commentId);
+  db.collection('notices').doc(String(n.id)).update({ comments: n.comments }).catch(() => {});
+  renderNoticeComments(n);
+  renderNotices();
 }
 
 function openAddNoticeModal() {
@@ -3588,6 +3839,113 @@ function deleteNotice(id) {
   db.collection('notices').doc(String(id)).delete().catch(e => console.error(e));
   renderNotices();
   showToast('공지가 삭제되었습니다');
+}
+
+// ============================================================
+//  PAGE: LIBRARY
+// ============================================================
+Pages.library = (() => {
+  let catFilter = 'all';
+
+  const CAT_COLORS = {
+    공문: 'bg-blue-100 text-blue-700',
+    전결규정: 'bg-purple-100 text-purple-700',
+    자료: 'bg-green-100 text-green-700',
+    기타: 'bg-gray-100 text-gray-600',
+  };
+
+  function render() {
+    if (!requireAuth()) return;
+    if (!DB.library) DB.library = [];
+    // 관리자만 추가 버튼 표시
+    const addBtn = document.getElementById('library-add-btn');
+    if (addBtn) addBtn.className = currentUser?.username === 'jungsoo.kim'
+      ? 'flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm'
+      : 'hidden items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm';
+    // 필터 버튼 active 상태
+    document.querySelectorAll('#lib-cat-filters .chip').forEach(btn => {
+      const active = btn.dataset.cat === catFilter;
+      btn.className = active
+        ? 'chip active !bg-primary !text-white !border-primary'
+        : 'chip';
+    });
+    renderList();
+  }
+
+  function renderList() {
+    const list = document.getElementById('lib-list');
+    if (!list) return;
+    const q = (document.getElementById('lib-search')?.value || '').toLowerCase();
+    const items = (DB.library || []).filter(item => {
+      if (catFilter !== 'all' && item.category !== catFilter) return false;
+      if (q && !item.title.toLowerCase().includes(q) && !(item.desc||'').toLowerCase().includes(q)) return false;
+      return true;
+    }).slice().reverse();
+
+    if (!items.length) {
+      list.innerHTML = '<div class="col-span-3 text-center py-16 text-secondary text-sm">등록된 자료가 없습니다.</div>';
+      return;
+    }
+    const isAdmin = currentUser?.username === 'jungsoo.kim';
+    list.innerHTML = items.map(item => {
+      const catBadge = CAT_COLORS[item.category] || CAT_COLORS['기타'];
+      const adder = DB.members.find(m => m.id === item.addedBy);
+      return `
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-4 hover:border-primary transition-colors group">
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <span class="text-xs px-2 py-0.5 rounded-full font-medium ${catBadge}">${item.category}</span>
+            ${isAdmin ? `<button onclick="deleteLibraryItem(${item.id})" class="opacity-0 group-hover:opacity-100 p-0.5 rounded text-red-400 hover:bg-red-50 flex-shrink-0"><span class="material-symbols-outlined" style="font-size:13px">delete</span></button>` : ''}
+          </div>
+          <div class="font-semibold text-sm text-on-surface mb-1 leading-snug">${item.title}</div>
+          ${item.desc ? `<p class="text-xs text-secondary leading-relaxed line-clamp-2 mb-2">${item.desc}</p>` : ''}
+          <div class="flex items-center justify-between mt-2">
+            <span class="text-xs text-secondary opacity-60">${adder?.name||'알수없음'} · ${new Date(item.addedAt).toLocaleDateString('ko-KR')}</span>
+            ${item.url ? `<a href="${item.url}" target="_blank" rel="noopener" class="flex items-center gap-1 text-xs text-primary hover:underline font-medium"><span class="material-symbols-outlined" style="font-size:13px">open_in_new</span>열기</a>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function setCatFilter(cat) {
+    catFilter = cat;
+    render();
+  }
+
+  return { render, setCatFilter, renderList };
+})();
+
+function renderLibrary() { Pages.library?.renderList(); }
+function filterLibrary(cat) { Pages.library.setCatFilter(cat); }
+
+function openAddLibraryModal() {
+  document.getElementById('lib-title').value = '';
+  document.getElementById('lib-category').value = '공문';
+  document.getElementById('lib-url').value = '';
+  document.getElementById('lib-desc').value = '';
+  document.getElementById('modal-add-library').classList.remove('hidden');
+}
+
+function saveLibraryItem() {
+  const title = document.getElementById('lib-title').value.trim();
+  if (!title) { alert('제목을 입력하세요.'); return; }
+  const category = document.getElementById('lib-category').value;
+  const url = document.getElementById('lib-url').value.trim();
+  const desc = document.getElementById('lib-desc').value.trim();
+  if (!DB.library) DB.library = [];
+  const item = { id: Date.now(), title, category, url, desc, addedBy: currentUser.memberId, addedAt: Date.now() };
+  DB.library.push(item);
+  db.collection('library').doc(String(item.id)).set(item).catch(e => console.error(e));
+  document.getElementById('modal-add-library').classList.add('hidden');
+  Pages.library.renderList();
+  showToast('자료가 등록되었습니다');
+}
+
+function deleteLibraryItem(id) {
+  if (!confirm('이 자료를 삭제하겠습니까?')) return;
+  DB.library = (DB.library || []).filter(i => i.id !== id);
+  db.collection('library').doc(String(id)).delete().catch(e => console.error(e));
+  Pages.library.renderList();
+  showToast('자료가 삭제되었습니다');
 }
 
 // ============================================================
