@@ -1966,171 +1966,194 @@ function openEditEventModal(id) { Pages.calendar.openEditEventModal(id); }
 function saveEvent() { Pages.calendar.saveEvent(); }
 
 // ============================================================
-//  TEAM
+//  PAGE: TEAM
 // ============================================================
-let memberFilter = 'all';
-let memberPartFilter = 'all';
+Pages.team = (() => {
+  let statusFilter = 'all';
+  let partFilter = 'all';
 
-function renderTeam() {
-  if (!requireAuth()) return;
-  let filtered = memberFilter === 'all' ? DB.members : DB.members.filter(m => m.status === memberFilter);
-  if (memberPartFilter !== 'all') filtered = filtered.filter(m => m.part === memberPartFilter);
-  const tbody = document.getElementById('team-table-body');
-  if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-12 text-secondary text-sm">팀원이 없습니다.</td></tr>';
-    return;
-  }
-  const partColors = {'W파트':'bg-blue-100 text-blue-700','U파트':'bg-green-100 text-green-700','KAM파트':'bg-purple-100 text-purple-700'};
-  tbody.innerHTML = filtered.map(m => {
-    const taskCount = DB.tasks.filter(t => getAssigneeIds(t).includes(m.id) && t.status !== '완료').length;
-    const statusColors = { 온라인:'badge-complete', 자리비움:'badge-pending', 휴가:'badge-delayed', 미팅중:'badge-progress' };
-    const partBadge = m.part ? `<span class="text-xs px-2 py-0.5 rounded-full font-medium ${partColors[m.part]||'bg-gray-100 text-gray-600'}">${m.part}</span>` : '<span class="text-secondary text-xs">-</span>';
-    return `
-      <tr class="border-b border-outline-variant hover:bg-surface-container-low transition-colors">
-        <td class="px-4 py-3">
-          <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">${m.name[0]}</div>
-            <span class="font-medium text-sm text-on-surface">${m.name}</span>
-          </div>
-        </td>
-        <td class="px-4 py-3 text-sm text-secondary">${m.rank||'-'}</td>
-        <td class="px-4 py-3">${partBadge}</td>
-        <td class="px-4 py-3 text-sm text-secondary">${m.center||'-'}</td>
-        <td class="px-4 py-3 text-sm text-secondary">${m.email||'-'}</td>
-        <td class="px-4 py-3"><span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[m.status]||'badge-normal'}">${m.status}</span></td>
-        <td class="px-4 py-3 text-sm">${taskCount > 0 ? `<span class="font-semibold text-primary cursor-pointer hover:underline" onclick="showMemberTasks(${m.id})">${taskCount}건</span>` : '<span class="text-secondary">없음</span>'}</td>
-        <td class="px-4 py-3">
-          <div class="flex gap-1">
-            <button onclick="moveMember(${m.id},-1)" class="p-1 rounded hover:bg-surface-container text-secondary" title="위로"><span class="material-symbols-outlined text-sm">arrow_upward</span></button>
-            <button onclick="moveMember(${m.id},1)" class="p-1 rounded hover:bg-surface-container text-secondary" title="아래로"><span class="material-symbols-outlined text-sm">arrow_downward</span></button>
-            <button onclick="editMember(${m.id})" class="p-1 rounded hover:bg-surface-container text-secondary"><span class="material-symbols-outlined text-sm">edit</span></button>
-            <button onclick="deleteMember(${m.id})" class="p-1 rounded hover:bg-red-50 text-red-400"><span class="material-symbols-outlined text-sm">delete</span></button>
-          </div>
-        </td>
-      </tr>`;
-  }).join('');
-
-  // 모바일 팀원 카드 렌더링
-  const mobileList = document.getElementById('team-mobile-list');
-  if (mobileList) {
-    const statusDotColors = { 온라인: '#22c55e', 오프라인: '#94a3b8', 자리비움: '#f59e0b', 휴가: '#ef4444', 미팅중: '#3b82f6' };
+  function render() {
+    if (!requireAuth()) return;
+    let filtered = statusFilter === 'all' ? DB.members : DB.members.filter(m => m.status === statusFilter);
+    if (partFilter !== 'all') filtered = filtered.filter(m => m.part === partFilter);
+    const tbody = document.getElementById('team-table-body');
     if (!filtered.length) {
-      mobileList.innerHTML = '<div class="text-center py-12 text-secondary text-sm">팀원이 없습니다.</div>';
-    } else {
-      mobileList.innerHTML = filtered.map(m => {
-        const taskCount = DB.tasks.filter(t => getAssigneeIds(t).includes(m.id) && t.status !== '완료').length;
-        const dotColor = statusDotColors[m.status] || '#94a3b8';
-        const initial = m.name ? m.name[0] : '?';
-        return `<div class="flex items-center gap-3 px-4 py-3 hover:bg-surface-container-low active:bg-surface-container cursor-pointer" onclick="editMember(${m.id})">
-          <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm flex-shrink-0">${initial}</div>
-          <div class="flex-1 min-w-0">
-            <div class="font-semibold text-sm text-on-surface">${m.name}</div>
-            <div class="text-xs text-secondary truncate">${m.rank || ''}${m.rank && m.part ? ' · ' : ''}${m.part || ''}</div>
-          </div>
-          <div class="flex flex-col items-end gap-1 flex-shrink-0">
-            <div class="flex items-center gap-1.5">
-              <div class="w-2 h-2 rounded-full" style="background:${dotColor}"></div>
-              <span class="text-xs text-secondary">${m.status || '오프라인'}</span>
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-12 text-secondary text-sm">팀원이 없습니다.</td></tr>';
+      return;
+    }
+    const partColors = {'W파트':'bg-blue-100 text-blue-700','U파트':'bg-green-100 text-green-700','KAM파트':'bg-purple-100 text-purple-700'};
+    tbody.innerHTML = filtered.map(m => {
+      const taskCount = DB.tasks.filter(t => getAssigneeIds(t).includes(m.id) && t.status !== '완료').length;
+      const statusColors = { 온라인:'badge-complete', 자리비움:'badge-pending', 휴가:'badge-delayed', 미팅중:'badge-progress' };
+      const partBadge = m.part ? `<span class="text-xs px-2 py-0.5 rounded-full font-medium ${partColors[m.part]||'bg-gray-100 text-gray-600'}">${m.part}</span>` : '<span class="text-secondary text-xs">-</span>';
+      return `
+        <tr class="border-b border-outline-variant hover:bg-surface-container-low transition-colors">
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">${m.name[0]}</div>
+              <span class="font-medium text-sm text-on-surface">${m.name}</span>
             </div>
-            ${taskCount > 0 ? `<span class="text-xs text-primary font-medium cursor-pointer" onclick="event.stopPropagation();showMemberTasks(${m.id})">${taskCount}건 진행중</span>` : ''}
-          </div>
-        </div>`;
-      }).join('');
+          </td>
+          <td class="px-4 py-3 text-sm text-secondary">${m.rank||'-'}</td>
+          <td class="px-4 py-3">${partBadge}</td>
+          <td class="px-4 py-3 text-sm text-secondary">${m.center||'-'}</td>
+          <td class="px-4 py-3 text-sm text-secondary">${m.email||'-'}</td>
+          <td class="px-4 py-3"><span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[m.status]||'badge-normal'}">${m.status}</span></td>
+          <td class="px-4 py-3 text-sm">${taskCount > 0 ? `<span class="font-semibold text-primary cursor-pointer hover:underline" onclick="showMemberTasks(${m.id})">${taskCount}건</span>` : '<span class="text-secondary">없음</span>'}</td>
+          <td class="px-4 py-3">
+            <div class="flex gap-1">
+              <button onclick="moveMember(${m.id},-1)" class="p-1 rounded hover:bg-surface-container text-secondary" title="위로"><span class="material-symbols-outlined text-sm">arrow_upward</span></button>
+              <button onclick="moveMember(${m.id},1)" class="p-1 rounded hover:bg-surface-container text-secondary" title="아래로"><span class="material-symbols-outlined text-sm">arrow_downward</span></button>
+              <button onclick="editMember(${m.id})" class="p-1 rounded hover:bg-surface-container text-secondary"><span class="material-symbols-outlined text-sm">edit</span></button>
+              <button onclick="deleteMember(${m.id})" class="p-1 rounded hover:bg-red-50 text-red-400"><span class="material-symbols-outlined text-sm">delete</span></button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+
+    // 모바일 팀원 카드 렌더링
+    const mobileList = document.getElementById('team-mobile-list');
+    if (mobileList) {
+      const statusDotColors = { 온라인: '#22c55e', 오프라인: '#94a3b8', 자리비움: '#f59e0b', 휴가: '#ef4444', 미팅중: '#3b82f6' };
+      if (!filtered.length) {
+        mobileList.innerHTML = '<div class="text-center py-12 text-secondary text-sm">팀원이 없습니다.</div>';
+      } else {
+        mobileList.innerHTML = filtered.map(m => {
+          const taskCount = DB.tasks.filter(t => getAssigneeIds(t).includes(m.id) && t.status !== '완료').length;
+          const dotColor = statusDotColors[m.status] || '#94a3b8';
+          const initial = m.name ? m.name[0] : '?';
+          return `<div class="flex items-center gap-3 px-4 py-3 hover:bg-surface-container-low active:bg-surface-container cursor-pointer" onclick="editMember(${m.id})">
+            <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm flex-shrink-0">${initial}</div>
+            <div class="flex-1 min-w-0">
+              <div class="font-semibold text-sm text-on-surface">${m.name}</div>
+              <div class="text-xs text-secondary truncate">${m.rank || ''}${m.rank && m.part ? ' · ' : ''}${m.part || ''}</div>
+            </div>
+            <div class="flex flex-col items-end gap-1 flex-shrink-0">
+              <div class="flex items-center gap-1.5">
+                <div class="w-2 h-2 rounded-full" style="background:${dotColor}"></div>
+                <span class="text-xs text-secondary">${m.status || '오프라인'}</span>
+              </div>
+              ${taskCount > 0 ? `<span class="text-xs text-primary font-medium cursor-pointer" onclick="event.stopPropagation();showMemberTasks(${m.id})">${taskCount}건 진행중</span>` : ''}
+            </div>
+          </div>`;
+        }).join('');
+      }
     }
   }
-}
 
-function filterMembers(f) {
-  memberFilter = f;
-  document.querySelectorAll('#member-status-filters .chip').forEach(c => {
-    c.className = c.dataset.filter === f ? 'chip active !bg-primary !text-white !border-primary' : 'chip';
-  });
-  renderTeam();
-}
-
-function filterMembersByPart(p) {
-  memberPartFilter = p;
-  document.querySelectorAll('#member-part-filters .chip').forEach(c => {
-    c.className = c.dataset.part === p ? 'chip active !bg-primary !text-white !border-primary' : 'chip';
-  });
-  renderTeam();
-}
-
-function openAddMemberModal() {
-  document.getElementById('editing-member-id').value = '';
-  document.getElementById('member-name').value = '';
-  document.getElementById('member-rank').value = '';
-  document.getElementById('member-email').value = '';
-  document.getElementById('member-center').value = '';
-  document.getElementById('member-status').value = '온라인';
-  document.getElementById('member-part').value = '';
-  document.getElementById('member-modal-title').textContent = '팀원 추가';
-  document.getElementById('modal-add-member').classList.remove('hidden');
-}
-
-function editMember(id) {
-  const m = DB.members.find(m => m.id === id);
-  if (!m) return;
-  document.getElementById('editing-member-id').value = id;
-  document.getElementById('member-name').value = m.name;
-  document.getElementById('member-rank').value = m.rank || '';
-  document.getElementById('member-email').value = m.email || '';
-  document.getElementById('member-center').value = m.center || '';
-  document.getElementById('member-status').value = m.status;
-  document.getElementById('member-part').value = m.part || '';
-  document.getElementById('member-modal-title').textContent = '팀원 수정';
-  document.getElementById('modal-add-member').classList.remove('hidden');
-}
-
-function saveMember() {
-  const name = document.getElementById('member-name').value.trim();
-  if (!name) { alert('이름을 입력하세요.'); return; }
-  const rank = document.getElementById('member-rank').value.trim();
-  const email = document.getElementById('member-email').value.trim();
-  const center = document.getElementById('member-center').value.trim();
-  const status = document.getElementById('member-status').value;
-  const part = document.getElementById('member-part').value;
-  const editId = parseInt(document.getElementById('editing-member-id').value);
-  if (editId) {
-    const m = DB.members.find(m => m.id === editId);
-    Object.assign(m, {name, rank, email, center, status, part});
-    showToast('팀원 정보가 수정되었습니다');
-  } else {
-    DB.members.push({id: Date.now(), name, rank, email, center, status, part, order: DB.members.length, createdAt: Date.now()});
-    showToast('팀원이 추가되었습니다');
+  function filterByStatus(f) {
+    statusFilter = f;
+    document.querySelectorAll('#member-status-filters .chip').forEach(c => {
+      c.className = c.dataset.filter === f ? 'chip active !bg-primary !text-white !border-primary' : 'chip';
+    });
+    render();
   }
-  saveDB();
-  document.getElementById('modal-add-member').classList.add('hidden');
-  renderTeam();
-  // update assignee selects
-  const sel = document.querySelector('select[onchange="filterByAssignee(this.value)"]');
-  if (sel) sel.innerHTML = '<option value="">담당자 (전체)</option>' + DB.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
-}
 
-function moveMember(id, dir) {
-  const idx = DB.members.findIndex(m => m.id === id);
-  const swapIdx = idx + dir;
-  if (swapIdx < 0 || swapIdx >= DB.members.length) return;
-  const a = DB.members[idx];
-  const b = DB.members[swapIdx];
-  const tempOrder = a.order ?? idx;
-  a.order = b.order ?? swapIdx;
-  b.order = tempOrder;
-  [DB.members[idx], DB.members[swapIdx]] = [DB.members[swapIdx], DB.members[idx]];
-  db.collection('members').doc(String(a.id)).update({ order: a.order })
-    .catch(e => console.error(e));
-  db.collection('members').doc(String(b.id)).update({ order: b.order })
-    .catch(e => console.error(e));
-  renderTeam();
-}
+  function filterByPart(p) {
+    partFilter = p;
+    document.querySelectorAll('#member-part-filters .chip').forEach(c => {
+      c.className = c.dataset.part === p ? 'chip active !bg-primary !text-white !border-primary' : 'chip';
+    });
+    render();
+  }
 
-function deleteMember(id) {
-  if (!confirm('이 팀원을 삭제하겠습니까?')) return;
-  DB.members = DB.members.filter(m => m.id !== id);
-  saveDB();
-  renderTeam();
-  showToast('팀원이 삭제되었습니다');
-}
+  function openAddMemberModal() {
+    document.getElementById('editing-member-id').value = '';
+    document.getElementById('member-name').value = '';
+    document.getElementById('member-rank').value = '';
+    document.getElementById('member-email').value = '';
+    document.getElementById('member-center').value = '';
+    document.getElementById('member-status').value = '온라인';
+    document.getElementById('member-part').value = '';
+    document.getElementById('member-modal-title').textContent = '팀원 추가';
+    document.getElementById('modal-add-member').classList.remove('hidden');
+  }
+
+  function editMember(id) {
+    const m = DB.members.find(m => m.id === id);
+    if (!m) return;
+    document.getElementById('editing-member-id').value = id;
+    document.getElementById('member-name').value = m.name;
+    document.getElementById('member-rank').value = m.rank || '';
+    document.getElementById('member-email').value = m.email || '';
+    document.getElementById('member-center').value = m.center || '';
+    document.getElementById('member-status').value = m.status;
+    document.getElementById('member-part').value = m.part || '';
+    document.getElementById('member-modal-title').textContent = '팀원 수정';
+    document.getElementById('modal-add-member').classList.remove('hidden');
+  }
+
+  function saveMember() {
+    const name = document.getElementById('member-name').value.trim();
+    if (!name) { alert('이름을 입력하세요.'); return; }
+    const rank = document.getElementById('member-rank').value.trim();
+    const email = document.getElementById('member-email').value.trim();
+    const center = document.getElementById('member-center').value.trim();
+    const status = document.getElementById('member-status').value;
+    const part = document.getElementById('member-part').value;
+    const editId = parseInt(document.getElementById('editing-member-id').value);
+    if (editId) {
+      const m = DB.members.find(m => m.id === editId);
+      Object.assign(m, {name, rank, email, center, status, part});
+      showToast('팀원 정보가 수정되었습니다');
+    } else {
+      DB.members.push({id: Date.now(), name, rank, email, center, status, part, order: DB.members.length, createdAt: Date.now()});
+      showToast('팀원이 추가되었습니다');
+    }
+    saveDB();
+    document.getElementById('modal-add-member').classList.add('hidden');
+    render();
+    // update assignee selects
+    const sel = document.querySelector('select[onchange="filterByAssignee(this.value)"]');
+    if (sel) sel.innerHTML = '<option value="">담당자 (전체)</option>' + DB.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+  }
+
+  function moveMember(id, dir) {
+    const idx = DB.members.findIndex(m => m.id === id);
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= DB.members.length) return;
+    const a = DB.members[idx];
+    const b = DB.members[swapIdx];
+    const tempOrder = a.order ?? idx;
+    a.order = b.order ?? swapIdx;
+    b.order = tempOrder;
+    [DB.members[idx], DB.members[swapIdx]] = [DB.members[swapIdx], DB.members[idx]];
+    db.collection('members').doc(String(a.id)).update({ order: a.order })
+      .catch(e => console.error(e));
+    db.collection('members').doc(String(b.id)).update({ order: b.order })
+      .catch(e => console.error(e));
+    render();
+  }
+
+  function deleteMember(id) {
+    if (!confirm('이 팀원을 삭제하겠습니까?')) return;
+    DB.members = DB.members.filter(m => m.id !== id);
+    saveDB();
+    render();
+    showToast('팀원이 삭제되었습니다');
+  }
+
+  return {
+    render,
+    filterByStatus,
+    filterByPart,
+    openAddMemberModal,
+    editMember,
+    saveMember,
+    moveMember,
+    deleteMember,
+  };
+})();
+
+// --- Team shims (HTML onclick 호환) ---
+function renderTeam() { Pages.team.render(); }
+function filterMembers(f) { Pages.team.filterByStatus(f); }
+function filterMembersByPart(p) { Pages.team.filterByPart(p); }
+function openAddMemberModal() { Pages.team.openAddMemberModal(); }
+function editMember(id) { Pages.team.editMember(id); }
+function saveMember() { Pages.team.saveMember(); }
+function moveMember(id, dir) { Pages.team.moveMember(id, dir); }
+function deleteMember(id) { Pages.team.deleteMember(id); }
 
 // ============================================================
 //  CENTERS
