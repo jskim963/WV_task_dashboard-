@@ -193,9 +193,9 @@ tailwind.config = {
 .cal-dot-row { display: none; justify-content: center; gap: 3px; margin-top: 2px; flex-wrap: wrap; }
 .cal-dot { width: 5px; height: 5px; border-radius: 50%; }
 /* 하단 safe area */
-main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)); }
+main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; }
 @media (max-width: 1023px) {
-  main { padding-bottom: max(80px, env(safe-area-inset-bottom, 80px)); }
+  main { padding-bottom: max(88px, env(safe-area-inset-bottom, 88px)) !important; }
 }
 @media (max-width: 1023px) {
   #page-calendar .cal-legend { font-size: 11px; gap: 6px !important; }
@@ -690,6 +690,8 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)); }
       </div>
     </div>
 
+    <!-- 하단 네비게이션바 safe-area 스페이서 (모바일) -->
+    <div class="lg:hidden flex-shrink-0" style="height: max(88px, env(safe-area-inset-bottom, 88px))"></div>
   </main>
 </div>
 
