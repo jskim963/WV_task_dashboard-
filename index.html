@@ -1165,12 +1165,9 @@ let activePage = 'overview';
 
 function refreshCurrentPage() {
   if (!currentUser) return;
-  if (activePage === 'overview') { try { renderOverview(); } catch(e) {} }
-  else if (activePage === 'dashboard') { try { renderDashboard(); } catch(e) {} }
-  else if (activePage === 'team') { try { renderTeam(); } catch(e) {} }
-  else if (activePage === 'centers') { try { renderCenters(); } catch(e) {} }
-  else if (activePage === 'calendar') { try { renderCalendar(); } catch(e) {} }
-  else if (activePage === 'weekly') { try { if(typeof renderWeekly === 'function') renderWeekly(); } catch(e) {} }
+  try {
+    if (Pages[activePage]?.render) Pages[activePage].render();
+  } catch(e) {}
   try { updateNotifBadge(); } catch(e) {}
 }
 
@@ -1314,13 +1311,8 @@ function showPage(name) {
   document.getElementById('page-' + name).classList.add('active');
   const navEl = document.getElementById('nav-' + name);
   if (navEl) navEl.classList.add('active');
-  if (name === 'overview') renderOverview();
-  if (name === 'dashboard') renderDashboard();
-  if (name === 'calendar') renderCalendar();
-  if (name === 'weekly') renderWeekly();
-  if (name === 'team') renderTeam();
-  if (name === 'centers') renderCenters();
-  if (name === 'settings') loadSettings();
+  if (Pages[name]?.render) Pages[name].render();
+  else if (name === 'settings') loadSettings();
 }
 
 function toggleSidebar() {
