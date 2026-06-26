@@ -3025,141 +3025,160 @@ function deleteEvent(id) {
 }
 
 // ============================================================
-//  WEEKLY VIEW
+//  PAGE: WEEKLY
 // ============================================================
-let weekStart = getWeekMonday(new Date());
-
 function getWeekMonday(d) {
   const dt = new Date(d); const day = dt.getDay();
   dt.setDate(dt.getDate() - (day === 0 ? 6 : day - 1));
   dt.setHours(0,0,0,0); return dt;
 }
 
-function changeWeek(dir) { weekStart = new Date(weekStart); weekStart.setDate(weekStart.getDate() + dir*7); renderWeekly(); }
-function goToThisWeek() { weekStart = getWeekMonday(new Date()); renderWeekly(); }
+Pages.weekly = (() => {
+  let weekStart = getWeekMonday(new Date());
 
-function renderWeekly() {
-  if (!requireAuth()) return;
-  const days = Array.from({length:7}, (_,i) => { const d = new Date(weekStart); d.setDate(weekStart.getDate()+i); return d; });
-  const todayStr = formatDate(new Date());
-  const dayNames = ['월','화','수','목','금','토','일'];
-  const endD = days[6];
-  document.getElementById('weekly-range-label').textContent =
-    `${weekStart.getFullYear()}년 ${weekStart.getMonth()+1}월 ${weekStart.getDate()}일 - ${endD.getMonth()+1}월 ${endD.getDate()}일`;
+  function render() {
+    if (!requireAuth()) return;
+    const days = Array.from({length:7}, (_,i) => { const d = new Date(weekStart); d.setDate(weekStart.getDate()+i); return d; });
+    const todayStr = formatDate(new Date());
+    const dayNames = ['월','화','수','목','금','토','일'];
+    const endD = days[6];
+    document.getElementById('weekly-range-label').textContent =
+      `${weekStart.getFullYear()}년 ${weekStart.getMonth()+1}월 ${weekStart.getDate()}일 - ${endD.getMonth()+1}월 ${endD.getDate()}일`;
 
-  const evColors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 업무보고:'background:#dcfce7;color:#16a34a', 기타:'background:#ede9fe;color:#7c3aed'};
+    const evColors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 업무보고:'background:#dcfce7;color:#16a34a', 기타:'background:#ede9fe;color:#7c3aed'};
 
-  const thead = `<tr>
-    <th class="px-3 py-2 text-left" style="min-width:90px">팀원</th>
-    ${days.map((d,i) => {
-      const ds = formatDate(d); const isToday = ds === todayStr;
-      const isSat = i===5; const isSun = i===6;
-      return `<th class="px-2 py-2 ${isToday?'wk-today':''}" style="min-width:110px">
-        <div class="text-xs font-semibold ${isSun?'text-red-500':isSat?'text-blue-500':isToday?'text-primary':''}">${dayNames[i]}</div>
-        <div class="text-xs font-normal text-secondary">${d.getMonth()+1}/${d.getDate()}</div>
-      </th>`;
-    }).join('')}
-  </tr>`;
-
-  const tbody = DB.members.map(m => {
-    const cells = days.map((d,i) => {
-      const ds = formatDate(d); const isToday = ds === todayStr; const isSat=i===5; const isSun=i===6;
-      const evs = DB.events.filter(e => eventFallsOnDate(e, ds) && (isTeamEvent(e) || getEventPersonIds(e).includes(m.id)));
-      const evHtml = evs.map(e => {
-        const s = evColors[e.type] || evColors['기타'];
-        const label = (e.personId===0?'(팀) ':'')+e.title;
-        return `<div class="wk-event" style="${s}" onclick="openEventDetail(${e.id})" title="${label}">${label}</div>`;
-      }).join('');
-      return `<td class="px-2 py-1 wk-cell ${isToday?'wk-today':isSat||isSun?'bg-slate-50':''}">${evHtml}</td>`;
-    }).join('');
-    return `<tr>
-      <td class="px-3 py-2 bg-white" style="vertical-align:middle">
-        <div class="flex items-center gap-2">
-          <div class="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">${m.name[0]}</div>
-          <div><div class="text-xs font-semibold">${m.name}</div><div class="text-xs text-secondary">${m.rank||''}</div></div>
-        </div>
-      </td>${cells}
+    const thead = `<tr>
+      <th class="px-3 py-2 text-left" style="min-width:90px">팀원</th>
+      ${days.map((d,i) => {
+        const ds = formatDate(d); const isToday = ds === todayStr;
+        const isSat = i===5; const isSun = i===6;
+        return `<th class="px-2 py-2 ${isToday?'wk-today':''}" style="min-width:110px">
+          <div class="text-xs font-semibold ${isSun?'text-red-500':isSat?'text-blue-500':isToday?'text-primary':''}">${dayNames[i]}</div>
+          <div class="text-xs font-normal text-secondary">${d.getMonth()+1}/${d.getDate()}</div>
+        </th>`;
+      }).join('')}
     </tr>`;
-  }).join('');
 
-  document.getElementById('weekly-content').innerHTML =
-    `<table class="wk-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+    const tbody = DB.members.map(m => {
+      const cells = days.map((d,i) => {
+        const ds = formatDate(d); const isToday = ds === todayStr; const isSat=i===5; const isSun=i===6;
+        const evs = DB.events.filter(e => eventFallsOnDate(e, ds) && (isTeamEvent(e) || getEventPersonIds(e).includes(m.id)));
+        const evHtml = evs.map(e => {
+          const s = evColors[e.type] || evColors['기타'];
+          const label = (e.personId===0?'(팀) ':'')+e.title;
+          return `<div class="wk-event" style="${s}" onclick="openEventDetail(${e.id})" title="${label}">${label}</div>`;
+        }).join('');
+        return `<td class="px-2 py-1 wk-cell ${isToday?'wk-today':isSat||isSun?'bg-slate-50':''}">${evHtml}</td>`;
+      }).join('');
+      return `<tr>
+        <td class="px-3 py-2 bg-white" style="vertical-align:middle">
+          <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">${m.name[0]}</div>
+            <div><div class="text-xs font-semibold">${m.name}</div><div class="text-xs text-secondary">${m.rank||''}</div></div>
+          </div>
+        </td>${cells}
+      </tr>`;
+    }).join('');
 
-  // 모바일 요일 스택 렌더링
-  const stack = document.getElementById('weekly-mobile-stack');
-  if (!stack) return;
-  const fullDayNames = ['월요일','화요일','수요일','목요일','금요일','토요일','일요일'];
-  const mobileEvColors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 업무보고:'background:#dcfce7;color:#16a34a', 기타:'background:#ede9fe;color:#7c3aed'};
-  const mobileDotColors = {휴무:'#ef4444', 출장:'#2563eb', 미팅:'#d97706', 기타:'#7c3aed'};
-  stack.innerHTML = days.map((d, i) => {
-    const ds = formatDate(d);
-    const isToday = ds === todayStr;
-    const isWeekend = i >= 5;
-    const dayEvs = DB.events.filter(e => eventFallsOnDate(e, ds));
-    const dots = dayEvs.slice(0,4).map(e=>`<div style="width:6px;height:6px;border-radius:50%;background:${mobileDotColors[e.type]||'#7c3aed'};flex-shrink:0"></div>`).join('');
-    const headerBg = isToday ? 'background:#2563eb' : 'background:#f8fafc';
-    const dayNameColor = isToday ? 'color:#fff' : isWeekend ? 'color:#9ca3af' : 'color:#374151';
-    const dateColor = isToday ? 'color:rgba(255,255,255,0.8)' : 'color:#6b7280';
-    const todayBadge = isToday ? '<span style="background:rgba(255,255,255,0.25);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:6px">오늘</span>' : '';
-    const evItems = dayEvs.map(e => {
-      const s = mobileEvColors[e.type] || mobileEvColors['기타'];
-      const eIds = getEventPersonIds(e);
-      const eNames = eIds.map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean).join(', ');
-      return `<div style="${s};border-radius:7px;padding:7px 10px;display:flex;flex-direction:column;gap:2px;cursor:pointer" onclick="openEventDetail(${e.id})">
-        <div style="font-size:12px;font-weight:600">${e.title}</div>
-        <div style="font-size:10px;color:#6b7280">${eNames?'👤 '+eNames:'팀 전체'}${e.startTime?' · 🕐 '+e.startTime:''}</div>
+    document.getElementById('weekly-content').innerHTML =
+      `<table class="wk-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+
+    // 모바일 요일 스택 렌더링
+    const stack = document.getElementById('weekly-mobile-stack');
+    if (!stack) return;
+    const fullDayNames = ['월요일','화요일','수요일','목요일','금요일','토요일','일요일'];
+    const mobileEvColors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 업무보고:'background:#dcfce7;color:#16a34a', 기타:'background:#ede9fe;color:#7c3aed'};
+    const mobileDotColors = {휴무:'#ef4444', 출장:'#2563eb', 미팅:'#d97706', 기타:'#7c3aed'};
+    stack.innerHTML = days.map((d, i) => {
+      const ds = formatDate(d);
+      const isToday = ds === todayStr;
+      const isWeekend = i >= 5;
+      const dayEvs = DB.events.filter(e => eventFallsOnDate(e, ds));
+      const dots = dayEvs.slice(0,4).map(e=>`<div style="width:6px;height:6px;border-radius:50%;background:${mobileDotColors[e.type]||'#7c3aed'};flex-shrink:0"></div>`).join('');
+      const headerBg = isToday ? 'background:#2563eb' : 'background:#f8fafc';
+      const dayNameColor = isToday ? 'color:#fff' : isWeekend ? 'color:#9ca3af' : 'color:#374151';
+      const dateColor = isToday ? 'color:rgba(255,255,255,0.8)' : 'color:#6b7280';
+      const todayBadge = isToday ? '<span style="background:rgba(255,255,255,0.25);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:6px">오늘</span>' : '';
+      const evItems = dayEvs.map(e => {
+        const s = mobileEvColors[e.type] || mobileEvColors['기타'];
+        const eIds = getEventPersonIds(e);
+        const eNames = eIds.map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean).join(', ');
+        return `<div style="${s};border-radius:7px;padding:7px 10px;display:flex;flex-direction:column;gap:2px;cursor:pointer" onclick="openEventDetail(${e.id})">
+          <div style="font-size:12px;font-weight:600">${e.title}</div>
+          <div style="font-size:10px;color:#6b7280">${eNames?'👤 '+eNames:'팀 전체'}${e.startTime?' · 🕐 '+e.startTime:''}</div>
+        </div>`;
+      }).join('');
+      const emptyMsg = dayEvs.length===0 ? '<div style="font-size:11px;color:#9ca3af;font-style:italic;padding:3px 0">일정 없음</div>' : '';
+      const cardId = `wk-card-${i}`;
+      const detailId = `wk-detail-${i}`;
+      const cardOpacity = isWeekend ? 'opacity:0.7' : '';
+      const cardBorder = isToday ? '2px solid #2563eb' : '1px solid #e2e8f0';
+      return `<div id="${cardId}" style="background:#fff;border-radius:10px;border:${cardBorder};overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);${cardOpacity}">
+        <div style="${headerBg};padding:9px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleWkCard(${i})">
+          <div style="${dayNameColor};font-size:12px;font-weight:700">${fullDayNames[i]}${todayBadge}</div>
+          <div style="display:flex;align-items:center;gap:6px;${dateColor};font-size:11px">
+            ${d.getMonth()+1}/${d.getDate()}
+            <div style="display:flex;gap:3px">${dots}</div>
+            <span id="wk-chev-${i}" style="font-size:13px;transition:transform 0.2s;display:inline-block">▼</span>
+          </div>
+        </div>
+        <div id="${detailId}" style="display:none;padding:10px 12px;background:#fafbff;border-top:1px solid #f1f5f9;flex-direction:column;gap:6px">
+          ${evItems}${emptyMsg}
+          <button onclick="openAddEventModal('${ds}')" style="background:none;border:1px dashed #c3c6d7;border-radius:7px;padding:7px;width:100%;font-size:11px;color:#6b7280;cursor:pointer;margin-top:4px">＋ 일정 추가</button>
+        </div>
       </div>`;
     }).join('');
-    const emptyMsg = dayEvs.length===0 ? '<div style="font-size:11px;color:#9ca3af;font-style:italic;padding:3px 0">일정 없음</div>' : '';
-    const cardId = `wk-card-${i}`;
-    const detailId = `wk-detail-${i}`;
-    const cardOpacity = isWeekend ? 'opacity:0.7' : '';
-    const cardBorder = isToday ? '2px solid #2563eb' : '1px solid #e2e8f0';
-    return `<div id="${cardId}" style="background:#fff;border-radius:10px;border:${cardBorder};overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);${cardOpacity}">
-      <div style="${headerBg};padding:9px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleWkCard(${i})">
-        <div style="${dayNameColor};font-size:12px;font-weight:700">${fullDayNames[i]}${todayBadge}</div>
-        <div style="display:flex;align-items:center;gap:6px;${dateColor};font-size:11px">
-          ${d.getMonth()+1}/${d.getDate()}
-          <div style="display:flex;gap:3px">${dots}</div>
-          <span id="wk-chev-${i}" style="font-size:13px;transition:transform 0.2s;display:inline-block">▼</span>
-        </div>
-      </div>
-      <div id="${detailId}" style="display:none;padding:10px 12px;background:#fafbff;border-top:1px solid #f1f5f9;flex-direction:column;gap:6px">
-        ${evItems}${emptyMsg}
-        <button onclick="openAddEventModal('${ds}')" style="background:none;border:1px dashed #c3c6d7;border-radius:7px;padding:7px;width:100%;font-size:11px;color:#6b7280;cursor:pointer;margin-top:4px">＋ 일정 추가</button>
-      </div>
-    </div>`;
-  }).join('');
 
-  // 오늘 카드 자동 펼침
-  const todayIdx = days.findIndex(d => formatDate(d) === todayStr);
-  if (todayIdx >= 0) toggleWkCard(todayIdx, true);
-}
-
-function toggleWkCard(idx, forceOpen) {
-  const detail = document.getElementById(`wk-detail-${idx}`);
-  const chev = document.getElementById(`wk-chev-${idx}`);
-  if (!detail) return;
-  const isOpen = detail.style.display === 'flex';
-  // 다른 카드 모두 닫기
-  for (let i = 0; i < 7; i++) {
-    const d = document.getElementById(`wk-detail-${i}`);
-    const c = document.getElementById(`wk-chev-${i}`);
-    if (d) d.style.display = 'none';
-    if (c) c.style.transform = '';
+    // 오늘 카드 자동 펼침
+    const todayIdx = days.findIndex(d => formatDate(d) === todayStr);
+    if (todayIdx >= 0) toggleWkCard(todayIdx, true);
   }
-  // 클릭한 카드 토글
-  if (!isOpen || forceOpen) {
-    detail.style.display = 'flex';
-    if (chev) chev.style.transform = 'rotate(180deg)';
-    if (!forceOpen) {
-      setTimeout(() => {
-        const card = document.getElementById(`wk-card-${idx}`);
-        if (card) card.scrollIntoView({behavior:'smooth', block:'nearest'});
-      }, 50);
+
+  function changeWeek(dir) {
+    weekStart = new Date(weekStart);
+    weekStart.setDate(weekStart.getDate() + dir * 7);
+    render();
+  }
+
+  function goThisWeek() {
+    weekStart = getWeekMonday(new Date());
+    render();
+  }
+
+  function toggleCard(idx, forceOpen) {
+    const detail = document.getElementById(`wk-detail-${idx}`);
+    const chev = document.getElementById(`wk-chev-${idx}`);
+    if (!detail) return;
+    const isOpen = detail.style.display === 'flex';
+    // 다른 카드 모두 닫기
+    for (let i = 0; i < 7; i++) {
+      const d = document.getElementById(`wk-detail-${i}`);
+      const c = document.getElementById(`wk-chev-${i}`);
+      if (d) d.style.display = 'none';
+      if (c) c.style.transform = '';
+    }
+    // 클릭한 카드 토글
+    if (!isOpen || forceOpen) {
+      detail.style.display = 'flex';
+      if (chev) chev.style.transform = 'rotate(180deg)';
+      if (!forceOpen) {
+        setTimeout(() => {
+          const card = document.getElementById(`wk-card-${idx}`);
+          if (card) card.scrollIntoView({behavior:'smooth', block:'nearest'});
+        }, 50);
+      }
     }
   }
-}
+
+  return { render, changeWeek, goThisWeek, toggleCard,
+           get weekStart() { return weekStart; } };
+})();
+
+// --- Weekly shims (HTML onclick 호환) ---
+function renderWeekly() { Pages.weekly.render(); }
+function changeWeek(dir) { Pages.weekly.changeWeek(dir); }
+function goToThisWeek() { Pages.weekly.goThisWeek(); }
+function toggleWkCard(idx, forceOpen) { Pages.weekly.toggleCard(idx, forceOpen); }
 
 // ============================================================
 //  NOTIFICATION PANEL
