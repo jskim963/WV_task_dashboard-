@@ -477,14 +477,16 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)); }
         </button>
       </div>
       <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-6">
-        <div class="flex items-center justify-between mb-6">
-          <div class="flex items-center gap-4">
-            <button onclick="changeMonth(-1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">chevron_left</span></button>
-            <h2 class="text-xl font-bold text-on-surface" id="cal-month-label" style="font-family:'Hanken Grotesk'"></h2>
-            <button onclick="changeMonth(1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">chevron_right</span></button>
-            <button onclick="goToToday()" class="px-3 py-1 border border-outline-variant rounded-lg text-sm text-secondary hover:bg-surface-container">오늘</button>
+        <div class="mb-4">
+          <!-- Row 1: 연월 + 네비 + 오늘 버튼 -->
+          <div class="flex items-center gap-2 mb-3">
+            <button onclick="changeMonth(-1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary flex-shrink-0"><span class="material-symbols-outlined">chevron_left</span></button>
+            <h2 class="text-lg font-bold text-on-surface flex-shrink-0" id="cal-month-label" style="font-family:'Hanken Grotesk'"></h2>
+            <button onclick="changeMonth(1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary flex-shrink-0"><span class="material-symbols-outlined">chevron_right</span></button>
+            <button onclick="goToToday()" class="px-3 py-1 border border-outline-variant rounded-lg text-sm text-secondary hover:bg-surface-container flex-shrink-0">오늘</button>
           </div>
-          <div class="cal-legend flex flex-wrap gap-x-3 gap-y-1.5 text-xs text-secondary justify-end">
+          <!-- Row 2: 범례 4개 가로 나열 -->
+          <div class="cal-legend flex items-center gap-x-3 gap-y-1 text-xs text-secondary flex-wrap">
             <span class="flex items-center gap-1 whitespace-nowrap"><span class="w-3 h-3 rounded-sm inline-block flex-shrink-0" style="background:#fee2e2"></span>휴무</span>
             <span class="flex items-center gap-1 whitespace-nowrap"><span class="w-3 h-3 rounded-sm inline-block flex-shrink-0" style="background:#dbeafe"></span>출장/외근</span>
             <span class="flex items-center gap-1 whitespace-nowrap"><span class="w-3 h-3 rounded-sm inline-block flex-shrink-0" style="background:#fef9c3"></span>미팅/회의</span>
