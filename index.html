@@ -3418,95 +3418,101 @@ function showMsg(el, msg) {
 }
 
 // ============================================================
-//  OVERVIEW
+//  PAGE: OVERVIEW
 // ============================================================
-function renderOverview() {
-  if (!requireAuth()) return;
-  const today = formatDate(new Date());
-  const d = new Date();
-  const weekdays = ['일','월','화','수','목','금','토'];
-  document.getElementById('overview-date').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${weekdays[d.getDay()]})`;
+Pages.overview = (() => {
+  function render() {
+    if (!requireAuth()) return;
+    const today = formatDate(new Date());
+    const d = new Date();
+    const weekdays = ['일','월','화','수','목','금','토'];
+    document.getElementById('overview-date').textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${weekdays[d.getDay()]})`;
 
-  const member = currentUser ? DB.members.find(m => m.id === currentUser.memberId) : null;
-  if (member) document.getElementById('overview-greeting').textContent = `안녕하세요, ${member.name}님 👋`;
+    const member = currentUser ? DB.members.find(m => m.id === currentUser.memberId) : null;
+    if (member) document.getElementById('overview-greeting').textContent = `안녕하세요, ${member.name}님 👋`;
 
-  // Panel 1: 업무 현황
-  const stats = [
-    { label:'전체', val: DB.tasks.length, color:'text-primary' },
-    { label:'진행중', val: DB.tasks.filter(t=>t.status==='진행중').length, color:'text-blue-600' },
-    { label:'지연', val: DB.tasks.filter(t=>t.status==='지연').length, color:'text-red-500' },
-    { label:'완료', val: DB.tasks.filter(t=>t.status==='완료').length, color:'text-green-600' },
-  ];
-  document.getElementById('ov-task-stats').innerHTML = stats.map(s => `
-    <div class="bg-surface-container-low rounded-lg px-3 py-3 text-center cursor-pointer hover:bg-surface-container" onclick="showPage('dashboard')">
-      <div class="text-2xl font-bold ${s.color}">${s.val}</div>
-      <div class="text-xs text-secondary mt-0.5">${s.label}</div>
-    </div>`).join('');
-
-  // Panel 2: 오늘 일정
-  const todayEvents = DB.events.filter(e => eventFallsOnDate(e, today));
-  const trips = todayEvents.filter(e => e.type === '출장');
-  const leaves = todayEvents.filter(e => e.type === '휴무');
-  const schedEl = document.getElementById('ov-today-schedule');
-  let schedHtml = '';
-  if (!todayEvents.length) {
-    schedHtml = '<p class="text-secondary text-sm">오늘 일정 없음</p>';
-  } else {
-    const renderEventPeople = (evs, icon, color, label) => {
-      if (!evs.length) return '';
-      const names = evs.flatMap(e => {
-        const ids = getEventPersonIds(e);
-        return ids.length ? ids.map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean) : ['팀 전체'];
-      }).filter((v,i,a)=>a.indexOf(v)===i);
-      return `<div class="flex items-start gap-1.5"><span class="material-symbols-outlined text-sm ${color} mt-0.5">${icon}</span><div><span class="font-medium text-xs ${color}">${label}</span><div class="text-xs text-secondary">${names.join(', ')}</div></div></div>`;
-    };
-    schedHtml += renderEventPeople(trips, 'flight_takeoff', 'text-blue-600', '출장/외근');
-    schedHtml += renderEventPeople(leaves, 'beach_access', 'text-red-500', '휴무/휴가');
-    const others = todayEvents.filter(e => e.type !== '출장' && e.type !== '휴무');
-    others.forEach(e => {
-      schedHtml += `<div class="flex items-center gap-1.5 text-xs text-on-surface"><span class="material-symbols-outlined text-sm text-yellow-600">event</span>${e.title}</div>`;
-    });
-  }
-  schedEl.innerHTML = schedHtml;
-
-  // Panel 3: 센터 이슈
-  const issueEl = document.getElementById('ov-center-issues');
-  const issueCenters = DB.centers.filter(c => c.status !== '정상');
-  if (!issueCenters.length) {
-    issueEl.innerHTML = '<p class="text-secondary text-sm flex items-center gap-1"><span class="material-symbols-outlined text-green-500 text-sm">check_circle</span>모든 센터 정상 운영 중</p>';
-  } else {
-    issueEl.innerHTML = issueCenters.map(c => `
-      <div class="flex items-start gap-2 cursor-pointer hover:bg-surface-container-low rounded-lg px-2 py-1.5 -mx-2" onclick="showPage('centers');selectCenter(${c.id})">
-        <span class="material-symbols-outlined text-orange-500 text-sm mt-0.5">warning</span>
-        <div><div class="font-medium text-xs text-on-surface">${c.name}</div>
-        <div class="text-xs text-secondary truncate">${c.issue||c.status}</div></div>
+    // Panel 1: 업무 현황
+    const stats = [
+      { label:'전체', val: DB.tasks.length, color:'text-primary' },
+      { label:'진행중', val: DB.tasks.filter(t=>t.status==='진행중').length, color:'text-blue-600' },
+      { label:'지연', val: DB.tasks.filter(t=>t.status==='지연').length, color:'text-red-500' },
+      { label:'완료', val: DB.tasks.filter(t=>t.status==='완료').length, color:'text-green-600' },
+    ];
+    document.getElementById('ov-task-stats').innerHTML = stats.map(s => `
+      <div class="bg-surface-container-low rounded-lg px-3 py-3 text-center cursor-pointer hover:bg-surface-container" onclick="showPage('dashboard')">
+        <div class="text-2xl font-bold ${s.color}">${s.val}</div>
+        <div class="text-xs text-secondary mt-0.5">${s.label}</div>
       </div>`).join('');
+
+    // Panel 2: 오늘 일정
+    const todayEvents = DB.events.filter(e => eventFallsOnDate(e, today));
+    const trips = todayEvents.filter(e => e.type === '출장');
+    const leaves = todayEvents.filter(e => e.type === '휴무');
+    const schedEl = document.getElementById('ov-today-schedule');
+    let schedHtml = '';
+    if (!todayEvents.length) {
+      schedHtml = '<p class="text-secondary text-sm">오늘 일정 없음</p>';
+    } else {
+      const renderEventPeople = (evs, icon, color, label) => {
+        if (!evs.length) return '';
+        const names = evs.flatMap(e => {
+          const ids = getEventPersonIds(e);
+          return ids.length ? ids.map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean) : ['팀 전체'];
+        }).filter((v,i,a)=>a.indexOf(v)===i);
+        return `<div class="flex items-start gap-1.5"><span class="material-symbols-outlined text-sm ${color} mt-0.5">${icon}</span><div><span class="font-medium text-xs ${color}">${label}</span><div class="text-xs text-secondary">${names.join(', ')}</div></div></div>`;
+      };
+      schedHtml += renderEventPeople(trips, 'flight_takeoff', 'text-blue-600', '출장/외근');
+      schedHtml += renderEventPeople(leaves, 'beach_access', 'text-red-500', '휴무/휴가');
+      const others = todayEvents.filter(e => e.type !== '출장' && e.type !== '휴무');
+      others.forEach(e => {
+        schedHtml += `<div class="flex items-center gap-1.5 text-xs text-on-surface"><span class="material-symbols-outlined text-sm text-yellow-600">event</span>${e.title}</div>`;
+      });
+    }
+    schedEl.innerHTML = schedHtml;
+
+    // Panel 3: 센터 이슈
+    const issueEl = document.getElementById('ov-center-issues');
+    const issueCenters = DB.centers.filter(c => c.status !== '정상');
+    if (!issueCenters.length) {
+      issueEl.innerHTML = '<p class="text-secondary text-sm flex items-center gap-1"><span class="material-symbols-outlined text-green-500 text-sm">check_circle</span>모든 센터 정상 운영 중</p>';
+    } else {
+      issueEl.innerHTML = issueCenters.map(c => `
+        <div class="flex items-start gap-2 cursor-pointer hover:bg-surface-container-low rounded-lg px-2 py-1.5 -mx-2" onclick="showPage('centers');selectCenter(${c.id})">
+          <span class="material-symbols-outlined text-orange-500 text-sm mt-0.5">warning</span>
+          <div><div class="font-medium text-xs text-on-surface">${c.name}</div>
+          <div class="text-xs text-secondary truncate">${c.issue||c.status}</div></div>
+        </div>`).join('');
+    }
+
+    // Panel 4: 내 업무 목록
+    const myTasksEl = document.getElementById('ov-my-tasks');
+    const myId = currentUser?.memberId;
+    const myTasks = myId ? DB.tasks.filter(t => getAssigneeIds(t).includes(myId) && t.status !== '완료') : [];
+    const statusColors = {진행중:'text-blue-600',지연:'text-red-500',대기:'text-secondary'};
+    if (!myTasks.length) {
+      myTasksEl.innerHTML = '<p class="text-secondary text-sm">진행 중인 업무 없음</p>';
+    } else {
+      myTasksEl.innerHTML = myTasks.map(t => `
+        <div class="flex items-center justify-between gap-2 cursor-pointer hover:bg-surface-container-low rounded-lg px-2 py-1.5 -mx-2" onclick="showPage('dashboard');setTimeout(()=>showTaskDetail(${t.id}),100)">
+          <span class="text-xs text-on-surface truncate flex-1">${t.name}</span>
+          <span class="text-xs font-medium ${statusColors[t.status]||'text-secondary'} flex-shrink-0">${t.status}</span>
+        </div>`).join('');
+    }
+
+    // Panel 5: 메모
+    const memo = DB.memos ? DB.memos.find(m => m.userId === myId) : null;
+    const memoEl = document.getElementById('personal-memo');
+    if (memoEl) memoEl.value = memo ? memo.content : '';
+    document.getElementById('memo-saved-indicator').textContent = '';
+
+    // Panel 6: 공지사항
+    renderNotices();
   }
+  return { render };
+})();
 
-  // Panel 4: 내 업무 목록
-  const myTasksEl = document.getElementById('ov-my-tasks');
-  const myId = currentUser?.memberId;
-  const myTasks = myId ? DB.tasks.filter(t => getAssigneeIds(t).includes(myId) && t.status !== '완료') : [];
-  const statusColors = {진행중:'text-blue-600',지연:'text-red-500',대기:'text-secondary'};
-  if (!myTasks.length) {
-    myTasksEl.innerHTML = '<p class="text-secondary text-sm">진행 중인 업무 없음</p>';
-  } else {
-    myTasksEl.innerHTML = myTasks.map(t => `
-      <div class="flex items-center justify-between gap-2 cursor-pointer hover:bg-surface-container-low rounded-lg px-2 py-1.5 -mx-2" onclick="showPage('dashboard');setTimeout(()=>showTaskDetail(${t.id}),100)">
-        <span class="text-xs text-on-surface truncate flex-1">${t.name}</span>
-        <span class="text-xs font-medium ${statusColors[t.status]||'text-secondary'} flex-shrink-0">${t.status}</span>
-      </div>`).join('');
-  }
-
-  // Panel 5: 메모
-  const memo = DB.memos ? DB.memos.find(m => m.userId === myId) : null;
-  const memoEl = document.getElementById('personal-memo');
-  if (memoEl) memoEl.value = memo ? memo.content : '';
-  document.getElementById('memo-saved-indicator').textContent = '';
-
-  // Panel 6: 공지사항
-  renderNotices();
-}
+// --- Overview shim ---
+function renderOverview() { Pages.overview.render(); }
 
 let memoSaveTimer = null;
 function scheduleMemoSave() {
