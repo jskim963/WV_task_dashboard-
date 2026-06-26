@@ -1692,241 +1692,278 @@ function showTaskDetail(id) { Pages.dashboard.showTaskDetail(id); }
 function addComment() { Pages.dashboard.addComment(); }
 
 // ============================================================
-//  CALENDAR
+//  PAGE: CALENDAR
 // ============================================================
-let calYear = new Date().getFullYear();
-let calMonth = new Date().getMonth();
-let calTypeFilter = 'all';
+Pages.calendar = (() => {
+  let year = new Date().getFullYear();
+  let month = new Date().getMonth();
+  let typeFilter = 'all';
 
-function setCalFilter(type) {
-  calTypeFilter = type;
-  document.querySelectorAll('.cal-filter-btn').forEach(btn => btn.classList.remove('active'));
-  const target = type === 'all' ? 'cal-filter-all' : `cal-filter-${type}`;
-  const el = document.getElementById(target);
-  if (el) el.classList.add('active');
-  renderCalendar();
-}
+  function render() {
+    if (!requireAuth()) return;
+    const d = new Date(year, month, 1);
+    document.getElementById('cal-month-label').textContent = `${year}년 ${month+1}월`;
+    const firstDay = d.getDay();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    const todayStr = formatDate(new Date());
+    const grid = document.getElementById('cal-grid');
+    grid.innerHTML = '';
+    const EVT_COLORS = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 업무보고:'background:#dcfce7;color:#16a34a', 기타:'background:#ede9fe;color:#7c3aed'};
+    const DOT_COLORS = {휴무:'#ef4444', 출장:'#2563eb', 미팅:'#d97706', 업무보고:'#16a34a', 기타:'#7c3aed'};
+    const isDesktop = window.innerWidth >= 1024;
+    const maxVisible = isDesktop ? 4 : 2;
 
-function renderCalendar() {
-  if (!requireAuth()) return;
-  const d = new Date(calYear, calMonth, 1);
-  document.getElementById('cal-month-label').textContent = `${calYear}년 ${calMonth+1}월`;
-  const firstDay = d.getDay();
-  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
-  const todayStr = formatDate(new Date());
-  const grid = document.getElementById('cal-grid');
-  grid.innerHTML = '';
-  const EVT_COLORS = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 업무보고:'background:#dcfce7;color:#16a34a', 기타:'background:#ede9fe;color:#7c3aed'};
-  const DOT_COLORS = {휴무:'#ef4444', 출장:'#2563eb', 미팅:'#d97706', 업무보고:'#16a34a', 기타:'#7c3aed'};
-  const isDesktop = window.innerWidth >= 1024;
-  const maxVisible = isDesktop ? 4 : 2;
+    function filterEvs(evs) {
+      if (typeFilter === 'all') return evs;
+      return evs.filter(e => e.type === typeFilter);
+    }
 
-  function filterEvs(evs) {
-    if (calTypeFilter === 'all') return evs;
-    return evs.filter(e => e.type === calTypeFilter);
+    // 이전 달 날짜 채우기
+    const prevMonthDays = new Date(year, month, 0).getDate();
+    for (let i = 0; i < firstDay; i++) {
+      const prevDay = prevMonthDays - firstDay + i + 1;
+      const prevY = month === 0 ? year - 1 : year;
+      const prevM = month === 0 ? 12 : month;
+      const prevDateStr = `${prevY}-${String(prevM).padStart(2,'0')}-${String(prevDay).padStart(2,'0')}`;
+      const prevEvs = filterEvs(DB.events.filter(e => eventFallsOnDate(e, prevDateStr)));
+      const isSun = i % 7 === 0; const isSat = i % 7 === 6;
+      const evHtml = prevEvs.slice(0, maxVisible).map(e =>
+        `<div class="cal-event opacity-50" style="${EVT_COLORS[e.type]||EVT_COLORS['기타']}">${e.title}</div>`
+      ).join('');
+      const prevDotHtml = prevEvs.length
+        ? `<div class="cal-dot-row">${prevEvs.slice(0,4).map(e=>`<div class="cal-dot" style="background:${DOT_COLORS[e.type]||'#7c3aed'};opacity:0.5"></div>`).join('')}</div>`
+        : '';
+      grid.innerHTML += `<div class="cal-day border-r border-b border-outline-variant other-month" onclick="calDayClick('${prevDateStr}', event)">
+        <div class="text-xs font-semibold mb-1 opacity-40 ${isSun?'text-red-400':isSat?'text-blue-400':''}">${prevDay}</div>${evHtml}${prevDotHtml}</div>`;
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const allDayEvents = DB.events.filter(e => eventFallsOnDate(e, dateStr)).sort((a,b) => {
+        const ai = Math.min(...(getEventPersonIds(a).map(id => DB.members.findIndex(m=>m.id===id)).filter(i=>i>=0)), isTeamEvent(a)?-1:999);
+        const bi = Math.min(...(getEventPersonIds(b).map(id => DB.members.findIndex(m=>m.id===id)).filter(i=>i>=0)), isTeamEvent(b)?-1:999);
+        return ai - bi;
+      });
+      const dayEvents = filterEvs(allDayEvents);
+      const isToday = dateStr === todayStr;
+      const isSun = (firstDay + day - 1) % 7 === 0;
+      const isSat = (firstDay + day - 1) % 7 === 6;
+      const visibleEvs = dayEvents.slice(0, maxVisible);
+      const moreCount = dayEvents.length - maxVisible;
+      const evHtml = visibleEvs.map(e => {
+        const s = EVT_COLORS[e.type] || EVT_COLORS.기타;
+        const nb = isNew(e) ? '<span class="new-badge">NEW</span>' : '';
+        return `<div class="cal-event" style="${s}" onclick="event.stopPropagation();openEventDetail(${e.id})">${e.title}${nb}</div>`;
+      }).join('') + (moreCount > 0 ? `<div class="cal-event" style="background:#f1f5f9;color:#64748b" onclick="event.stopPropagation();calDayClick('${dateStr}',event)">+${moreCount}개</div>` : '');
+      const dotHtml = dayEvents.length
+        ? `<div class="cal-dot-row">${dayEvents.slice(0,4).map(e=>`<div class="cal-dot" style="background:${DOT_COLORS[e.type]||'#7c3aed'}"></div>`).join('')}</div>`
+        : '';
+      grid.innerHTML += `
+        <div class="cal-day border-r border-b border-outline-variant ${isToday?'today':''}" onclick="calDayClick('${dateStr}', event)">
+          <div class="text-xs font-semibold mb-1 ${isSun?'text-red-500':isSat?'text-blue-500':''} ${isToday?'bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center':''}">${day}</div>
+          ${evHtml}${dotHtml}
+        </div>`;
+    }
+    // 다음 달 날짜 채우기
+    const totalCells = firstDay + daysInMonth;
+    const trailing = (7 - totalCells % 7) % 7;
+    const nextY = month === 11 ? year + 1 : year;
+    const nextM = month === 11 ? 1 : month + 2;
+    for (let i = 1; i <= trailing; i++) {
+      const nextDateStr = `${nextY}-${String(nextM).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+      const nextEvs = filterEvs(DB.events.filter(e => eventFallsOnDate(e, nextDateStr)));
+      const col = (totalCells + i - 1) % 7;
+      const isSun = col === 0; const isSat = col === 6;
+      const evHtml = nextEvs.slice(0, maxVisible).map(e =>
+        `<div class="cal-event opacity-50" style="${EVT_COLORS[e.type]||EVT_COLORS['기타']}">${e.title}</div>`
+      ).join('');
+      const nextDotHtml = nextEvs.length
+        ? `<div class="cal-dot-row">${nextEvs.slice(0,4).map(e=>`<div class="cal-dot" style="background:${DOT_COLORS[e.type]||'#7c3aed'};opacity:0.5"></div>`).join('')}</div>`
+        : '';
+      grid.innerHTML += `<div class="cal-day border-r border-b border-outline-variant other-month" onclick="calDayClick('${nextDateStr}', event)">
+        <div class="text-xs font-semibold mb-1 opacity-40 ${isSun?'text-red-400':isSat?'text-blue-400':''}">${i}</div>${evHtml}${nextDotHtml}</div>`;
+    }
   }
 
-  // 이전 달 날짜 채우기
-  const prevMonthDays = new Date(calYear, calMonth, 0).getDate();
-  for (let i = 0; i < firstDay; i++) {
-    const prevDay = prevMonthDays - firstDay + i + 1;
-    const prevY = calMonth === 0 ? calYear - 1 : calYear;
-    const prevM = calMonth === 0 ? 12 : calMonth;
-    const prevDateStr = `${prevY}-${String(prevM).padStart(2,'0')}-${String(prevDay).padStart(2,'0')}`;
-    const prevEvs = filterEvs(DB.events.filter(e => eventFallsOnDate(e, prevDateStr)));
-    const isSun = i % 7 === 0; const isSat = i % 7 === 6;
-    const evHtml = prevEvs.slice(0, maxVisible).map(e =>
-      `<div class="cal-event opacity-50" style="${EVT_COLORS[e.type]||EVT_COLORS['기타']}">${e.title}</div>`
-    ).join('');
-    const prevDotHtml = prevEvs.length
-      ? `<div class="cal-dot-row">${prevEvs.slice(0,4).map(e=>`<div class="cal-dot" style="background:${DOT_COLORS[e.type]||'#7c3aed'};opacity:0.5"></div>`).join('')}</div>`
-      : '';
-    grid.innerHTML += `<div class="cal-day border-r border-b border-outline-variant other-month" onclick="calDayClick('${prevDateStr}', event)">
-      <div class="text-xs font-semibold mb-1 opacity-40 ${isSun?'text-red-400':isSat?'text-blue-400':''}">${prevDay}</div>${evHtml}${prevDotHtml}</div>`;
+  function setFilter(type) {
+    typeFilter = type;
+    document.querySelectorAll('.cal-filter-btn').forEach(btn => btn.classList.remove('active'));
+    const target = type === 'all' ? 'cal-filter-all' : `cal-filter-${type}`;
+    const el = document.getElementById(target);
+    if (el) el.classList.add('active');
+    render();
   }
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const allDayEvents = DB.events.filter(e => eventFallsOnDate(e, dateStr)).sort((a,b) => {
-      const ai = Math.min(...(getEventPersonIds(a).map(id => DB.members.findIndex(m=>m.id===id)).filter(i=>i>=0)), isTeamEvent(a)?-1:999);
-      const bi = Math.min(...(getEventPersonIds(b).map(id => DB.members.findIndex(m=>m.id===id)).filter(i=>i>=0)), isTeamEvent(b)?-1:999);
-      return ai - bi;
-    });
-    const dayEvents = filterEvs(allDayEvents);
-    const isToday = dateStr === todayStr;
-    const isSun = (firstDay + day - 1) % 7 === 0;
-    const isSat = (firstDay + day - 1) % 7 === 6;
-    const visibleEvs = dayEvents.slice(0, maxVisible);
-    const moreCount = dayEvents.length - maxVisible;
-    const evHtml = visibleEvs.map(e => {
-      const s = EVT_COLORS[e.type] || EVT_COLORS.기타;
-      const nb = isNew(e) ? '<span class="new-badge">NEW</span>' : '';
-      return `<div class="cal-event" style="${s}" onclick="event.stopPropagation();openEventDetail(${e.id})">${e.title}${nb}</div>`;
-    }).join('') + (moreCount > 0 ? `<div class="cal-event" style="background:#f1f5f9;color:#64748b" onclick="event.stopPropagation();calDayClick('${dateStr}',event)">+${moreCount}개</div>` : '');
-    const dotHtml = dayEvents.length
-      ? `<div class="cal-dot-row">${dayEvents.slice(0,4).map(e=>`<div class="cal-dot" style="background:${DOT_COLORS[e.type]||'#7c3aed'}"></div>`).join('')}</div>`
-      : '';
-    grid.innerHTML += `
-      <div class="cal-day border-r border-b border-outline-variant ${isToday?'today':''}" onclick="calDayClick('${dateStr}', event)">
-        <div class="text-xs font-semibold mb-1 ${isSun?'text-red-500':isSat?'text-blue-500':''} ${isToday?'bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center':''}">${day}</div>
-        ${evHtml}${dotHtml}
-      </div>`;
-  }
-  // 다음 달 날짜 채우기
-  const totalCells = firstDay + daysInMonth;
-  const trailing = (7 - totalCells % 7) % 7;
-  const nextY = calMonth === 11 ? calYear + 1 : calYear;
-  const nextM = calMonth === 11 ? 1 : calMonth + 2;
-  for (let i = 1; i <= trailing; i++) {
-    const nextDateStr = `${nextY}-${String(nextM).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-    const nextEvs = filterEvs(DB.events.filter(e => eventFallsOnDate(e, nextDateStr)));
-    const col = (totalCells + i - 1) % 7;
-    const isSun = col === 0; const isSat = col === 6;
-    const evHtml = nextEvs.slice(0, maxVisible).map(e =>
-      `<div class="cal-event opacity-50" style="${EVT_COLORS[e.type]||EVT_COLORS['기타']}">${e.title}</div>`
-    ).join('');
-    const nextDotHtml = nextEvs.length
-      ? `<div class="cal-dot-row">${nextEvs.slice(0,4).map(e=>`<div class="cal-dot" style="background:${DOT_COLORS[e.type]||'#7c3aed'};opacity:0.5"></div>`).join('')}</div>`
-      : '';
-    grid.innerHTML += `<div class="cal-day border-r border-b border-outline-variant other-month" onclick="calDayClick('${nextDateStr}', event)">
-      <div class="text-xs font-semibold mb-1 opacity-40 ${isSun?'text-red-400':isSat?'text-blue-400':''}">${i}</div>${evHtml}${nextDotHtml}</div>`;
-  }
-}
 
-function openCalDayModal(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  const dow = ['일','월','화','수','목','금','토'][d.getDay()];
-  document.getElementById('cal-day-modal-title').textContent = `${d.getMonth()+1}월 ${d.getDate()}일 (${dow})`;
-  document.getElementById('cal-day-modal-add-btn').onclick = () => {
-    document.getElementById('modal-cal-day').classList.add('hidden');
-    openAddEventModal(dateStr);
+  function prevMonth() {
+    month--;
+    if (month < 0) { month = 11; year--; }
+    render();
+  }
+
+  function nextMonth() {
+    month++;
+    if (month > 11) { month = 0; year++; }
+    render();
+  }
+
+  function goToday() {
+    const n = new Date();
+    year = n.getFullYear();
+    month = n.getMonth();
+    render();
+  }
+
+  function openCalDayModal(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const dow = ['일','월','화','수','목','금','토'][d.getDay()];
+    document.getElementById('cal-day-modal-title').textContent = `${d.getMonth()+1}월 ${d.getDate()}일 (${dow})`;
+    document.getElementById('cal-day-modal-add-btn').onclick = () => {
+      document.getElementById('modal-cal-day').classList.add('hidden');
+      openAddEventModal(dateStr);
+    };
+    const dayEvents = DB.events.filter(ev => eventFallsOnDate(ev, dateStr));
+    const evColors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 업무보고:'background:#dcfce7;color:#16a34a', 기타:'background:#ede9fe;color:#7c3aed'};
+    const container = document.getElementById('cal-day-modal-events');
+    if (dayEvents.length === 0) {
+      container.innerHTML = '<div class="py-8 text-sm text-secondary italic text-center">이 날 일정이 없습니다</div>';
+    } else {
+      container.innerHTML = '<div class="divide-y divide-outline-variant">' + dayEvents.map(ev => {
+        const eIds = getEventPersonIds(ev);
+        const eNames = eIds.map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean).join(', ');
+        const dotColor = {휴무:'#ef4444', 출장:'#2563eb', 미팅:'#d97706', 업무보고:'#16a34a', 기타:'#7c3aed'}[ev.type] || '#7c3aed';
+        return `<div class="py-3 flex items-start gap-3 cursor-pointer hover:bg-surface-container-low rounded-lg px-2" onclick="document.getElementById('modal-cal-day').classList.add('hidden');openEventDetail(${ev.id})">
+          <div class="w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0" style="background:${dotColor}"></div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-semibold text-on-surface">${ev.title}</div>
+            <div class="text-xs text-secondary mt-0.5">${eNames ? '👤 '+eNames : '팀 전체'}${ev.startTime?' · 🕐 '+ev.startTime:''}</div>
+          </div>
+        </div>`;
+      }).join('') + '</div>';
+    }
+    document.getElementById('modal-cal-day').classList.remove('hidden');
+  }
+
+  function calDayClick(dateStr, e) {
+    if (window.innerWidth >= 1024) { openCalDayModal(dateStr); return; }
+    const panel = document.getElementById('cal-day-panel');
+    const title = document.getElementById('cal-panel-title');
+    const evList = document.getElementById('cal-panel-events');
+    const d = new Date(dateStr + 'T00:00:00');
+    const dow = ['일','월','화','수','목','금','토'][d.getDay()];
+    title.textContent = `${d.getMonth()+1}월 ${d.getDate()}일 (${dow})`;
+    const dayEvents = DB.events.filter(ev => eventFallsOnDate(ev, dateStr));
+    const evColors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 업무보고:'background:#dcfce7;color:#16a34a', 기타:'background:#ede9fe;color:#7c3aed'};
+    if (dayEvents.length === 0) {
+      evList.innerHTML = '<div class="px-4 py-4 text-sm text-secondary italic text-center">일정이 없어요</div>';
+    } else {
+      evList.innerHTML = dayEvents.map(ev => {
+        const s = evColors[ev.type] || evColors['기타'];
+        const eIds = getEventPersonIds(ev);
+        const eNames = eIds.map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean).join(', ');
+        const dotColor = {휴무:'#ef4444', 출장:'#2563eb', 미팅:'#d97706', 업무보고:'#16a34a', 기타:'#7c3aed'}[ev.type] || '#7c3aed';
+        return `<div class="px-4 py-3 flex items-start gap-3 cursor-pointer hover:bg-surface-container-low" onclick="openEventDetail(${ev.id})">
+          <div class="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style="background:${dotColor}"></div>
+          <div>
+            <div class="text-sm font-semibold text-on-surface">${ev.title}</div>
+            <div class="text-xs text-secondary mt-0.5">${eNames ? '👤 '+eNames : '팀 전체'}${ev.startTime?' · 🕐 '+ev.startTime:''}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+    document.getElementById('cal-panel-add-btn').onclick = () => openAddEventModal(dateStr);
+    panel.style.display = 'block';
+    setTimeout(() => panel.scrollIntoView({behavior:'smooth', block:'nearest'}), 50);
+  }
+
+  function openAddEventModal(dateStr) {
+    document.getElementById('editing-event-id').value = '';
+    document.getElementById('event-modal-title').textContent = '일정 추가';
+    document.getElementById('event-title').value = '';
+    document.getElementById('event-date').value = dateStr || formatDate(new Date());
+    document.getElementById('event-date-end').value = '';
+    document.getElementById('event-memo').value = '';
+    const sel = document.getElementById('event-person');
+    populateEventPersonSelect(sel, []);
+    sel.options[0].selected = true;
+    const radios = document.querySelectorAll('input[name="event-type"]');
+    radios.forEach(r => r.checked = false);
+    document.getElementById('modal-add-event').classList.remove('hidden');
+  }
+
+  function openEditEventModal(id) {
+    const e = DB.events.find(ev => ev.id === id);
+    if (!e) return;
+    document.getElementById('modal-event-detail').classList.add('hidden');
+    document.getElementById('editing-event-id').value = id;
+    document.getElementById('event-modal-title').textContent = '일정 수정';
+    document.getElementById('event-title').value = e.title;
+    document.getElementById('event-date').value = e.date;
+    document.getElementById('event-date-end').value = e.dateEnd || '';
+    document.getElementById('event-memo').value = e.memo || '';
+    const sel = document.getElementById('event-person');
+    const existingIds = getEventPersonIds(e).map(String);
+    populateEventPersonSelect(sel, existingIds.length ? existingIds : []);
+    if (!existingIds.length) sel.options[0].selected = true;
+    const radios = document.querySelectorAll('input[name="event-type"]');
+    radios.forEach(r => { r.checked = r.value === e.type; });
+    document.getElementById('modal-add-event').classList.remove('hidden');
+  }
+
+  function saveEvent() {
+    const title = document.getElementById('event-title').value.trim();
+    const date = document.getElementById('event-date').value;
+    if (!title || !date) { alert('제목과 시작일을 입력하세요.'); return; }
+    const dateEnd = document.getElementById('event-date-end').value || null;
+    const selOpts = [...document.getElementById('event-person').selectedOptions].map(o => o.value);
+    const isTeam = selOpts.includes('0') || selOpts.length === 0;
+    const personId = isTeam ? 0 : (selOpts.length === 1 ? parseInt(selOpts[0]) : 0);
+    const personIds = isTeam ? [] : selOpts.map(v => parseInt(v)).filter(Boolean);
+    const type = document.querySelector('input[name="event-type"]:checked')?.value || '기타';
+    const memo = document.getElementById('event-memo').value.trim();
+    const editId = parseInt(document.getElementById('editing-event-id').value);
+    if (editId) {
+      const ev = DB.events.find(e => e.id === editId);
+      if (ev) Object.assign(ev, {title, date, dateEnd, personId, personIds, type, memo});
+      showToast('일정이 수정되었습니다');
+    } else {
+      DB.events.push({id: Date.now(), title, date, dateEnd, personId, personIds, type, memo, createdAt: Date.now()});
+      showToast('일정이 추가되었습니다');
+    }
+    saveDB();
+    document.getElementById('modal-add-event').classList.add('hidden');
+    render();
+    if (document.getElementById('page-weekly').classList.contains('active')) renderWeekly();
+    updateNotifBadge();
+  }
+
+  return {
+    render,
+    setFilter,
+    prevMonth,
+    nextMonth,
+    goToday,
+    openCalDayModal,
+    calDayClick,
+    openAddEventModal,
+    openEditEventModal,
+    saveEvent,
+    get year() { return year; },
+    get month() { return month; },
   };
-  const dayEvents = DB.events.filter(ev => eventFallsOnDate(ev, dateStr));
-  const evColors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 업무보고:'background:#dcfce7;color:#16a34a', 기타:'background:#ede9fe;color:#7c3aed'};
-  const container = document.getElementById('cal-day-modal-events');
-  if (dayEvents.length === 0) {
-    container.innerHTML = '<div class="py-8 text-sm text-secondary italic text-center">이 날 일정이 없습니다</div>';
-  } else {
-    container.innerHTML = '<div class="divide-y divide-outline-variant">' + dayEvents.map(ev => {
-      const eIds = getEventPersonIds(ev);
-      const eNames = eIds.map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean).join(', ');
-      const dotColor = {휴무:'#ef4444', 출장:'#2563eb', 미팅:'#d97706', 업무보고:'#16a34a', 기타:'#7c3aed'}[ev.type] || '#7c3aed';
-      return `<div class="py-3 flex items-start gap-3 cursor-pointer hover:bg-surface-container-low rounded-lg px-2" onclick="document.getElementById('modal-cal-day').classList.add('hidden');openEventDetail(${ev.id})">
-        <div class="w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0" style="background:${dotColor}"></div>
-        <div class="flex-1 min-w-0">
-          <div class="text-sm font-semibold text-on-surface">${ev.title}</div>
-          <div class="text-xs text-secondary mt-0.5">${eNames ? '👤 '+eNames : '팀 전체'}${ev.startTime?' · 🕐 '+ev.startTime:''}</div>
-        </div>
-      </div>`;
-    }).join('') + '</div>';
-  }
-  document.getElementById('modal-cal-day').classList.remove('hidden');
-}
+})();
 
-function calDayClick(dateStr, e) {
-  if (window.innerWidth >= 1024) { openCalDayModal(dateStr); return; }
-  const panel = document.getElementById('cal-day-panel');
-  const title = document.getElementById('cal-panel-title');
-  const evList = document.getElementById('cal-panel-events');
-  const d = new Date(dateStr + 'T00:00:00');
-  const dow = ['일','월','화','수','목','금','토'][d.getDay()];
-  title.textContent = `${d.getMonth()+1}월 ${d.getDate()}일 (${dow})`;
-  const dayEvents = DB.events.filter(ev => eventFallsOnDate(ev, dateStr));
-  const evColors = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 업무보고:'background:#dcfce7;color:#16a34a', 기타:'background:#ede9fe;color:#7c3aed'};
-  if (dayEvents.length === 0) {
-    evList.innerHTML = '<div class="px-4 py-4 text-sm text-secondary italic text-center">일정이 없어요</div>';
-  } else {
-    evList.innerHTML = dayEvents.map(ev => {
-      const s = evColors[ev.type] || evColors['기타'];
-      const eIds = getEventPersonIds(ev);
-      const eNames = eIds.map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean).join(', ');
-      const dotColor = {휴무:'#ef4444', 출장:'#2563eb', 미팅:'#d97706', 업무보고:'#16a34a', 기타:'#7c3aed'}[ev.type] || '#7c3aed';
-      return `<div class="px-4 py-3 flex items-start gap-3 cursor-pointer hover:bg-surface-container-low" onclick="openEventDetail(${ev.id})">
-        <div class="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style="background:${dotColor}"></div>
-        <div>
-          <div class="text-sm font-semibold text-on-surface">${ev.title}</div>
-          <div class="text-xs text-secondary mt-0.5">${eNames ? '👤 '+eNames : '팀 전체'}${ev.startTime?' · 🕐 '+ev.startTime:''}</div>
-        </div>
-      </div>`;
-    }).join('');
-  }
-  document.getElementById('cal-panel-add-btn').onclick = () => openAddEventModal(dateStr);
-  panel.style.display = 'block';
-  setTimeout(() => panel.scrollIntoView({behavior:'smooth', block:'nearest'}), 50);
-}
-
+// --- Calendar shims (HTML onclick 호환) ---
+function renderCalendar() { Pages.calendar.render(); }
+function setCalFilter(type) { Pages.calendar.setFilter(type); }
 function changeMonth(dir) {
-  calMonth += dir;
-  if (calMonth > 11) { calMonth = 0; calYear++; }
-  if (calMonth < 0) { calMonth = 11; calYear--; }
-  renderCalendar();
+  if (dir < 0) Pages.calendar.prevMonth();
+  else Pages.calendar.nextMonth();
 }
-
-function goToToday() {
-  calYear = new Date().getFullYear();
-  calMonth = new Date().getMonth();
-  renderCalendar();
-}
-
-function openAddEventModal(dateStr) {
-  document.getElementById('editing-event-id').value = '';
-  document.getElementById('event-modal-title').textContent = '일정 추가';
-  document.getElementById('event-title').value = '';
-  document.getElementById('event-date').value = dateStr || formatDate(new Date());
-  document.getElementById('event-date-end').value = '';
-  document.getElementById('event-memo').value = '';
-  const sel = document.getElementById('event-person');
-  populateEventPersonSelect(sel, []);
-  sel.options[0].selected = true;
-  const radios = document.querySelectorAll('input[name="event-type"]');
-  radios.forEach(r => r.checked = false);
-  document.getElementById('modal-add-event').classList.remove('hidden');
-}
-
-function openEditEventModal(id) {
-  const e = DB.events.find(ev => ev.id === id);
-  if (!e) return;
-  document.getElementById('modal-event-detail').classList.add('hidden');
-  document.getElementById('editing-event-id').value = id;
-  document.getElementById('event-modal-title').textContent = '일정 수정';
-  document.getElementById('event-title').value = e.title;
-  document.getElementById('event-date').value = e.date;
-  document.getElementById('event-date-end').value = e.dateEnd || '';
-  document.getElementById('event-memo').value = e.memo || '';
-  const sel = document.getElementById('event-person');
-  const existingIds = getEventPersonIds(e).map(String);
-  populateEventPersonSelect(sel, existingIds.length ? existingIds : []);
-  if (!existingIds.length) sel.options[0].selected = true;
-  const radios = document.querySelectorAll('input[name="event-type"]');
-  radios.forEach(r => { r.checked = r.value === e.type; });
-  document.getElementById('modal-add-event').classList.remove('hidden');
-}
-
-function saveEvent() {
-  const title = document.getElementById('event-title').value.trim();
-  const date = document.getElementById('event-date').value;
-  if (!title || !date) { alert('제목과 시작일을 입력하세요.'); return; }
-  const dateEnd = document.getElementById('event-date-end').value || null;
-  const selOpts = [...document.getElementById('event-person').selectedOptions].map(o => o.value);
-  const isTeam = selOpts.includes('0') || selOpts.length === 0;
-  const personId = isTeam ? 0 : (selOpts.length === 1 ? parseInt(selOpts[0]) : 0);
-  const personIds = isTeam ? [] : selOpts.map(v => parseInt(v)).filter(Boolean);
-  const type = document.querySelector('input[name="event-type"]:checked')?.value || '기타';
-  const memo = document.getElementById('event-memo').value.trim();
-  const editId = parseInt(document.getElementById('editing-event-id').value);
-  if (editId) {
-    const ev = DB.events.find(e => e.id === editId);
-    if (ev) Object.assign(ev, {title, date, dateEnd, personId, personIds, type, memo});
-    showToast('일정이 수정되었습니다');
-  } else {
-    DB.events.push({id: Date.now(), title, date, dateEnd, personId, personIds, type, memo, createdAt: Date.now()});
-    showToast('일정이 추가되었습니다');
-  }
-  saveDB();
-  document.getElementById('modal-add-event').classList.add('hidden');
-  renderCalendar();
-  if (document.getElementById('page-weekly').classList.contains('active')) renderWeekly();
-  updateNotifBadge();
-}
+function goToToday() { Pages.calendar.goToday(); }
+function calDayClick(dateStr, e) { Pages.calendar.calDayClick(dateStr, e); }
+function openCalDayModal(dateStr) { Pages.calendar.openCalDayModal(dateStr); }
+function openAddEventModal(dateStr) { Pages.calendar.openAddEventModal(dateStr); }
+function openEditEventModal(id) { Pages.calendar.openEditEventModal(id); }
+function saveEvent() { Pages.calendar.saveEvent(); }
 
 // ============================================================
 //  TEAM
