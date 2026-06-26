@@ -1163,6 +1163,7 @@ function saveDB() {
 let activePage = 'overview';
 
 function refreshCurrentPage() {
+  if (!currentUser) return;
   if (activePage === 'overview') { try { renderOverview(); } catch(e) {} }
   else if (activePage === 'dashboard') { try { renderDashboard(); } catch(e) {} }
   else if (activePage === 'team') { try { renderTeam(); } catch(e) {} }
@@ -1177,7 +1178,7 @@ function setupListeners() {
   LISTEN_COLLS.forEach(coll => {
     db.collection(coll).onSnapshot(snapshot => {
       DB[coll] = snapshot.docs.map(d => d.data());
-      if (currentUser) refreshCurrentPage();
+      refreshCurrentPage();
     }, err => console.error('onSnapshot 오류 (' + coll + '):', err));
   });
 
@@ -1296,6 +1297,7 @@ function formatDate(d) {
 //  NAVIGATION
 // ============================================================
 function showPage(name) {
+  if (!requireAuth()) return;
   // 모바일에서 사이드바 자동 닫기
   if (window.innerWidth < 1024) {
     const sb = document.getElementById('sidebar');
@@ -1342,6 +1344,7 @@ let currentPage = 1;
 const PAGE_SIZE = 8;
 
 function renderDashboard() {
+  if (!requireAuth()) return;
   // Today's date
   const now = new Date();
   document.getElementById('today-date').textContent = now.toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric', weekday:'long'});
@@ -1673,6 +1676,7 @@ function setCalFilter(type) {
 }
 
 function renderCalendar() {
+  if (!requireAuth()) return;
   const d = new Date(calYear, calMonth, 1);
   document.getElementById('cal-month-label').textContent = `${calYear}년 ${calMonth+1}월`;
   const firstDay = d.getDay();
@@ -1899,6 +1903,7 @@ let memberFilter = 'all';
 let memberPartFilter = 'all';
 
 function renderTeam() {
+  if (!requireAuth()) return;
   let filtered = memberFilter === 'all' ? DB.members : DB.members.filter(m => m.status === memberFilter);
   if (memberPartFilter !== 'all') filtered = filtered.filter(m => m.part === memberPartFilter);
   const tbody = document.getElementById('team-table-body');
@@ -2081,6 +2086,7 @@ function moveCenter(id, dir) {
 }
 
 function renderCenters() {
+  if (!requireAuth()) return;
   const list = document.getElementById('center-list');
   if (!list) return;
   const statusColors = {정상:'badge-complete', 이슈:'badge-delayed', 점검:'badge-pending'};
@@ -2964,6 +2970,7 @@ function changeWeek(dir) { weekStart = new Date(weekStart); weekStart.setDate(we
 function goToThisWeek() { weekStart = getWeekMonday(new Date()); renderWeekly(); }
 
 function renderWeekly() {
+  if (!requireAuth()) return;
   const days = Array.from({length:7}, (_,i) => { const d = new Date(weekStart); d.setDate(weekStart.getDate()+i); return d; });
   const todayStr = formatDate(new Date());
   const dayNames = ['월','화','수','목','금','토','일'];
@@ -3235,6 +3242,15 @@ function hideLoginOverlay() {
   document.getElementById('login-overlay').style.cssText = 'display:none!important;';
 }
 
+function requireAuth(fn) {
+  if (!currentUser) {
+    showLoginOverlay();
+    return false;
+  }
+  if (typeof fn === 'function') fn();
+  return true;
+}
+
 function doLogin() {
   const username = document.getElementById('login-username').value.trim().toLowerCase();
   const password = document.getElementById('login-password').value;
@@ -3364,6 +3380,7 @@ function showMsg(el, msg) {
 //  OVERVIEW
 // ============================================================
 function renderOverview() {
+  if (!requireAuth()) return;
   const today = formatDate(new Date());
   const d = new Date();
   const weekdays = ['일','월','화','수','목','금','토'];
