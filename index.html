@@ -2156,213 +2156,64 @@ function moveMember(id, dir) { Pages.team.moveMember(id, dir); }
 function deleteMember(id) { Pages.team.deleteMember(id); }
 
 // ============================================================
-//  CENTERS
+//  PAGE: CENTERS
 // ============================================================
-let selectedCenterId = null;
+Pages.centers = (() => {
+  let selectedId = null;
 
-function moveCenter(id, dir) {
-  const idx = DB.centers.findIndex(c => c.id === id);
-  const swapIdx = idx + dir;
-  if (swapIdx < 0 || swapIdx >= DB.centers.length) return;
-  const a = DB.centers[idx];
-  const b = DB.centers[swapIdx];
-  const tempOrder = a.order ?? idx;
-  a.order = b.order ?? swapIdx;
-  b.order = tempOrder;
-  [DB.centers[idx], DB.centers[swapIdx]] = [DB.centers[swapIdx], DB.centers[idx]];
-  db.collection('centers').doc(String(a.id)).update({ order: a.order })
-    .catch(e => console.error(e));
-  db.collection('centers').doc(String(b.id)).update({ order: b.order })
-    .catch(e => console.error(e));
-  renderCenters();
-}
+  function render() {
+    if (!requireAuth()) return;
+    const list = document.getElementById('center-list');
+    if (!list) return;
+    const statusColors = {정상:'badge-complete', 이슈:'badge-delayed', 점검:'badge-pending'};
+    list.innerHTML = DB.centers.map(c => {
+      const manager = DB.members.find(m => m.id === c.managerId);
+      const relatedTasks = DB.tasks.filter(t => getAssigneeIds(t).some(id => { const m=DB.members.find(m=>m.id===id); return m && m.center===c.name; }));
+      const isOpen = selectedId === c.id;
+      return `
+      <div class="center-accordion-card border border-outline-variant rounded-xl mb-2 overflow-hidden bg-white shadow-sm" id="center-card-${c.id}">
+        <div class="flex items-center gap-1 pr-4 cursor-pointer hover:bg-surface-container-low transition-all ${isOpen ? 'bg-primary-container' : ''}" onclick="toggleCenterCard(${c.id})">
+          <div class="flex flex-col gap-0.5 py-3 pl-2 shrink-0">
+            <button onclick="event.stopPropagation();moveCenter(${c.id},-1)" class="p-0.5 rounded hover:bg-surface-container text-secondary" title="위로"><span class="material-symbols-outlined" style="font-size:14px">arrow_upward</span></button>
+            <button onclick="event.stopPropagation();moveCenter(${c.id},1)" class="p-0.5 rounded hover:bg-surface-container text-secondary" title="아래로"><span class="material-symbols-outlined" style="font-size:14px">arrow_downward</span></button>
+          </div>
+          <div class="flex-1 py-3 pl-2 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="font-semibold text-sm text-on-surface">${c.name}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[c.status]||'badge-normal'}">${c.status}</span>
+            </div>
+            <div class="text-xs text-secondary">${c.code || ''}${c.address ? ' · ' + c.address : ''}</div>
+            ${c.issue ? `<div class="text-xs text-orange-600 mt-1 truncate">⚠ ${c.issue}</div>` : ''}
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <div class="text-right hidden sm:block">
+              <div class="text-xs text-secondary">${manager ? manager.name : '미배정'}</div>
+              <div class="text-xs text-secondary">${relatedTasks.length}건</div>
+            </div>
+            <span class="material-symbols-outlined text-secondary transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}" id="center-chev-${c.id}" style="font-size:18px">expand_more</span>
+          </div>
+        </div>
+        <div id="center-body-${c.id}" class="${isOpen ? '' : 'hidden'} border-t border-outline-variant">
+          ${buildDetail(c)}
+        </div>
+      </div>`;
+    }).join('') || '<div class="text-center py-8 text-secondary text-sm">센터가 없습니다</div>';
 
-function renderCenters() {
-  if (!requireAuth()) return;
-  const list = document.getElementById('center-list');
-  if (!list) return;
-  const statusColors = {정상:'badge-complete', 이슈:'badge-delayed', 점검:'badge-pending'};
-  list.innerHTML = DB.centers.map(c => {
+    populateCenterManagerSelect();
+  }
+
+  function buildDetail(c) {
     const manager = DB.members.find(m => m.id === c.managerId);
-    const relatedTasks = DB.tasks.filter(t => getAssigneeIds(t).some(id => { const m=DB.members.find(m=>m.id===id); return m && m.center===c.name; }));
-    const isOpen = selectedCenterId === c.id;
+    const statusColors = {정상:'badge-complete', 이슈:'badge-delayed', 점검:'badge-pending'};
     return `
-    <div class="center-accordion-card border border-outline-variant rounded-xl mb-2 overflow-hidden bg-white shadow-sm" id="center-card-${c.id}">
-      <div class="flex items-center gap-1 pr-4 cursor-pointer hover:bg-surface-container-low transition-all ${isOpen ? 'bg-primary-container' : ''}" onclick="toggleCenterCard(${c.id})">
-        <div class="flex flex-col gap-0.5 py-3 pl-2 shrink-0">
-          <button onclick="event.stopPropagation();moveCenter(${c.id},-1)" class="p-0.5 rounded hover:bg-surface-container text-secondary" title="위로"><span class="material-symbols-outlined" style="font-size:14px">arrow_upward</span></button>
-          <button onclick="event.stopPropagation();moveCenter(${c.id},1)" class="p-0.5 rounded hover:bg-surface-container text-secondary" title="아래로"><span class="material-symbols-outlined" style="font-size:14px">arrow_downward</span></button>
-        </div>
-        <div class="flex-1 py-3 pl-2 min-w-0">
-          <div class="flex items-center gap-2 mb-1">
-            <span class="font-semibold text-sm text-on-surface">${c.name}</span>
-            <span class="text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[c.status]||'badge-normal'}">${c.status}</span>
-          </div>
-          <div class="text-xs text-secondary">${c.code || ''}${c.address ? ' · ' + c.address : ''}</div>
-          ${c.issue ? `<div class="text-xs text-orange-600 mt-1 truncate">⚠ ${c.issue}</div>` : ''}
-        </div>
-        <div class="flex items-center gap-3 shrink-0">
-          <div class="text-right hidden sm:block">
-            <div class="text-xs text-secondary">${manager ? manager.name : '미배정'}</div>
-            <div class="text-xs text-secondary">${relatedTasks.length}건</div>
-          </div>
-          <span class="material-symbols-outlined text-secondary transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}" id="center-chev-${c.id}" style="font-size:18px">expand_more</span>
-        </div>
-      </div>
-      <div id="center-body-${c.id}" class="${isOpen ? '' : 'hidden'} border-t border-outline-variant">
-        ${buildCenterDetail(c)}
-      </div>
-    </div>`;
-  }).join('') || '<div class="text-center py-8 text-secondary text-sm">센터가 없습니다</div>';
-
-  populateCenterManagerSelect();
-}
-
-function buildCenterDetail(c) {
-  const manager = DB.members.find(m => m.id === c.managerId);
-  const statusColors = {정상:'badge-complete', 이슈:'badge-delayed', 점검:'badge-pending'};
-  return `
-    <div class="p-6">
-      <div class="flex items-start justify-between mb-4">
-        <div>
-          <div class="flex items-center gap-3 mb-2">
-            <span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[c.status]||'badge-normal'}">${c.status}</span>
-            <span class="text-xs text-secondary font-mono">${c.code||''}</span>
-          </div>
-          <h2 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'">${c.name}</h2>
-          <p class="text-sm text-secondary mt-1">${c.address||''}</p>
-        </div>
-        <div class="flex gap-2">
-          <button onclick="editCenter(${c.id})" class="flex items-center gap-1.5 border border-outline-variant rounded-lg px-3 py-2 text-sm text-secondary hover:bg-surface-container"><span class="material-symbols-outlined text-sm">edit</span>수정</button>
-          <button onclick="deleteCenter(${c.id})" class="flex items-center gap-1.5 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-500 hover:bg-red-50"><span class="material-symbols-outlined text-sm">delete</span>삭제</button>
-        </div>
-      </div>
-      <div class="grid grid-cols-2 gap-4 mb-4">
-        <div class="bg-surface-container-low rounded-lg p-4">
-          <div class="text-xs text-secondary mb-1">본사 담당자</div>
-          <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">${manager?manager.name[0]:'?'}</div>
-            <span class="font-semibold text-sm">${manager?manager.name:'미배정'}</span>
-            ${manager?`<span class="text-xs text-secondary">${manager.rank||''}</span>`:''}
-          </div>
-        </div>
-        <div class="bg-surface-container-low rounded-lg p-4">
-          <div class="text-xs text-secondary mb-1">관련 업무</div>
-          <div class="font-semibold text-sm">${DB.tasks.filter(t => getAssigneeIds(t).some(id => { const m=DB.members.find(m=>m.id===id); return m && m.center===c.name; })).length}건 진행 중</div>
-        </div>
-      </div>
-      ${c.director ? `
-      <div class="mb-4 bg-surface-container-low rounded-lg p-4">
-        <div class="text-xs text-secondary mb-2 font-semibold">센터장</div>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-xs font-bold">${c.director.name[0]}</div>
-            <span class="font-semibold text-sm">${c.director.name}</span>
-          </div>
-          ${c.director.phone ? `<span class="text-xs text-secondary">${c.director.phone}</span>` : ''}
-        </div>
-      </div>` : ''}
-      ${c.staff && c.staff.length ? `
-      <div class="mb-4">
-        <div class="text-xs text-secondary mb-2 font-semibold">센터원 (${c.staff.length}명)</div>
-        <div class="grid grid-cols-2 gap-2">
-          ${c.staff.map(s => `<div class="flex items-center gap-2 bg-surface-container-low rounded-lg px-3 py-2">
-            <div class="w-6 h-6 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center text-xs font-bold">${s.name[0]}</div>
-            <div><div class="text-xs font-semibold">${s.name}</div><div class="text-xs text-secondary">${s.role||''}</div></div>
-          </div>`).join('')}
-        </div>
-      </div>` : ''}
-      <div class="border-t border-outline-variant pt-4">
-        <h3 class="font-bold text-sm text-on-surface mb-3 flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-sm ${c.issue?'text-orange-500':'text-secondary'}">report_problem</span>
-          실시간 주요 이슈 및 특이사항
-        </h3>
-        ${c.issue ? `
-          <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
-            <p class="text-sm text-orange-800 leading-relaxed">${c.issue}</p>
-          </div>
-        ` : `
-          <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 flex items-center gap-2">
-            <span class="material-symbols-outlined text-green-600 text-sm">check_circle</span>
-            <p class="text-sm text-green-700">현재 특이사항 없음</p>
-          </div>
-        `}
-        <div class="flex gap-2">
-          <input type="text" id="center-issue-input-${c.id}" placeholder="새 이슈 또는 특이사항 입력..." class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')addCenterIssue(${c.id})">
-          <button onclick="addCenterIssue(${c.id})" class="bg-primary text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">추가</button>
-          ${c.issue ? `<button onclick="clearCenterIssue(${c.id})" class="border border-outline-variant rounded-lg px-3 py-2 text-sm text-secondary hover:bg-surface-container">이슈 해소</button>` : ''}
-        </div>
-        ${c.issueHistory && c.issueHistory.length ? `
-        <div class="mt-4">
-          <div class="text-xs font-semibold text-secondary mb-2 flex items-center gap-1">
-            <span class="material-symbols-outlined text-sm">history</span>
-            이슈 이력 (${c.issueHistory.length}건)
-          </div>
-          <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
-            ${c.issueHistory.map((h,idx)=>`
-              <div class="rounded-lg px-3 py-2 border ${h.resolved ? 'bg-surface-container-low border-outline-variant opacity-70' : 'bg-orange-50 border-orange-200'}">
-                <div class="flex items-center justify-between mb-1">
-                  <span class="text-xs text-secondary">${h.date}</span>
-                  <div class="flex items-center gap-2">
-                    <label class="flex items-center gap-1.5 cursor-pointer select-none" onclick="event.stopPropagation()">
-                      <input type="checkbox" ${h.resolved?'checked':''} onchange="toggleIssueResolved(${c.id},${idx})" class="w-3.5 h-3.5 accent-green-600 cursor-pointer">
-                      <span class="text-xs ${h.resolved?'text-green-600':'text-orange-600'}">${h.resolved?`해소 ${h.resolvedDate||''}`:'미해소'}</span>
-                    </label>
-                    <button onclick="event.stopPropagation();deleteIssueHistory(${c.id},${idx})" class="p-0.5 rounded hover:bg-red-100 text-red-400" title="삭제"><span class="material-symbols-outlined" style="font-size:14px">delete</span></button>
-                  </div>
-                </div>
-                <p class="text-xs text-on-surface ${h.resolved?'line-through text-secondary':''}">${h.text}</p>
-              </div>`).join('')}
-          </div>
-        </div>` : ''}
-      </div>
-    </div>`;
-}
-
-function searchCenters(q) {
-  const lower = q.toLowerCase();
-  document.querySelectorAll('.center-accordion-card').forEach(card => {
-    const id = parseInt(card.id.replace('center-card-', ''));
-    const c = DB.centers.find(c => c.id === id);
-    if (!c) return;
-    const match = !q || c.name.toLowerCase().includes(lower) || (c.code||'').toLowerCase().includes(lower) || (c.address||'').toLowerCase().includes(lower);
-    card.style.display = match ? '' : 'none';
-  });
-}
-
-function toggleCenterCard(id) {
-  const isOpen = selectedCenterId === id;
-  selectedCenterId = isOpen ? null : id;
-  DB.centers.forEach(c => {
-    const body = document.getElementById(`center-body-${c.id}`);
-    const chev = document.getElementById(`center-chev-${c.id}`);
-    const header = document.querySelector(`#center-card-${c.id} > div:first-child`);
-    if (!body) return;
-    const open = c.id === id && !isOpen;
-    body.classList.toggle('hidden', !open);
-    if (chev) chev.classList.toggle('rotate-180', open);
-    if (header) {
-      header.classList.toggle('bg-primary-container', open);
-    }
-    // Rebuild detail content when opening to get fresh data
-    if (open) body.innerHTML = buildCenterDetail(c);
-  });
-}
-
-function selectCenter(id) { toggleCenterCard(id); }
-function _selectCenter_legacy_UNUSED(id) {
-  /* replaced by toggleCenterCard — kept only so git diff is reviewable */
-  void id;
-  /*
-    <div class="bg-white rounded-xl border border-outline-variant shadow-sm">
-      <div class="p-6 border-b border-outline-variant">
+      <div class="p-6">
         <div class="flex items-start justify-between mb-4">
           <div>
             <div class="flex items-center gap-3 mb-2">
               <span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[c.status]||'badge-normal'}">${c.status}</span>
               <span class="text-xs text-secondary font-mono">${c.code||''}</span>
             </div>
-            <h2 class="text-xl lg:text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">${c.name}</h2>
+            <h2 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'">${c.name}</h2>
             <p class="text-sm text-secondary mt-1">${c.address||''}</p>
           </div>
           <div class="flex gap-2">
@@ -2370,7 +2221,7 @@ function _selectCenter_legacy_UNUSED(id) {
             <button onclick="deleteCenter(${c.id})" class="flex items-center gap-1.5 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-500 hover:bg-red-50"><span class="material-symbols-outlined text-sm">delete</span>삭제</button>
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-4 mb-4">
           <div class="bg-surface-container-low rounded-lg p-4">
             <div class="text-xs text-secondary mb-1">본사 담당자</div>
             <div class="flex items-center gap-2">
@@ -2385,7 +2236,7 @@ function _selectCenter_legacy_UNUSED(id) {
           </div>
         </div>
         ${c.director ? `
-        <div class="mt-4 bg-surface-container-low rounded-lg p-4">
+        <div class="mb-4 bg-surface-container-low rounded-lg p-4">
           <div class="text-xs text-secondary mb-2 font-semibold">센터장</div>
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
@@ -2396,7 +2247,7 @@ function _selectCenter_legacy_UNUSED(id) {
           </div>
         </div>` : ''}
         ${c.staff && c.staff.length ? `
-        <div class="mt-4">
+        <div class="mb-4">
           <div class="text-xs text-secondary mb-2 font-semibold">센터원 (${c.staff.length}명)</div>
           <div class="grid grid-cols-2 gap-2">
             ${c.staff.map(s => `<div class="flex items-center gap-2 bg-surface-container-low rounded-lg px-3 py-2">
@@ -2405,186 +2256,266 @@ function _selectCenter_legacy_UNUSED(id) {
             </div>`).join('')}
           </div>
         </div>` : ''}
-      </div>
-      <div class="p-6">
-        <h3 class="font-bold text-sm text-on-surface mb-3 flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-sm ${c.issue?'text-orange-500':'text-secondary'}">report_problem</span>
-          실시간 주요 이슈 및 특이사항
-        </h3>
-        ${c.issue ? `
-          <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
-            <p class="text-sm text-orange-800 leading-relaxed">${c.issue}</p>
+        <div class="border-t border-outline-variant pt-4">
+          <h3 class="font-bold text-sm text-on-surface mb-3 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm ${c.issue?'text-orange-500':'text-secondary'}">report_problem</span>
+            실시간 주요 이슈 및 특이사항
+          </h3>
+          ${c.issue ? `
+            <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+              <p class="text-sm text-orange-800 leading-relaxed">${c.issue}</p>
+            </div>
+          ` : `
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 flex items-center gap-2">
+              <span class="material-symbols-outlined text-green-600 text-sm">check_circle</span>
+              <p class="text-sm text-green-700">현재 특이사항 없음</p>
+            </div>
+          `}
+          <div class="flex gap-2">
+            <input type="text" id="center-issue-input-${c.id}" placeholder="새 이슈 또는 특이사항 입력..." class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')addCenterIssue(${c.id})">
+            <button onclick="addCenterIssue(${c.id})" class="bg-primary text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">추가</button>
+            ${c.issue ? `<button onclick="clearCenterIssue(${c.id})" class="border border-outline-variant rounded-lg px-3 py-2 text-sm text-secondary hover:bg-surface-container">이슈 해소</button>` : ''}
           </div>
-        ` : `
-          <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 flex items-center gap-2">
-            <span class="material-symbols-outlined text-green-600 text-sm">check_circle</span>
-            <p class="text-sm text-green-700">현재 특이사항 없음</p>
-          </div>
-        `}
-        <div class="flex gap-2">
-          <input type="text" id="center-issue-input-${c.id}" placeholder="새 이슈 또는 특이사항 입력..." class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')addCenterIssue(${c.id})">
-          <button onclick="addCenterIssue(${c.id})" class="bg-primary text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">추가</button>
-          ${c.issue ? `<button onclick="clearCenterIssue(${c.id})" class="border border-outline-variant rounded-lg px-3 py-2 text-sm text-secondary hover:bg-surface-container">이슈 해소</button>` : ''}
-        </div>
-        ${c.issueHistory && c.issueHistory.length ? `
-        <div class="mt-4">
-          <div class="text-xs font-semibold text-secondary mb-2 flex items-center gap-1">
-            <span class="material-symbols-outlined text-sm">history</span>
-            이슈 이력 (${c.issueHistory.length}건)
-          </div>
-          <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
-            ${c.issueHistory.map((h,idx)=>`
-              <div class="rounded-lg px-3 py-2 border ${h.resolved ? 'bg-surface-container-low border-outline-variant opacity-70' : 'bg-orange-50 border-orange-200'}">
-                <div class="flex items-center justify-between mb-1">
-                  <span class="text-xs text-secondary">${h.date}</span>
-                  <div class="flex items-center gap-2">
-                    <label class="flex items-center gap-1.5 cursor-pointer select-none" onclick="event.stopPropagation()">
-                      <input type="checkbox" ${h.resolved?'checked':''} onchange="toggleIssueResolved(${c.id},${idx})" class="w-3.5 h-3.5 accent-green-600 cursor-pointer">
-                      <span class="text-xs ${h.resolved?'text-green-600':'text-orange-600'}">${h.resolved?`해소 ${h.resolvedDate||''}`:'미해소'}</span>
-                    </label>
-                    <button onclick="event.stopPropagation();deleteIssueHistory(${c.id},${idx})" class="p-0.5 rounded hover:bg-red-100 text-red-400" title="삭제"><span class="material-symbols-outlined" style="font-size:14px">delete</span></button>
+          ${c.issueHistory && c.issueHistory.length ? `
+          <div class="mt-4">
+            <div class="text-xs font-semibold text-secondary mb-2 flex items-center gap-1">
+              <span class="material-symbols-outlined text-sm">history</span>
+              이슈 이력 (${c.issueHistory.length}건)
+            </div>
+            <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
+              ${c.issueHistory.map((h,idx)=>`
+                <div class="rounded-lg px-3 py-2 border ${h.resolved ? 'bg-surface-container-low border-outline-variant opacity-70' : 'bg-orange-50 border-orange-200'}">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs text-secondary">${h.date}</span>
+                    <div class="flex items-center gap-2">
+                      <label class="flex items-center gap-1.5 cursor-pointer select-none" onclick="event.stopPropagation()">
+                        <input type="checkbox" ${h.resolved?'checked':''} onchange="toggleIssueResolved(${c.id},${idx})" class="w-3.5 h-3.5 accent-green-600 cursor-pointer">
+                        <span class="text-xs ${h.resolved?'text-green-600':'text-orange-600'}">${h.resolved?`해소 ${h.resolvedDate||''}`:'미해소'}</span>
+                      </label>
+                      <button onclick="event.stopPropagation();deleteIssueHistory(${c.id},${idx})" class="p-0.5 rounded hover:bg-red-100 text-red-400" title="삭제"><span class="material-symbols-outlined" style="font-size:14px">delete</span></button>
+                    </div>
                   </div>
-                </div>
-                <p class="text-xs text-on-surface ${h.resolved?'line-through text-secondary':''}">${h.text}</p>
-              </div>`).join('')}
-          </div>
-        </div>` : ''}
-      </div>
-    </div>
-  */
-}
-
-function addCenterIssue(id) {
-  const c = DB.centers.find(c => c.id === id);
-  const input = document.getElementById(`center-issue-input-${id}`);
-  if (!c || !input || !input.value.trim()) return;
-  if (!c.issueHistory) c.issueHistory = [];
-  const now = new Date().toLocaleDateString('ko-KR') + ' ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
-  c.issueHistory.unshift({text: input.value.trim(), date: now, resolved: false});
-  c.issue = input.value.trim();
-  if (c.status === '정상') c.status = '이슈';
-  saveDB();
-  renderCenters();
-  showToast('이슈가 등록되었습니다');
-}
-
-function deleteIssueHistory(centerId, idx) {
-  const c = DB.centers.find(c => c.id === centerId);
-  if (!c || !c.issueHistory) return;
-  c.issueHistory.splice(idx, 1);
-  const hasActive = c.issueHistory.some(h => !h.resolved);
-  if (!hasActive) { c.issue = ''; if (c.status === '이슈') c.status = '정상'; }
-  saveDB(); renderCenters();
-}
-
-function toggleIssueResolved(centerId, idx) {
-  const c = DB.centers.find(c => c.id === centerId);
-  if (!c || !c.issueHistory || !c.issueHistory[idx]) return;
-  const h = c.issueHistory[idx];
-  h.resolved = !h.resolved;
-  if (h.resolved) {
-    h.resolvedDate = new Date().toLocaleDateString('ko-KR') + ' ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
-  } else {
-    delete h.resolvedDate;
+                  <p class="text-xs text-on-surface ${h.resolved?'line-through text-secondary':''}">${h.text}</p>
+                </div>`).join('')}
+            </div>
+          </div>` : ''}
+        </div>
+      </div>`;
   }
-  // 미해소 항목이 하나도 없으면 c.issue 초기화
-  const hasActive = c.issueHistory.some(h => !h.resolved);
-  if (!hasActive) { c.issue = ''; c.status = '정상'; }
-  saveDB(); renderCenters();
-}
 
-function clearCenterIssue(id) {
-  const c = DB.centers.find(c => c.id === id);
-  if (!c) return;
-  if (c.issueHistory) {
-    const active = c.issueHistory.find(h => !h.resolved);
-    if (active) {
-      active.resolved = true;
-      active.resolvedDate = new Date().toLocaleDateString('ko-KR') + ' ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  function searchCenters(q) {
+    const lower = q.toLowerCase();
+    document.querySelectorAll('.center-accordion-card').forEach(card => {
+      const id = parseInt(card.id.replace('center-card-', ''));
+      const c = DB.centers.find(c => c.id === id);
+      if (!c) return;
+      const match = !q || c.name.toLowerCase().includes(lower) || (c.code||'').toLowerCase().includes(lower) || (c.address||'').toLowerCase().includes(lower);
+      card.style.display = match ? '' : 'none';
+    });
+  }
+
+  function toggleCard(id) {
+    const isOpen = selectedId === id;
+    selectedId = isOpen ? null : id;
+    DB.centers.forEach(c => {
+      const body = document.getElementById(`center-body-${c.id}`);
+      const chev = document.getElementById(`center-chev-${c.id}`);
+      const header = document.querySelector(`#center-card-${c.id} > div:first-child`);
+      if (!body) return;
+      const open = c.id === id && !isOpen;
+      body.classList.toggle('hidden', !open);
+      if (chev) chev.classList.toggle('rotate-180', open);
+      if (header) {
+        header.classList.toggle('bg-primary-container', open);
+      }
+      // Rebuild detail content when opening to get fresh data
+      if (open) body.innerHTML = buildDetail(c);
+    });
+  }
+
+  function selectCenterById(id) { toggleCard(id); }
+
+  function moveCenter(id, dir) {
+    const idx = DB.centers.findIndex(c => c.id === id);
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= DB.centers.length) return;
+    const a = DB.centers[idx];
+    const b = DB.centers[swapIdx];
+    const tempOrder = a.order ?? idx;
+    a.order = b.order ?? swapIdx;
+    b.order = tempOrder;
+    [DB.centers[idx], DB.centers[swapIdx]] = [DB.centers[swapIdx], DB.centers[idx]];
+    db.collection('centers').doc(String(a.id)).update({ order: a.order })
+      .catch(e => console.error(e));
+    db.collection('centers').doc(String(b.id)).update({ order: b.order })
+      .catch(e => console.error(e));
+    render();
+  }
+
+  function addCenterIssue(id) {
+    const c = DB.centers.find(c => c.id === id);
+    const input = document.getElementById(`center-issue-input-${id}`);
+    if (!c || !input || !input.value.trim()) return;
+    if (!c.issueHistory) c.issueHistory = [];
+    const now = new Date().toLocaleDateString('ko-KR') + ' ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    c.issueHistory.unshift({text: input.value.trim(), date: now, resolved: false});
+    c.issue = input.value.trim();
+    if (c.status === '정상') c.status = '이슈';
+    saveDB();
+    render();
+    showToast('이슈가 등록되었습니다');
+  }
+
+  function deleteIssueHistory(centerId, idx) {
+    const c = DB.centers.find(c => c.id === centerId);
+    if (!c || !c.issueHistory) return;
+    c.issueHistory.splice(idx, 1);
+    const hasActive = c.issueHistory.some(h => !h.resolved);
+    if (!hasActive) { c.issue = ''; if (c.status === '이슈') c.status = '정상'; }
+    saveDB(); render();
+  }
+
+  function toggleIssueResolved(centerId, idx) {
+    const c = DB.centers.find(c => c.id === centerId);
+    if (!c || !c.issueHistory || !c.issueHistory[idx]) return;
+    const h = c.issueHistory[idx];
+    h.resolved = !h.resolved;
+    if (h.resolved) {
+      h.resolvedDate = new Date().toLocaleDateString('ko-KR') + ' ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    } else {
+      delete h.resolvedDate;
     }
+    // 미해소 항목이 하나도 없으면 c.issue 초기화
+    const hasActive = c.issueHistory.some(h => !h.resolved);
+    if (!hasActive) { c.issue = ''; c.status = '정상'; }
+    saveDB(); render();
   }
-  c.issue = '';
-  if (c.status === '이슈') c.status = '정상';
-  saveDB();
-  renderCenters();
-  showToast('이슈가 해소되었습니다');
-}
 
-function openAddCenterModal() {
-  document.getElementById('editing-center-id').value = '';
-  document.getElementById('center-name').value = '';
-  document.getElementById('center-code').value = '';
-  document.getElementById('center-address').value = '';
-  document.getElementById('center-issue').value = '';
-  document.getElementById('center-status').value = '정상';
-  document.getElementById('center-director-name').value = '';
-  document.getElementById('center-director-phone').value = '';
-  document.getElementById('staff-list').innerHTML = '';
-  document.getElementById('center-modal-title').textContent = '센터 추가';
-  populateCenterManagerSelect();
-  document.getElementById('modal-add-center').classList.remove('hidden');
-}
-
-function editCenter(id) {
-  const c = DB.centers.find(c => c.id === id);
-  if (!c) return;
-  document.getElementById('editing-center-id').value = id;
-  document.getElementById('center-name').value = c.name;
-  document.getElementById('center-code').value = c.code || '';
-  document.getElementById('center-address').value = c.address || '';
-  document.getElementById('center-issue').value = c.issue || '';
-  document.getElementById('center-status').value = c.status;
-  document.getElementById('center-director-name').value = c.director?.name || '';
-  document.getElementById('center-director-phone').value = c.director?.phone || '';
-  document.getElementById('staff-list').innerHTML = '';
-  (c.staff || []).forEach(s => addStaffRow(s.name, s.role));
-  document.getElementById('center-modal-title').textContent = '센터 수정';
-  populateCenterManagerSelect();
-  document.getElementById('center-manager').value = c.managerId;
-  document.getElementById('modal-add-center').classList.remove('hidden');
-}
-
-function saveCenter() {
-  const name = document.getElementById('center-name').value.trim();
-  if (!name) { alert('센터명을 입력하세요.'); return; }
-  const code = document.getElementById('center-code').value.trim();
-  const address = document.getElementById('center-address').value.trim();
-  const managerId = parseInt(document.getElementById('center-manager').value) || null;
-  const status = document.getElementById('center-status').value;
-  const issue = document.getElementById('center-issue').value.trim();
-  const dirName = document.getElementById('center-director-name').value.trim();
-  const dirPhone = document.getElementById('center-director-phone').value.trim();
-  const director = dirName ? {name: dirName, phone: dirPhone} : null;
-  const staff = getStaffData();
-  const editId = parseInt(document.getElementById('editing-center-id').value);
-  if (editId) {
-    const c = DB.centers.find(c => c.id === editId);
-    Object.assign(c, {name, code, address, managerId, status, issue, director, staff});
-    showToast('센터 정보가 수정되었습니다');
-  } else {
-    DB.centers.push({id: Date.now(), name, code, address, managerId, status, issue, director, staff, issues:[], order: DB.centers.length, createdAt: Date.now()});
-    showToast('센터가 추가되었습니다');
+  function clearCenterIssue(id) {
+    const c = DB.centers.find(c => c.id === id);
+    if (!c) return;
+    if (c.issueHistory) {
+      const active = c.issueHistory.find(h => !h.resolved);
+      if (active) {
+        active.resolved = true;
+        active.resolvedDate = new Date().toLocaleDateString('ko-KR') + ' ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+      }
+    }
+    c.issue = '';
+    if (c.status === '이슈') c.status = '정상';
+    saveDB();
+    render();
+    showToast('이슈가 해소되었습니다');
   }
-  saveDB();
-  document.getElementById('modal-add-center').classList.add('hidden');
-  renderCenters();
-}
 
-function deleteCenter(id) {
-  if (!confirm('이 센터를 삭제하겠습니까?')) return;
-  DB.centers = DB.centers.filter(c => c.id !== id);
-  if (selectedCenterId === id) {
-    selectedCenterId = null;
+  function openAddCenterModal() {
+    document.getElementById('editing-center-id').value = '';
+    document.getElementById('center-name').value = '';
+    document.getElementById('center-code').value = '';
+    document.getElementById('center-address').value = '';
+    document.getElementById('center-issue').value = '';
+    document.getElementById('center-status').value = '정상';
+    document.getElementById('center-director-name').value = '';
+    document.getElementById('center-director-phone').value = '';
+    document.getElementById('staff-list').innerHTML = '';
+    document.getElementById('center-modal-title').textContent = '센터 추가';
+    populateCenterManagerSelect();
+    document.getElementById('modal-add-center').classList.remove('hidden');
   }
-  saveDB();
-  renderCenters();
-  showToast('센터가 삭제되었습니다');
-}
 
-function populateCenterManagerSelect() {
-  const sel = document.getElementById('center-manager');
-  if (sel) sel.innerHTML = '<option value="">미배정</option>' + DB.members.map(m => `<option value="${m.id}">${m.name} ${m.rank||''}</option>`).join('');
-}
+  function editCenter(id) {
+    const c = DB.centers.find(c => c.id === id);
+    if (!c) return;
+    document.getElementById('editing-center-id').value = id;
+    document.getElementById('center-name').value = c.name;
+    document.getElementById('center-code').value = c.code || '';
+    document.getElementById('center-address').value = c.address || '';
+    document.getElementById('center-issue').value = c.issue || '';
+    document.getElementById('center-status').value = c.status;
+    document.getElementById('center-director-name').value = c.director?.name || '';
+    document.getElementById('center-director-phone').value = c.director?.phone || '';
+    document.getElementById('staff-list').innerHTML = '';
+    (c.staff || []).forEach(s => addStaffRow(s.name, s.role));
+    document.getElementById('center-modal-title').textContent = '센터 수정';
+    populateCenterManagerSelect();
+    document.getElementById('center-manager').value = c.managerId;
+    document.getElementById('modal-add-center').classList.remove('hidden');
+  }
+
+  function saveCenter() {
+    const name = document.getElementById('center-name').value.trim();
+    if (!name) { alert('센터명을 입력하세요.'); return; }
+    const code = document.getElementById('center-code').value.trim();
+    const address = document.getElementById('center-address').value.trim();
+    const managerId = parseInt(document.getElementById('center-manager').value) || null;
+    const status = document.getElementById('center-status').value;
+    const issue = document.getElementById('center-issue').value.trim();
+    const dirName = document.getElementById('center-director-name').value.trim();
+    const dirPhone = document.getElementById('center-director-phone').value.trim();
+    const director = dirName ? {name: dirName, phone: dirPhone} : null;
+    const staff = getStaffData();
+    const editId = parseInt(document.getElementById('editing-center-id').value);
+    if (editId) {
+      const c = DB.centers.find(c => c.id === editId);
+      Object.assign(c, {name, code, address, managerId, status, issue, director, staff});
+      showToast('센터 정보가 수정되었습니다');
+    } else {
+      DB.centers.push({id: Date.now(), name, code, address, managerId, status, issue, director, staff, issues:[], order: DB.centers.length, createdAt: Date.now()});
+      showToast('센터가 추가되었습니다');
+    }
+    saveDB();
+    document.getElementById('modal-add-center').classList.add('hidden');
+    render();
+  }
+
+  function deleteCenter(id) {
+    if (!confirm('이 센터를 삭제하겠습니까?')) return;
+    DB.centers = DB.centers.filter(c => c.id !== id);
+    if (selectedId === id) {
+      selectedId = null;
+    }
+    saveDB();
+    render();
+    showToast('센터가 삭제되었습니다');
+  }
+
+  function populateCenterManagerSelect() {
+    const sel = document.getElementById('center-manager');
+    if (sel) sel.innerHTML = '<option value="">미배정</option>' + DB.members.map(m => `<option value="${m.id}">${m.name} ${m.rank||''}</option>`).join('');
+  }
+
+  return {
+    render,
+    toggleCard,
+    selectCenter: selectCenterById,
+    moveCenter,
+    searchCenters,
+    addCenterIssue,
+    deleteIssueHistory,
+    toggleIssueResolved,
+    clearCenterIssue,
+    openAddCenterModal,
+    editCenter,
+    saveCenter,
+    deleteCenter,
+    get selectedId() { return selectedId; },
+  };
+})();
+
+// --- Centers shims (HTML onclick 호환) ---
+function renderCenters() { Pages.centers.render(); }
+function toggleCenterCard(id) { Pages.centers.toggleCard(id); }
+function selectCenter(id) { Pages.centers.selectCenter(id); }
+function moveCenter(id, dir) { Pages.centers.moveCenter(id, dir); }
+function searchCenters(q) { Pages.centers.searchCenters(q); }
+function addCenterIssue(id) { Pages.centers.addCenterIssue(id); }
+function deleteIssueHistory(id, idx) { Pages.centers.deleteIssueHistory(id, idx); }
+function toggleIssueResolved(id, idx) { Pages.centers.toggleIssueResolved(id, idx); }
+function clearCenterIssue(id) { Pages.centers.clearCenterIssue(id); }
+function openAddCenterModal() { Pages.centers.openAddCenterModal(); }
+function editCenter(id) { Pages.centers.editCenter(id); }
+function saveCenter() { Pages.centers.saveCenter(); }
+function deleteCenter(id) { Pages.centers.deleteCenter(id); }
 
 // ============================================================
 //  SEARCH
