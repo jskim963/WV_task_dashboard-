@@ -1185,13 +1185,13 @@ function setupListeners() {
   db.collection('members').onSnapshot(snapshot => {
     DB.members = snapshot.docs.map(d => d.data())
       .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-    if (currentUser) refreshCurrentPage();
+    refreshCurrentPage();
   }, err => console.error('onSnapshot 오류 (members):', err));
 
   db.collection('centers').onSnapshot(snapshot => {
     DB.centers = snapshot.docs.map(d => d.data())
       .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-    if (currentUser) refreshCurrentPage();
+    refreshCurrentPage();
   }, err => console.error('onSnapshot 오류 (centers):', err));
 }
 
@@ -3242,12 +3242,11 @@ function hideLoginOverlay() {
   document.getElementById('login-overlay').style.cssText = 'display:none!important;';
 }
 
-function requireAuth(fn) {
+function requireAuth() {
   if (!currentUser) {
     showLoginOverlay();
     return false;
   }
-  if (typeof fn === 'function') fn();
   return true;
 }
 
