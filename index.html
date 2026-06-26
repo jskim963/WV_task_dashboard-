@@ -1596,7 +1596,7 @@ Pages.dashboard = (() => {
   function deleteTask(id) {
     if (!confirm('이 업무를 삭제하겠습니까?')) return;
     DB.tasks = DB.tasks.filter(t => t.id !== id);
-    saveDB();
+    db.collection('tasks').doc(String(id)).delete().catch(e => console.error(e));
     render();
     showToast('업무가 삭제되었습니다');
   }
@@ -2121,7 +2121,7 @@ Pages.team = (() => {
   function deleteMember(id) {
     if (!confirm('이 팀원을 삭제하겠습니까?')) return;
     DB.members = DB.members.filter(m => m.id !== id);
-    saveDB();
+    db.collection('members').doc(String(id)).delete().catch(e => console.error(e));
     render();
     showToast('팀원이 삭제되었습니다');
   }
@@ -2464,10 +2464,8 @@ Pages.centers = (() => {
   function deleteCenter(id) {
     if (!confirm('이 센터를 삭제하겠습니까?')) return;
     DB.centers = DB.centers.filter(c => c.id !== id);
-    if (selectedId === id) {
-      selectedId = null;
-    }
-    saveDB();
+    if (selectedId === id) selectedId = null;
+    db.collection('centers').doc(String(id)).delete().catch(e => console.error(e));
     render();
     showToast('센터가 삭제되었습니다');
   }
@@ -2964,7 +2962,7 @@ function openEventDetail(id) {
 function deleteEvent(id) {
   if (!confirm('이 일정을 삭제하겠습니까?')) return;
   DB.events = DB.events.filter(e => e.id !== id);
-  saveDB();
+  db.collection('events').doc(String(id)).delete().catch(e => console.error(e));
   document.getElementById('modal-event-detail').classList.add('hidden');
   renderCalendar();
   if (document.getElementById('page-weekly').classList.contains('active')) renderWeekly();
@@ -3581,7 +3579,7 @@ function saveNotice() {
 function deleteNotice(id) {
   if (!confirm('이 공지를 삭제하겠습니까?')) return;
   DB.notices = DB.notices.filter(n => n.id !== id);
-  saveDB();
+  db.collection('notices').doc(String(id)).delete().catch(e => console.error(e));
   renderNotices();
   showToast('공지가 삭제되었습니다');
 }
@@ -3611,6 +3609,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const today = formatDate(new Date());
   const dateInputs = document.querySelectorAll('input[type="date"]');
   dateInputs.forEach(i => { if (!i.value) i.value = today; });
+});
+
+// 브라우저 닫기 / 탭 숨김 시 온라인 상태 해제
+function setMemberOffline() {
+  if (!currentUser) return;
+  db.collection('members').doc(String(currentUser.memberId)).update({ status: '오프라인' }).catch(() => {});
+}
+window.addEventListener('beforeunload', setMemberOffline);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') setMemberOffline();
+  else if (document.visibilityState === 'visible' && currentUser) {
+    db.collection('members').doc(String(currentUser.memberId)).update({ status: '온라인' }).catch(() => {});
+  }
 });
 
 // 모바일→데스크탑 경계를 실제로 넘어설 때만 사이드바 상태 초기화
