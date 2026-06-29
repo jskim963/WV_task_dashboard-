@@ -4832,18 +4832,41 @@ Pages.overview = (() => {
     }
     schedEl.innerHTML = schedHtml;
 
-    // Panel 3: 센터 이슈
+    // Panel 3: 센터 이슈 (status 이슈 + 미해결 운영특이사항 통합)
     const issueEl = document.getElementById('ov-center-issues');
-    const issueCenters = DB.centers.filter(c => c.status !== '정상');
-    if (!issueCenters.length) {
+    const centerIssueItems = (DB.centers||[]).reduce((acc, c) => {
+      const unresolvedNotes = (c.operationNotes||[]).filter(n => !n.resolved);
+      const hasStatusIssue = c.status !== '정상';
+      if (hasStatusIssue || unresolvedNotes.length > 0) {
+        acc.push({ c, unresolvedNotes, hasStatusIssue });
+      }
+      return acc;
+    }, []);
+    if (!centerIssueItems.length) {
       issueEl.innerHTML = '<p class="text-secondary text-sm flex items-center gap-1"><span class="material-symbols-outlined text-green-500 text-sm">check_circle</span>모든 센터 정상 운영 중</p>';
     } else {
-      issueEl.innerHTML = issueCenters.map(c => `
+      issueEl.innerHTML = centerIssueItems.map(({ c, unresolvedNotes, hasStatusIssue }) => {
+        const latestNote = unresolvedNotes.sort((a, b) => b.date - a.date)[0];
+        const subText = hasStatusIssue
+          ? (c.issue || c.status)
+          : (latestNote ? latestNote.text : '');
+        const icon = hasStatusIssue ? 'warning' : 'note_alt';
+        const iconColor = hasStatusIssue ? 'text-orange-500' : 'text-yellow-500';
+        const noteCountBadge = unresolvedNotes.length > 0
+          ? `<span class="ml-1 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-medium">특이사항 ${unresolvedNotes.length}</span>`
+          : '';
+        return `
         <div class="flex items-start gap-2 cursor-pointer hover:bg-surface-container-low rounded-lg px-2 py-1.5 -mx-2" onclick="showPage('centers');selectCenter(${c.id})">
-          <span class="material-symbols-outlined text-orange-500 text-sm mt-0.5">warning</span>
-          <div><div class="font-medium text-xs text-on-surface">${c.name}</div>
-          <div class="text-xs text-secondary truncate">${c.issue||c.status}</div></div>
-        </div>`).join('');
+          <span class="material-symbols-outlined ${iconColor} text-sm mt-0.5">${icon}</span>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1 flex-wrap">
+              <span class="font-medium text-xs text-on-surface">${c.name}</span>
+              ${noteCountBadge}
+            </div>
+            <div class="text-xs text-secondary truncate mt-0.5">${subText}</div>
+          </div>
+        </div>`;
+      }).join('');
     }
 
     // Panel 4: 내 업무 목록
