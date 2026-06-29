@@ -465,6 +465,33 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
           <div id="ov-today-schedule" class="space-y-1.5 text-sm"></div>
         </div>
 
+        <!-- Panel 7: 내 프로젝트 -->
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-purple-500 text-base">folder_special</span>내 프로젝트</h2>
+            <button onclick="showPage('projects')" class="text-xs text-primary hover:underline">전체 보기</button>
+          </div>
+          <div id="ov-my-projects" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
+        </div>
+
+        <!-- Panel 8: 검토방 기안서 -->
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-indigo-500 text-base">description</span>검토방 기안서</h2>
+            <button onclick="showPage('drafts')" class="text-xs text-primary hover:underline">검토방 보기</button>
+          </div>
+          <div id="ov-my-drafts" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
+        </div>
+
+        <!-- Panel 9: 자료실 바로가기 -->
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-teal-500 text-base">folder_open</span>자료실</h2>
+            <button onclick="showPage('library')" class="text-xs text-primary hover:underline">바로가기</button>
+          </div>
+          <div id="ov-library-shortcut" class="space-y-1.5"></div>
+        </div>
+
       </div>
     </div>
 
@@ -3236,8 +3263,11 @@ Pages.centers = (() => {
     const PAGE_SIZE = 10;
     const page = _notePages[c.id] || 0;
     const totalPages = Math.ceil(notes.length / PAGE_SIZE);
-    // 최신순 정렬 후 페이지 슬라이스
-    const sorted = [...notes].sort((a, b) => b.date - a.date);
+    // 미해결 최신순 → 해결 최신순 순서
+    const sorted = [...notes].sort((a, b) => {
+      if (a.resolved !== b.resolved) return a.resolved ? 1 : -1;
+      return b.date - a.date;
+    });
     const pageNotes = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
     const historyHtml = pageNotes.length ? pageNotes.map(n => {
@@ -3319,7 +3349,7 @@ Pages.centers = (() => {
           </div>
         </div>
       </div>`;
-      return occupancyHtml + buildOpsNotesSection(c) + tasksHtml;
+      return occupancyHtml + tasksHtml + buildOpsNotesSection(c);
     } else if (c.type === 'V') {
       const volumes = c.volumes || [];
       const volumesHtml = `
@@ -4839,6 +4869,57 @@ Pages.overview = (() => {
 
     // Panel 6: 공지사항
     renderNotices();
+
+    // Panel 7: 내 프로젝트
+    const myProjectsEl = document.getElementById('ov-my-projects');
+    if (myProjectsEl) {
+      const myProjects = (DB.projects||[]).filter(p =>
+        (p.assigneeIds||[]).includes(myId) || p.createdBy === currentUser?.username
+      );
+      if (!myProjects.length) {
+        myProjectsEl.innerHTML = '<p class="text-secondary text-sm">참여 중인 프로젝트 없음</p>';
+      } else {
+        myProjectsEl.innerHTML = myProjects.map(p => {
+          const taskCount = (DB.tasks||[]).filter(t => t.projectId === p.id && t.status !== '완료').length;
+          return `
+          <div class="flex items-center justify-between gap-2 cursor-pointer hover:bg-surface-container-low rounded-lg px-2 py-1.5 -mx-2" onclick="showPage('projects');setTimeout(()=>Pages.projects?.selectProject?.(${p.id}),100)">
+            <span class="text-xs text-on-surface truncate flex-1">${p.title}</span>
+            ${taskCount > 0 ? `<span class="text-xs text-blue-600 font-medium flex-shrink-0">업무 ${taskCount}</span>` : ''}
+          </div>`;
+        }).join('');
+      }
+    }
+
+    // Panel 8: 검토방 기안서 (내가 올린 것)
+    const myDraftsEl = document.getElementById('ov-my-drafts');
+    if (myDraftsEl) {
+      const myDrafts = (DB.drafts||[]).filter(d => d.createdBy === currentUser?.username)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+      const statusColor = { '검토중':'text-blue-600', '승인':'text-green-600', '반려':'text-red-500', '작성중':'text-secondary' };
+      if (!myDrafts.length) {
+        myDraftsEl.innerHTML = '<p class="text-secondary text-sm">등록한 기안서 없음</p>';
+      } else {
+        myDraftsEl.innerHTML = myDrafts.map(d => `
+          <div class="flex items-center justify-between gap-2 cursor-pointer hover:bg-surface-container-low rounded-lg px-2 py-1.5 -mx-2" onclick="showPage('drafts');setTimeout(()=>Pages.drafts?.openDetail?.(${d.id}),100)">
+            <span class="text-xs text-on-surface truncate flex-1">${d.title}</span>
+            <span class="text-xs font-medium flex-shrink-0 ${statusColor[d.status]||'text-secondary'}">${d.status||''}</span>
+          </div>`).join('');
+      }
+    }
+
+    // Panel 9: 자료실 바로가기
+    const libEl = document.getElementById('ov-library-shortcut');
+    if (libEl) {
+      libEl.innerHTML = `
+        <button onclick="showPage('library')" class="w-full flex items-center gap-3 bg-surface-container-low hover:bg-surface-container rounded-xl px-4 py-3 transition-colors">
+          <span class="material-symbols-outlined text-teal-500 text-2xl">folder_open</span>
+          <div class="text-left">
+            <div class="text-sm font-semibold text-on-surface">자료실 열기</div>
+            <div class="text-xs text-secondary mt-0.5">파일 업로드 및 공유</div>
+          </div>
+          <span class="material-symbols-outlined text-secondary ml-auto">chevron_right</span>
+        </button>`;
+    }
   }
   return { render };
 })();
@@ -6854,7 +6935,7 @@ window.addEventListener('resize', () => {
 
 <!-- ====== Center Detail Panel Overlay ====== -->
 <div id="center-detail-overlay" class="hidden fixed inset-0 z-40" onclick="if(event.target===this)closeCenterDetail()">
-  <div id="center-detail-panel" class="absolute right-0 top-0 bottom-0 bg-white shadow-2xl flex flex-col overflow-hidden" style="width:72%;">
+  <div id="center-detail-panel" class="absolute right-0 top-0 bottom-0 bg-white shadow-2xl flex flex-col overflow-hidden" style="width:50%;">
     <!-- 헤더 -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-outline-variant flex-shrink-0">
       <div class="flex items-center gap-3">
