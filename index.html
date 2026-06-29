@@ -301,6 +301,9 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       <div class="nav-item" onclick="showPage('projects')" id="nav-projects">
         <span class="material-symbols-outlined">folder_special</span> 프로젝트
       </div>
+      <div class="nav-item" onclick="showPage('drafts')" id="nav-drafts">
+        <span class="material-symbols-outlined">rate_review</span> 검토방
+      </div>
       <div class="nav-item" onclick="showPage('library')" id="nav-library">
         <span class="material-symbols-outlined">folder_open</span> 자료실
       </div>
@@ -1394,7 +1397,7 @@ db.enablePersistence().catch(err => {
   }
 });
 
-const FS_COLLS = ['tasks', 'members', 'centers', 'events', 'notices', 'users', 'memos', 'library', 'projects'];
+const FS_COLLS = ['tasks', 'members', 'centers', 'events', 'notices', 'users', 'memos', 'library', 'projects', 'drafts', 'draft_templates'];
 
 // ============================================================
 //  DATA STORE (localStorage persistence)
@@ -1410,6 +1413,8 @@ let DB = {
   memos: [],
   library: [],
   projects: [],
+  drafts: [],
+  draft_templates: [],
   myProfile: { name: '나', email: '', rank: '' },
 };
 let currentUser = null;
@@ -1477,6 +1482,16 @@ function setupListeners() {
       .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
     refreshCurrentPage();
   }, err => console.error('onSnapshot 오류 (centers):', err));
+
+  db.collection('drafts').onSnapshot(snapshot => {
+    DB.drafts = snapshot.docs.map(d => d.data());
+    refreshCurrentPage();
+  }, err => console.error('onSnapshot 오류 (drafts):', err));
+
+  db.collection('draft_templates').onSnapshot(snapshot => {
+    DB.draft_templates = snapshot.docs.map(d => d.data());
+    refreshCurrentPage();
+  }, err => console.error('onSnapshot 오류 (draft_templates):', err));
 }
 
 function initDemoData() {
