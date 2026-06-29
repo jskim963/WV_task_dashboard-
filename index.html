@@ -5179,22 +5179,33 @@ Pages.library = (() => {
       currentUser?.memberId === item.createdBy ||
       currentUser?.memberId === item.uploadedBy;
 
-    const folderCards = ff.map(f => `
+    const isAdmin = currentUser?.username === 'jungsoo.kim';
+    const folderCards = ff.map(f => {
+      const safeName = f.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return `
       <div class="lib-item bg-white rounded-xl border border-outline-variant shadow-sm p-4 cursor-pointer select-none group"
-           onclick="libNavigate('${f.id}','${f.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">
+           onclick="libNavigate('${f.id}','${safeName}')">
         <div class="flex items-start justify-between gap-1 mb-3">
           <div class="w-11 h-11 rounded-xl bg-yellow-50 flex items-center justify-center">
             <span class="material-symbols-outlined text-yellow-500" style="font-size:26px">folder</span>
           </div>
-          ${canManage(f) ? `
-          <button onclick="event.stopPropagation();libDeleteFolder('${f.id}')"
-                  class="opacity-0 group-hover:opacity-100 p-1 rounded-lg text-red-400 hover:bg-red-50 transition-opacity">
-            <span class="material-symbols-outlined" style="font-size:16px">delete</span>
-          </button>` : ''}
+          <div class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            ${isAdmin ? `
+            <button onclick="event.stopPropagation();libRenameFolder('${f.id}','${safeName}')"
+                    class="p-1 rounded-lg text-blue-400 hover:bg-blue-50" title="이름 변경">
+              <span class="material-symbols-outlined" style="font-size:16px">edit</span>
+            </button>` : ''}
+            ${canManage(f) ? `
+            <button onclick="event.stopPropagation();libDeleteFolder('${f.id}','${safeName}')"
+                    class="p-1 rounded-lg text-red-400 hover:bg-red-50" title="폴더 삭제">
+              <span class="material-symbols-outlined" style="font-size:16px">delete</span>
+            </button>` : ''}
+          </div>
         </div>
         <div class="font-semibold text-sm text-on-surface leading-snug line-clamp-2">${f.name}</div>
         <div class="text-xs text-secondary mt-1 opacity-60">${new Date(f.createdAt).toLocaleDateString('ko-KR')}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
     const fileCards = fi.map(file => {
       const s = getFileStyle(file.mimeType);
@@ -5263,12 +5274,46 @@ Pages.library = (() => {
       .catch(e => { console.error(e); showToast('폴더 생성 실패'); });
   }
 
-  // ---- 파일 삭제 ----
-  function deleteFolder(id) {
-    if (!confirm('폴더를 삭제하겠습니까?\n(폴더 안의 파일은 별도 삭제 필요)')) return;
-    db.collection('lib_folders').doc(id).delete()
-      .then(() => showToast('폴더가 삭제되었습니다'))
-      .catch(e => console.error(e));
+  // ---- 폴더 이름 변경 (관리자 전용) ----
+  function renameFolder(id, currentName) {
+    if (currentUser?.username !== 'jungsoo.kim') { showToast('관리자만 폴더 이름을 변경할 수 있습니다'); return; }
+    const newName = prompt('새 폴더 이름을 입력하세요:', currentName);
+    if (!newName || !newName.trim() || newName.trim() === currentName) return;
+    db.collection('lib_folders').doc(id).update({ name: newName.trim() })
+      .then(() => {
+        // folderStack에 있는 항목 이름도 동기화
+        const idx = folderStack.findIndex(f => f.id === id);
+        if (idx !== -1) { folderStack[idx].name = newName.trim(); updateBreadcrumb(); }
+        showToast('폴더 이름이 변경되었습니다');
+      })
+      .catch(e => { console.error(e); showToast('이름 변경 실패'); });
+  }
+
+  // ---- 폴더 삭제 (하위 파일/폴더 포함 재귀 삭제) ----
+  async function deleteFolderRecursive(folderId) {
+    // 이 폴더의 파일들 삭제 (Storage + Firestore)
+    const filesSnap = await db.collection('lib_files').where('folderKey', '==', folderId).get();
+    for (const doc of filesSnap.docs) {
+      const f = doc.data();
+      if (f.storagePath) await storage.ref(f.storagePath).delete().catch(() => {});
+      await db.collection('lib_files').doc(doc.id).delete();
+    }
+    // 하위 폴더 재귀 삭제
+    const subSnap = await db.collection('lib_folders').where('parentKey', '==', folderId).get();
+    for (const doc of subSnap.docs) {
+      await deleteFolderRecursive(doc.id);
+    }
+    // 폴더 자체 삭제
+    await db.collection('lib_folders').doc(folderId).delete();
+  }
+
+  function deleteFolder(id, folderName) {
+    const msg = `⚠️ 폴더 삭제 경고\n\n"${folderName || '이 폴더'}" 안의 모든 하위 폴더와 파일이\nFirebase에서 영구적으로 삭제됩니다.\n\n되돌릴 수 없습니다. 계속하시겠습니까?`;
+    if (!confirm(msg)) return;
+    showToast('삭제 중...');
+    deleteFolderRecursive(id)
+      .then(() => showToast('폴더와 내부 파일이 모두 삭제되었습니다'))
+      .catch(e => { console.error(e); showToast('삭제 중 오류가 발생했습니다'); });
   }
 
   function deleteFile(id, storagePath) {
@@ -5420,6 +5465,7 @@ Pages.library = (() => {
     navigateTo,
     navigateToIndex,
     createFolder,
+    renameFolder,
     deleteFolder,
     deleteFile,
     uploadFiles,
@@ -6866,7 +6912,8 @@ function libNavigate(id, name)         { Pages.library.navigateTo(id, name); }
 function libNavToIndex(i)              { Pages.library.navigateToIndex(i); }
 function libOpenNewFolder()            { document.getElementById('lib-folder-name').value = ''; document.getElementById('modal-lib-folder').classList.remove('hidden'); setTimeout(() => document.getElementById('lib-folder-name').focus(), 50); }
 function libSaveFolder()               { const n = document.getElementById('lib-folder-name').value.trim(); if(!n){alert('폴더 이름을 입력하세요');return;} Pages.library.createFolder(n); document.getElementById('modal-lib-folder').classList.add('hidden'); }
-function libDeleteFolder(id)           { Pages.library.deleteFolder(id); }
+function libRenameFolder(id, name)     { Pages.library.renameFolder(id, name); }
+function libDeleteFolder(id, name)     { Pages.library.deleteFolder(id, name); }
 function libDeleteFile(id, path)       { Pages.library.deleteFile(id, path); }
 function libUploadFiles(files)         { Pages.library.uploadFiles(files); }
 function libOpenFileModal(id)          { Pages.library.openFileModal(id); }
