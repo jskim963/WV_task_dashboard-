@@ -86,8 +86,15 @@ tailwind.config = {
   .center-type-W { background:#dbeafe;color:#1d4ed8; }
   .center-type-V { background:#dcfce7;color:#15803d; }
   .center-card { cursor:pointer;border:1.5px solid transparent;transition:border-color .15s,box-shadow .15s; }
-  .center-card:hover { border-color:#93c5fd;box-shadow:0 4px 16px rgba(37,99,235,.1); }
-  .center-card.active { border-color:#2563eb;box-shadow:0 4px 16px rgba(37,99,235,.18); }
+  .center-card.card-W { background:#eff6ff;border-color:#bfdbfe; }
+  .center-card.card-W:hover { border-color:#3b82f6;box-shadow:0 4px 16px rgba(37,99,235,.12); }
+  .center-card.card-W.active { border-color:#2563eb;box-shadow:0 4px 16px rgba(37,99,235,.22); }
+  .center-card.card-V { background:#f0fdf4;border-color:#bbf7d0; }
+  .center-card.card-V:hover { border-color:#16a34a;box-shadow:0 4px 16px rgba(21,128,61,.12); }
+  .center-card.card-V.active { border-color:#15803d;box-shadow:0 4px 16px rgba(21,128,61,.22); }
+  .center-card.card-null { background:#ffffff;border-color:#e2e8f0; }
+  .center-card.card-null:hover { border-color:#93c5fd;box-shadow:0 4px 16px rgba(37,99,235,.1); }
+  .center-card.card-null.active { border-color:#2563eb; }
   .occupancy-bar-track { height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden; }
   .occupancy-bar-fill { height:100%;background:#2563eb;border-radius:4px;transition:width .3s; }
   #center-detail-overlay { background:rgba(0,0,0,.35); }
@@ -2932,6 +2939,7 @@ function deleteMember(id) { Pages.team.deleteMember(id); }
 Pages.centers = (() => {
   let _selectedId = null;
   let _activeTab = 'info';
+  const _notePages = {};  // centerId → current page (0-based)
   const isAdmin = () => currentUser?.username === 'jungsoo.kim';
   const canEdit = (c) => isAdmin() || currentUser?.memberId === c?.managerId;
 
@@ -3002,8 +3010,9 @@ Pages.centers = (() => {
           `</div>`;
       }
     }
+    const cardTypeClass = c.type === 'W' ? 'card-W' : c.type === 'V' ? 'card-V' : 'card-null';
     return `
-    <div class="center-card bg-white rounded-xl p-4 shadow-sm ${isActive ? 'active' : ''}" id="center-card-${c.id}" onclick="openCenterDetail(${c.id})">
+    <div class="center-card ${cardTypeClass} rounded-xl p-4 shadow-sm ${isActive ? 'active' : ''}" id="center-card-${c.id}" onclick="openCenterDetail(${c.id})">
       <div class="flex items-start justify-between gap-2 mb-1">
         <span class="font-semibold text-sm text-on-surface leading-tight">${c.name}</span>
         <span class="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusColors[c.status]||'badge-normal'}">${c.status||''}</span>
@@ -3221,15 +3230,76 @@ Pages.centers = (() => {
   }
 
   // ── 탭 3: 운영현황 ──────────────────────────────────────────
+  function buildOpsNotesSection(c) {
+    const edit = canEdit(c);
+    const notes = c.operationNotes || [];
+    const PAGE_SIZE = 10;
+    const page = _notePages[c.id] || 0;
+    const totalPages = Math.ceil(notes.length / PAGE_SIZE);
+    // 최신순 정렬 후 페이지 슬라이스
+    const sorted = [...notes].sort((a, b) => b.date - a.date);
+    const pageNotes = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+    const historyHtml = pageNotes.length ? pageNotes.map(n => {
+      const dateStr = n.date ? new Date(n.date).toLocaleDateString('ko-KR', {month:'2-digit',day:'2-digit'}) : '';
+      const resolvedClass = n.resolved ? 'opacity-50 line-through' : '';
+      return `
+      <div class="flex items-start gap-2 bg-surface-container-low rounded-lg px-3 py-2 mb-2">
+        <input type="checkbox" ${n.resolved ? 'checked' : ''} onchange="toggleNoteResolved(${c.id}, ${n.id})"
+          class="mt-0.5 flex-shrink-0 w-4 h-4 rounded accent-blue-600" title="해결됨 표시">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm ${resolvedClass} break-words">${n.text}</p>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-xs text-secondary">${dateStr}</span>
+            ${n.resolved && n.resolvedDate ? `<span class="text-xs text-green-600">해결 ${new Date(n.resolvedDate).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'})}</span>` : ''}
+          </div>
+        </div>
+        ${edit ? `<button onclick="deleteOperationNote(${c.id}, ${n.id})" class="flex-shrink-0 text-red-400 hover:text-red-600 text-xs ml-1" title="삭제">✕</button>` : ''}
+      </div>`;
+    }).join('') : '<p class="text-sm text-secondary py-2">등록된 특이사항 없음</p>';
+
+    const paginationHtml = totalPages > 1 ? `
+    <div class="flex items-center justify-between mt-2">
+      <button onclick="changeOpsNotePage(${c.id}, ${page - 1})" ${page === 0 ? 'disabled' : ''}
+        class="text-xs px-3 py-1 rounded-lg border border-outline-variant disabled:opacity-40 hover:bg-surface-container-low">← 이전</button>
+      <span class="text-xs text-secondary">${page + 1} / ${totalPages}</span>
+      <button onclick="changeOpsNotePage(${c.id}, ${page + 1})" ${page >= totalPages - 1 ? 'disabled' : ''}
+        class="text-xs px-3 py-1 rounded-lg border border-outline-variant disabled:opacity-40 hover:bg-surface-container-low">다음 →</button>
+    </div>` : '';
+
+    return `
+    <div class="mb-6">
+      <h3 class="font-bold text-sm mb-3">운영 특이사항</h3>
+      ${edit ? `
+      <div class="flex gap-2 mb-3">
+        <textarea id="ops-note-input-${c.id}" rows="2" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none" placeholder="새 특이사항 입력..."></textarea>
+        <button onclick="addOperationNote(${c.id})" class="self-end text-xs bg-primary text-white rounded-lg px-3 py-2 font-semibold hover:bg-blue-700 whitespace-nowrap">추가</button>
+      </div>` : ''}
+      ${historyHtml}
+      ${paginationHtml}
+    </div>`;
+  }
+
   function buildTabOps(c) {
     const edit = canEdit(c);
     const relatedTasks = (DB.tasks||[]).filter(t => t.centerId === c.id && t.status !== '완료');
-    let metricsHtml = '';
+    const statusColors2 = { '완료':'badge-complete','진행중':'badge-inprogress','지연':'badge-delayed','예정':'badge-pending' };
+
+    const tasksHtml = `
+    <div class="mb-6">
+      <h3 class="font-bold text-sm mb-3">관련 업무 (${relatedTasks.length}건)</h3>
+      ${relatedTasks.length ? relatedTasks.map(t => `
+        <div class="flex items-center justify-between bg-surface-container-low rounded-lg px-3 py-2 mb-2 cursor-pointer hover:border-primary border border-transparent" onclick="showTaskDetail(${t.id})">
+          <span class="text-sm">${t.name}</span>
+          <span class="text-xs px-2 py-0.5 rounded-full font-medium ${statusColors2[t.status]||'badge-normal'}">${t.status}</span>
+        </div>`).join('') : '<p class="text-sm text-secondary">진행 중인 업무 없음</p>'}
+    </div>`;
+
     if (c.type === 'W') {
       const leased = c.occupancy?.leased ?? 0;
       const total = c.occupancy?.total ?? 0;
       const pct = total > 0 ? Math.round(leased / total * 100) : 0;
-      metricsHtml = `
+      const occupancyHtml = `
       <div class="mb-6">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-bold text-sm">가동률</h3>
@@ -3249,9 +3319,10 @@ Pages.centers = (() => {
           </div>
         </div>
       </div>`;
+      return occupancyHtml + buildOpsNotesSection(c) + tasksHtml;
     } else if (c.type === 'V') {
       const volumes = c.volumes || [];
-      metricsHtml = `
+      const volumesHtml = `
       <div class="mb-6">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-bold text-sm">물동량</h3>
@@ -3266,28 +3337,10 @@ Pages.centers = (() => {
           </div>`).join('') : '<div class="col-span-3 text-center text-sm text-secondary">물동량 항목 없음</div>'}
         </div>
       </div>`;
+      return volumesHtml + tasksHtml + buildOpsNotesSection(c);
     }
-    const statusColors2 = { '완료':'badge-complete','진행중':'badge-inprogress','지연':'badge-delayed','예정':'badge-pending' };
-    const noteHtml = `
-    <div class="mb-6">
-      <div class="flex items-center justify-between mb-2">
-        <h3 class="font-bold text-sm">운영 특이사항</h3>
-      </div>
-      ${edit ? `
-      <textarea id="ops-note-input-${c.id}" rows="3" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none mb-2" placeholder="운영 특이사항 입력...">${c.operationNote||''}</textarea>
-      <button onclick="saveOperationNote(${c.id})" class="text-xs bg-primary text-white rounded-lg px-3 py-1.5 font-semibold hover:bg-blue-700">저장</button>
-      ` : `<p class="text-sm text-on-surface whitespace-pre-line ${c.operationNote ? '' : 'text-secondary'}">${c.operationNote || '내용 없음'}</p>`}
-    </div>`;
-    const tasksHtml = `
-    <div>
-      <h3 class="font-bold text-sm mb-3">관련 업무 (${relatedTasks.length}건)</h3>
-      ${relatedTasks.length ? relatedTasks.map(t => `
-        <div class="flex items-center justify-between bg-surface-container-low rounded-lg px-3 py-2 mb-2 cursor-pointer hover:border-primary border border-transparent" onclick="showTaskDetail(${t.id})">
-          <span class="text-sm">${t.name}</span>
-          <span class="text-xs px-2 py-0.5 rounded-full font-medium ${statusColors2[t.status]||'badge-normal'}">${t.status}</span>
-        </div>`).join('') : '<p class="text-sm text-secondary">진행 중인 업무 없음</p>'}
-    </div>`;
-    return metricsHtml + noteHtml + tasksHtml;
+    // 미분류
+    return buildOpsNotesSection(c) + tasksHtml;
   }
 
   // ── CRUD ────────────────────────────────────────────────────
@@ -3456,6 +3509,7 @@ Pages.centers = (() => {
     toggleCard,
     editCenterFromPanel: () => { if (_selectedId) editCenterModal(_selectedId); },
     deleteCenterFromPanel: () => { if (_selectedId) deleteCenter(_selectedId); },
+    _setNotePage: (centerId, page) => { _notePages[centerId] = page; },
     get selectedId() { return _selectedId; },
   };
 })();
@@ -3478,15 +3532,50 @@ function saveCenter()                  { Pages.centers.saveCenter(); }
 function deleteCenter(id)              { Pages.centers.deleteCenter(id); }
 function editCenter(id)                { Pages.centers.editCenterModal(id); }
 
-function saveOperationNote(centerId) {
+function addOperationNote(centerId) {
   const c = (DB.centers||[]).find(c => c.id === centerId);
   if (!c) return;
   const ta = document.getElementById(`ops-note-input-${centerId}`);
   if (!ta) return;
-  c.operationNote = ta.value.trim();
+  const text = ta.value.trim();
+  if (!text) { showToast('내용을 입력해주세요'); return; }
+  if (!c.operationNotes) c.operationNotes = [];
+  const newNote = { id: Date.now(), text, date: Date.now(), resolved: false, resolvedDate: null };
+  c.operationNotes.push(newNote);
+  c.updatedAt = Date.now();
+  // 저장 후 첫 페이지(최신)로
+  Pages.centers._setNotePage(centerId, 0);
+  saveDB();
+  ta.value = '';
+  showToast('특이사항이 추가되었습니다');
+  Pages.centers.selectTab('ops');
+}
+
+function toggleNoteResolved(centerId, noteId) {
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c) return;
+  const note = (c.operationNotes||[]).find(n => n.id === noteId);
+  if (!note) return;
+  note.resolved = !note.resolved;
+  note.resolvedDate = note.resolved ? Date.now() : null;
   c.updatedAt = Date.now();
   saveDB();
-  showToast('운영 특이사항이 저장되었습니다');
+  Pages.centers.selectTab('ops');
+}
+
+function deleteOperationNote(centerId, noteId) {
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c) return;
+  c.operationNotes = (c.operationNotes||[]).filter(n => n.id !== noteId);
+  c.updatedAt = Date.now();
+  saveDB();
+  showToast('삭제되었습니다');
+  Pages.centers.selectTab('ops');
+}
+
+function changeOpsNotePage(centerId, page) {
+  Pages.centers._setNotePage(centerId, page);
+  Pages.centers.selectTab('ops');
 }
 
 // ---- Center sub-item CRUD ----
