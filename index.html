@@ -5241,6 +5241,99 @@ function toggleProjectAssignee(id)          { Pages.projects.toggleProjectAssign
 function addModalMilestone()                { Pages.projects.addModalMilestone(); }
 function removeModalMilestone(i)            { Pages.projects.removeModalMilestone(i); }
 
+// ============================================================
+//  PAGES.DRAFTS
+// ============================================================
+Pages.drafts = (() => {
+  let _draftFilter = 'all';
+  let _currentDraftId = null;
+  let _currentVersionId = null;
+  let _reviewLine = [];
+  let _draftAttachments = [];
+  let _revisionAttachments = [];
+  let _draftType = 'free';
+
+  function draftStatusClass(s) {
+    return s === '검토완료' ? 'bg-green-100 text-green-700'
+      : s === '반려' ? 'bg-red-100 text-red-600'
+      : 'bg-yellow-100 text-yellow-700';
+  }
+
+  function buildCard(d) {
+    const v0 = (d.versions || [])[0] || {};
+    const typeName = d.type === 'free' ? '자유형식'
+      : ((DB.draft_templates || []).find(t => t.id === d.templateId)?.name || '양식');
+    const reviewLine = d.reviewLine || [];
+    return `<div class="bg-surface rounded-2xl border border-outline-variant p-5 cursor-pointer hover:shadow-md hover:border-primary/40 transition-all"
+      onclick="openDraftDetail(${d.id})">
+      <div class="flex items-start justify-between mb-2">
+        <h3 class="font-bold text-on-surface text-sm leading-snug flex-1 mr-2">${d.title}</h3>
+        <span class="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${draftStatusClass(d.status)}">${d.status}</span>
+      </div>
+      <div class="text-xs text-secondary mb-3">${typeName} · ${d.createdBy} · ${new Date(d.createdAt).toLocaleDateString('ko-KR')}</div>
+      ${reviewLine.length ? `<div class="flex items-center gap-1 flex-wrap">
+        ${reviewLine.map((r, i) => `
+          <div class="flex items-center gap-1">
+            <div class="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold" title="${r.name} (${r.role})">${r.name[0]}</div>
+            <span class="text-xs text-secondary">${r.role}</span>
+          </div>
+          ${i < reviewLine.length - 1 ? '<span class="text-secondary text-xs">›</span>' : ''}
+        `).join('')}
+      </div>` : ''}
+      ${(d.versions||[]).length > 1 ? `<div class="mt-2 text-xs text-primary/70 flex items-center gap-1"><span class="material-symbols-outlined text-sm">edit_note</span> 첨삭본 ${d.versions.length - 1}개</div>` : ''}
+    </div>`;
+  }
+
+  function render() {
+    if (!requireAuth()) return;
+    const drafts = (DB.drafts || []).filter(d =>
+      _draftFilter === 'all' || d.status === _draftFilter
+    ).sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+
+    const grid = document.getElementById('drafts-grid');
+    const empty = document.getElementById('drafts-empty');
+    if (!grid) return;
+
+    if (!drafts.length) {
+      grid.innerHTML = '';
+      grid.classList.add('hidden');
+      empty?.classList.remove('hidden');
+    } else {
+      empty?.classList.add('hidden');
+      grid.classList.remove('hidden');
+      grid.innerHTML = drafts.map(buildCard).join('');
+    }
+  }
+
+  function filterDrafts_fn(f) {
+    _draftFilter = f;
+    document.querySelectorAll('.draft-filter-btn').forEach(b => {
+      b.className = b.dataset.filter === f
+        ? 'draft-filter-btn active px-4 py-1.5 rounded-full text-sm font-medium transition-all bg-primary text-white'
+        : 'draft-filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary';
+    });
+    render();
+  }
+
+  return {
+    render,
+    filterDrafts: filterDrafts_fn,
+    get currentDraftId() { return _currentDraftId; },
+    get currentVersionId() { return _currentVersionId; },
+    get reviewLine() { return _reviewLine; },
+    get draftAttachments() { return _draftAttachments; },
+    get revisionAttachments() { return _revisionAttachments; },
+    get draftType() { return _draftType; },
+    _setDraftType(t) { _draftType = t; },
+    _setReviewLine(rl) { _reviewLine = rl; },
+    _setDraftAttachments(a) { _draftAttachments = a; },
+    _setRevisionAttachments(a) { _revisionAttachments = a; },
+  };
+})();
+
+function filterDrafts(f) { Pages.drafts.filterDrafts(f); }
+function openDraftDetail(id) { Pages.drafts.openDetail(id); }
+
 // ---- Library global shims ----
 function libNavigate(id, name)         { Pages.library.navigateTo(id, name); }
 function libNavToIndex(i)              { Pages.library.navigateToIndex(i); }
