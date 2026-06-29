@@ -992,8 +992,12 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
         </div>
         <!-- 에디터 툴바 (자유형식만) -->
         <div id="draft-editor-toolbar" class="flex items-center gap-1 px-3 py-1.5 border-b border-outline-variant bg-surface-container/40 flex-shrink-0 flex-wrap">
+          <!-- 되돌리기 -->
+          <button onclick="draftExec('undo')" title="되돌리기 (Ctrl+Z)" class="editor-btn"><span class="material-symbols-outlined text-sm">undo</span></button>
+          <button onclick="draftExec('redo')" title="다시하기 (Ctrl+Y)" class="editor-btn"><span class="material-symbols-outlined text-sm">redo</span></button>
+          <div class="w-px h-5 bg-outline-variant mx-1"></div>
           <!-- 폰트 크기 -->
-          <select onchange="draftExecFontSize(this.value)" class="border border-outline-variant rounded px-1.5 py-0.5 text-xs mr-1">
+          <select onchange="draftExecFontSize(this.value)" id="draft-font-size-select" class="border border-outline-variant rounded px-1.5 py-0.5 text-xs mr-1">
             <option value="">크기</option>
             <option value="1">10px</option>
             <option value="2">12px</option>
@@ -6131,7 +6135,25 @@ function draftExec(cmd) {
 function draftExecFontSize(val) {
   if (!val) return;
   _draftRestoreRange();
-  document.execCommand('fontSize', false, val);
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  if (range.collapsed) return;
+  // Remove existing font-size spans inside selection first
+  document.execCommand('removeFormat', false, null);
+  // Re-select (removeFormat collapses in some browsers, restore)
+  if (_draftEditorSavedRange) { sel.removeAllRanges(); sel.addRange(_draftEditorSavedRange); }
+  const span = document.createElement('span');
+  span.style.fontSize = val;
+  try {
+    range.surroundContents(span);
+  } catch(e) {
+    // If selection spans multiple elements, use execCommand fallback
+    document.execCommand('insertHTML', false, `<span style="font-size:${val}">${range.toString()}</span>`);
+  }
+  // Reset select to default label
+  const sel2 = document.getElementById('draft-font-size-select');
+  if (sel2) sel2.value = '';
 }
 
 function draftExecForeColor(val) {
@@ -6243,6 +6265,64 @@ function draftDeleteTableCol() {
   if (rows[0]?.children.length <= 1) { table.remove(); return; }
   rows.forEach(row => row.children[colIdx]?.remove());
 }
+
+// ---- Table column resize ----
+(function() {
+  let _resizing = false, _startX = 0, _startW = 0, _targetCell = null;
+
+  function _attachTableResize(editor) {
+    editor.addEventListener('mousemove', e => {
+      if (_resizing) return;
+      const cell = e.target.closest('td, th');
+      if (!cell) { editor.style.cursor = ''; return; }
+      const rect = cell.getBoundingClientRect();
+      const nearRight = e.clientX > rect.right - 6 && e.clientX < rect.right + 6;
+      editor.style.cursor = nearRight ? 'col-resize' : '';
+    });
+
+    editor.addEventListener('mousedown', e => {
+      const cell = e.target.closest('td, th');
+      if (!cell) return;
+      const rect = cell.getBoundingClientRect();
+      const nearRight = e.clientX > rect.right - 6 && e.clientX < rect.right + 6;
+      if (!nearRight) return;
+      e.preventDefault();
+      _resizing = true;
+      _startX = e.clientX;
+      _startW = cell.offsetWidth;
+      _targetCell = cell;
+      // Fix widths of all cells in the same column so table doesn't reflow other cols
+      const table = cell.closest('table');
+      if (table) {
+        const colIdx = Array.from(cell.parentNode.children).indexOf(cell);
+        table.querySelectorAll('tr').forEach(row => {
+          const c = row.children[colIdx];
+          if (c) c.style.width = c.offsetWidth + 'px';
+        });
+        table.style.width = table.offsetWidth + 'px';
+        table.style.tableLayout = 'fixed';
+      }
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!_resizing || !_targetCell) return;
+      const dx = e.clientX - _startX;
+      const newW = Math.max(40, _startW + dx);
+      _targetCell.style.width = newW + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (_resizing) { _resizing = false; _targetCell = null; }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const editor = document.getElementById('draft-content');
+    if (editor) _attachTableResize(editor);
+    const revision = document.getElementById('revision-content');
+    if (revision) _attachTableResize(revision);
+  });
+})();
 
 // Save selection when user clicks toolbar (before focus leaves editor)
 document.addEventListener('DOMContentLoaded', () => {
