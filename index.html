@@ -5130,6 +5130,8 @@ Pages.library = (() => {
   let _unsubFiles = null;
   let _searchQuery = '';
   let _currentFileForModal = null;  // 파일 상세 모달용
+  let _dragSrcId = null;            // 드래그 중인 폴더 ID
+  let _folders = [];                // 현재 렌더된 폴더 목록 (순서 조작용)
 
   // ---- 파일 타입별 아이콘 ----
   const MIME_MAP = [
@@ -5186,7 +5188,8 @@ Pages.library = (() => {
     _unsubFolders = db.collection('lib_folders')
       .where('parentKey', '==', key)
       .onSnapshot(snap => {
-        folders = snap.docs.map(d => d.data()).sort((a,b) => a.createdAt - b.createdAt);
+        folders = snap.docs.map(d => d.data()).sort((a,b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt));
+        _folders = folders;
         renderGrid(folders, files);
       }, err => console.error('lib_folders error:', err));
 
@@ -5225,10 +5228,19 @@ Pages.library = (() => {
       const safeName = f.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       return `
       <div class="lib-item bg-white rounded-xl border border-outline-variant shadow-sm p-4 cursor-pointer select-none group"
-           onclick="libNavigate('${f.id}','${safeName}')">
+           data-folder-id="${f.id}"
+           draggable="${isAdmin ? 'true' : 'false'}"
+           onclick="libNavigate('${f.id}','${safeName}')"
+           ondragstart="libFolderDragStart(event,'${f.id}')"
+           ondragover="libFolderDragOver(event)"
+           ondragleave="libFolderDragLeave(event)"
+           ondrop="libFolderDrop(event,'${f.id}')">
         <div class="flex items-start justify-between gap-1 mb-3">
-          <div class="w-11 h-11 rounded-xl bg-yellow-50 flex items-center justify-center">
-            <span class="material-symbols-outlined text-yellow-500" style="font-size:26px">folder</span>
+          <div class="flex items-center gap-2">
+            ${isAdmin ? `<span class="material-symbols-outlined text-secondary opacity-30 group-hover:opacity-70 cursor-grab transition-opacity" style="font-size:16px" title="드래그하여 순서 변경">drag_indicator</span>` : ''}
+            <div class="w-11 h-11 rounded-xl bg-yellow-50 flex items-center justify-center">
+              <span class="material-symbols-outlined text-yellow-500" style="font-size:26px">folder</span>
+            </div>
           </div>
           <div class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             ${isAdmin ? `
@@ -5297,6 +5309,45 @@ Pages.library = (() => {
     if (index === 0) folderStack = [];
     else folderStack = folderStack.slice(0, index);
     render();
+  }
+
+  // ---- 폴더 드래그앤드롭 순서 변경 ----
+  function folderDragStart(e, id) {
+    _dragSrcId = id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.currentTarget.style.opacity = '0.4';
+  }
+
+  function folderDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    e.currentTarget.classList.add('ring-2', 'ring-primary', 'ring-offset-1');
+  }
+
+  function folderDragLeave(e) {
+    e.currentTarget.classList.remove('ring-2', 'ring-primary', 'ring-offset-1');
+  }
+
+  function folderDrop(e, targetId) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('ring-2', 'ring-primary', 'ring-offset-1');
+    document.querySelectorAll('[data-folder-id]').forEach(el => el.style.opacity = '');
+    if (!_dragSrcId || _dragSrcId === targetId) { _dragSrcId = null; return; }
+
+    const srcIdx = _folders.findIndex(f => f.id === _dragSrcId);
+    const tgtIdx = _folders.findIndex(f => f.id === targetId);
+    if (srcIdx < 0 || tgtIdx < 0) { _dragSrcId = null; return; }
+
+    const reordered = [..._folders];
+    const [moved] = reordered.splice(srcIdx, 1);
+    reordered.splice(tgtIdx, 0, moved);
+
+    const batch = db.batch();
+    reordered.forEach((f, i) => {
+      batch.update(db.collection('lib_folders').doc(f.id), { order: i });
+    });
+    batch.commit().catch(e => console.error(e));
+    _dragSrcId = null;
   }
 
   // ---- 폴더 생성 ----
@@ -5515,6 +5566,10 @@ Pages.library = (() => {
     setSearch,
     openPdfViewer,
     closePdfViewer,
+    folderDragStart,
+    folderDragOver,
+    folderDragLeave,
+    folderDrop,
   };
 })();
 
@@ -6964,6 +7019,10 @@ function libOpenNewFolder()            { document.getElementById('lib-folder-nam
 function libSaveFolder()               { const n = document.getElementById('lib-folder-name').value.trim(); if(!n){alert('폴더 이름을 입력하세요');return;} Pages.library.createFolder(n); document.getElementById('modal-lib-folder').classList.add('hidden'); }
 function libRenameFolder(id, name)     { Pages.library.renameFolder(id, name); }
 function libDeleteFolder(id, name)     { Pages.library.deleteFolder(id, name); }
+function libFolderDragStart(e, id)     { Pages.library.folderDragStart(e, id); }
+function libFolderDragOver(e)          { Pages.library.folderDragOver(e); }
+function libFolderDragLeave(e)         { Pages.library.folderDragLeave(e); }
+function libFolderDrop(e, id)          { Pages.library.folderDrop(e, id); }
 function libDeleteFile(id, path)       { Pages.library.deleteFile(id, path); }
 function libUploadFiles(files)         { Pages.library.uploadFiles(files); }
 function libOpenFileModal(id)          { Pages.library.openFileModal(id); }
