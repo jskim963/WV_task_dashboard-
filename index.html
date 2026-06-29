@@ -5528,6 +5528,308 @@ Pages.drafts = (() => {
     el?.classList.toggle('hidden');
   }
 
+  // ---- 양식 선택 ----
+  function selectDraftType_fn(type) {
+    _draftType = type;
+    document.querySelectorAll('.draft-type-btn').forEach(b => {
+      b.classList.toggle('active-type', b.dataset.type === type);
+    });
+    document.getElementById('draft-free-content-wrap').classList.toggle('hidden', type !== 'free');
+    document.getElementById('draft-template-fields-wrap').classList.toggle('hidden', type !== 'template');
+    document.getElementById('draft-template-select').classList.toggle('hidden', type !== 'template');
+    if (type === 'template') renderDraftTemplateSelect();
+  }
+
+  function renderDraftTemplateSelect() {
+    const sel = document.getElementById('draft-template-select');
+    sel.innerHTML = '<option value="">양식 선택...</option>' +
+      (DB.draft_templates||[]).map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+    sel.onchange = () => renderTemplateFieldsInModal(parseInt(sel.value)||null, 'draft');
+  }
+
+  function renderTemplateFieldsInModal(templateId, mode) {
+    const wrap = document.getElementById(mode === 'draft' ? 'draft-template-fields-wrap' : 'revision-template-fields-wrap');
+    if (!wrap) return;
+    if (!templateId) { wrap.innerHTML = ''; return; }
+    const tpl = (DB.draft_templates||[]).find(t => t.id === templateId);
+    if (!tpl) return;
+    wrap.innerHTML = tpl.fields.map(f => `
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">${f.label}</label>
+        ${f.type === 'textarea'
+          ? `<textarea id="${mode}-field-${f.key}" rows="3" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none"></textarea>`
+          : `<input type="${f.type}" id="${mode}-field-${f.key}" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">`}
+      </div>`).join('');
+  }
+
+  // ---- 결재라인 드롭박스 ----
+  function renderDraftMemberList() {
+    const list = document.getElementById('draft-member-list');
+    if (!list) return;
+    list.innerHTML = (DB.members||[]).map(m => {
+      const alreadyAdded = _reviewLine.some(r => r.memberId === m.id);
+      return `<label class="flex items-center gap-2 px-3 py-2 hover:bg-surface-container cursor-pointer text-sm ${alreadyAdded ? 'opacity-40 pointer-events-none' : ''}">
+        <input type="checkbox" ${alreadyAdded ? 'checked disabled' : ''} onchange="addMemberToReviewLine(${m.id})">
+        <div class="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">${m.name[0]}</div>
+        <span>${m.name}</span>
+        <span class="text-secondary text-xs">${m.rank||''}</span>
+      </label>`;
+    }).join('');
+  }
+
+  function toggleDraftMemberDropdown_fn() {
+    const panel = document.getElementById('draft-member-dropdown-panel');
+    const willShow = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !willShow);
+    if (willShow) renderDraftMemberList();
+  }
+
+  function addMemberToReviewLine_fn(memberId) {
+    if (_reviewLine.some(r => r.memberId === memberId)) return;
+    const m = (DB.members||[]).find(m => m.id === memberId);
+    if (!m) return;
+    _reviewLine.push({ id: Date.now(), name: m.name, memberId: m.id, role: m.rank || '' });
+    renderReviewLineList();
+  }
+
+  function addManualReviewer_fn() {
+    const name = document.getElementById('manual-reviewer-name')?.value.trim();
+    const role = document.getElementById('manual-reviewer-role')?.value.trim();
+    if (!name) { alert('이름을 입력하세요'); return; }
+    _reviewLine.push({ id: Date.now(), name, memberId: null, role });
+    document.getElementById('manual-reviewer-name').value = '';
+    document.getElementById('manual-reviewer-role').value = '';
+    renderReviewLineList();
+  }
+
+  function removeReviewer_fn(idx) {
+    _reviewLine.splice(idx, 1);
+    renderReviewLineList();
+  }
+
+  function moveReviewer_fn(idx, dir) {
+    const to = idx + dir;
+    if (to < 0 || to >= _reviewLine.length) return;
+    [_reviewLine[idx], _reviewLine[to]] = [_reviewLine[to], _reviewLine[idx]];
+    renderReviewLineList();
+  }
+
+  function renderReviewLineList() {
+    const list = document.getElementById('draft-review-line-list');
+    if (!list) return;
+    list.innerHTML = _reviewLine.map((r, i) => `
+      <div class="flex items-center gap-2 bg-surface-container-low rounded-lg px-3 py-2 text-sm">
+        <div class="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">${r.name[0]}</div>
+        <span class="flex-1">${r.name}</span>
+        <span class="text-xs text-secondary">${r.role}</span>
+        <button onclick="moveReviewer(${i},-1)" class="text-secondary hover:text-primary p-0.5 ${i===0?'opacity-30 pointer-events-none':''}"><span class="material-symbols-outlined text-sm">arrow_upward</span></button>
+        <button onclick="moveReviewer(${i},1)" class="text-secondary hover:text-primary p-0.5 ${i===_reviewLine.length-1?'opacity-30 pointer-events-none':''}"><span class="material-symbols-outlined text-sm">arrow_downward</span></button>
+        <button onclick="removeReviewer(${i})" class="text-red-300 hover:text-red-500 p-0.5"><span class="material-symbols-outlined text-sm">close</span></button>
+      </div>`).join('');
+  }
+
+  // ---- 파일 업로드 (Storage) ----
+  async function uploadDraftFiles(inputId, existingAttachments) {
+    const input = document.getElementById(inputId);
+    const files = input ? Array.from(input.files) : [];
+    const uploaded = [...existingAttachments];
+    for (const file of files) {
+      const path = `drafts/${Date.now()}_${file.name}`;
+      const ref = firebase.storage().ref(path);
+      try {
+        await ref.put(file);
+        const url = await ref.getDownloadURL();
+        uploaded.push({ name: file.name, url, mimeType: file.type });
+      } catch(e) { console.error('파일 업로드 오류:', e); }
+    }
+    return uploaded;
+  }
+
+  // ---- 모달 열기 ----
+  function openAddModal_fn() {
+    _reviewLine = [];
+    _draftAttachments = [];
+    _draftType = 'free';
+    document.getElementById('editing-draft-id').value = '';
+    document.getElementById('draft-title').value = '';
+    document.getElementById('draft-content').value = '';
+    document.getElementById('draft-template-fields-wrap').innerHTML = '';
+    document.getElementById('draft-template-select').classList.add('hidden');
+    document.getElementById('draft-template-select').value = '';
+    document.getElementById('draft-free-content-wrap').classList.remove('hidden');
+    document.getElementById('draft-template-fields-wrap').classList.add('hidden');
+    document.getElementById('draft-attachment-list').innerHTML = '';
+    document.querySelectorAll('.draft-type-btn').forEach(b => b.classList.toggle('active-type', b.dataset.type === 'free'));
+    document.getElementById('draft-modal-title').textContent = '새 기안서';
+    renderReviewLineList();
+    renderDraftMemberList();
+    document.getElementById('modal-add-draft').classList.remove('hidden');
+  }
+
+  function editDraft_fn(id) {
+    const d = (DB.drafts||[]).find(d => d.id === id);
+    if (!d) return;
+    closeDraftDetail_fn();
+    const v0 = d.versions?.[0] || {};
+    _reviewLine = (d.reviewLine||[]).map(r => ({...r}));
+    _draftAttachments = [...(v0.attachments||[])];
+    _draftType = d.type;
+    document.getElementById('editing-draft-id').value = id;
+    document.getElementById('draft-title').value = d.title;
+    document.getElementById('draft-modal-title').textContent = '기안서 수정';
+    selectDraftType_fn(d.type);
+    if (d.type === 'free') {
+      document.getElementById('draft-content').value = v0.content || '';
+    } else {
+      renderDraftTemplateSelect();
+      document.getElementById('draft-template-select').value = d.templateId || '';
+      renderTemplateFieldsInModal(d.templateId, 'draft');
+      try {
+        const data = JSON.parse(v0.content || '{}');
+        Object.entries(data).forEach(([k, v]) => {
+          const el = document.getElementById(`draft-field-${k}`);
+          if (el) el.value = v;
+        });
+      } catch(e) {}
+    }
+    renderReviewLineList();
+    renderDraftMemberList();
+    document.getElementById('modal-add-draft').classList.remove('hidden');
+  }
+
+  async function saveDraft_fn() {
+    const title = document.getElementById('draft-title').value.trim();
+    if (!title) { alert('제목을 입력하세요'); return; }
+
+    const attachments = await uploadDraftFiles('draft-file-input', _draftAttachments);
+    let content = '';
+    let templateId = null;
+    if (_draftType === 'free') {
+      content = document.getElementById('draft-content').value;
+    } else {
+      templateId = parseInt(document.getElementById('draft-template-select').value) || null;
+      const tpl = (DB.draft_templates||[]).find(t => t.id === templateId);
+      if (tpl) {
+        const data = {};
+        tpl.fields.forEach(f => { data[f.key] = document.getElementById(`draft-field-${f.key}`)?.value || ''; });
+        content = JSON.stringify(data);
+      }
+    }
+
+    const editId = document.getElementById('editing-draft-id').value;
+    if (editId) {
+      const d = (DB.drafts||[]).find(d => d.id === parseInt(editId));
+      if (!d) return;
+      const v0 = d.versions?.[0];
+      if (v0) { v0.content = content; v0.attachments = attachments; }
+      d.title = title; d.type = _draftType; d.templateId = templateId;
+      d.reviewLine = [..._reviewLine]; d.updatedAt = Date.now();
+      db.collection('drafts').doc(String(d.id)).update({
+        title, type: _draftType, templateId, reviewLine: d.reviewLine,
+        versions: d.versions, updatedAt: d.updatedAt
+      }).catch(e => console.error(e));
+      showToast('기안서가 수정되었습니다');
+    } else {
+      const id = Date.now();
+      const member = (DB.members||[]).find(m => m.username === currentUser?.username || m.id === currentUser?.memberId);
+      const newDraft = {
+        id, title, type: _draftType, templateId, status: '검토중',
+        reviewLine: [..._reviewLine],
+        versions: [{
+          id: Date.now(), label: '기안자 원본',
+          authorName: member?.name || currentUser?.username || '나',
+          authorUsername: currentUser?.username || '',
+          content, attachments, inlineComments: [], createdAt: Date.now()
+        }],
+        comments: [],
+        createdBy: currentUser?.username || '',
+        createdAt: id, updatedAt: id,
+      };
+      if (!DB.drafts) DB.drafts = [];
+      DB.drafts.push(newDraft);
+      db.collection('drafts').doc(String(id)).set(newDraft).catch(e => console.error(e));
+      showToast('기안서가 등록되었습니다');
+    }
+    document.getElementById('modal-add-draft').classList.add('hidden');
+    render();
+  }
+
+  function deleteDraft_fn(id) {
+    if (!confirm('기안서를 삭제하겠습니까?')) return;
+    DB.drafts = (DB.drafts||[]).filter(d => d.id !== id);
+    db.collection('drafts').doc(String(id)).delete().catch(e => console.error(e));
+    closeDraftDetail_fn();
+    showToast('삭제되었습니다');
+    render();
+  }
+
+  function editCurrentDraft_fn() { if (_currentDraftId) editDraft_fn(_currentDraftId); }
+  function deleteCurrentDraft_fn() { if (_currentDraftId) deleteDraft_fn(_currentDraftId); }
+
+  // ---- 첨삭본 ----
+  function openAddRevisionModal_fn() {
+    if (!_currentDraftId) return;
+    const d = (DB.drafts||[]).find(d => d.id === _currentDraftId);
+    if (!d) return;
+    const v0 = d.versions?.[0] || {};
+    _revisionAttachments = [];
+    const member = (DB.members||[]).find(m => m.username === currentUser?.username || m.id === currentUser?.memberId);
+    const myName = member?.name || currentUser?.username || '나';
+    document.getElementById('revision-label').value = `${myName} 첨삭`;
+    document.getElementById('revision-content-wrap').classList.toggle('hidden', d.type !== 'free');
+    document.getElementById('revision-template-fields-wrap').classList.toggle('hidden', d.type !== 'template');
+    if (d.type === 'free') {
+      document.getElementById('revision-content').value = v0.content || '';
+    } else {
+      renderTemplateFieldsInModal(d.templateId, 'revision');
+      try {
+        const data = JSON.parse(v0.content || '{}');
+        const tpl = (DB.draft_templates||[]).find(t => t.id === d.templateId);
+        tpl?.fields.forEach(f => {
+          const el = document.getElementById(`revision-field-${f.key}`);
+          if (el) el.value = data[f.key] || '';
+        });
+      } catch(e) {}
+    }
+    document.getElementById('revision-attachment-list').innerHTML = '';
+    document.getElementById('modal-add-revision').classList.remove('hidden');
+  }
+
+  async function saveRevision_fn() {
+    if (!_currentDraftId) return;
+    const d = (DB.drafts||[]).find(d => d.id === _currentDraftId);
+    if (!d) return;
+    const label = document.getElementById('revision-label').value.trim() || '첨삭본';
+    const attachments = await uploadDraftFiles('revision-file-input', _revisionAttachments);
+    let content = '';
+    if (d.type === 'free') {
+      content = document.getElementById('revision-content').value;
+    } else {
+      const tpl = (DB.draft_templates||[]).find(t => t.id === d.templateId);
+      if (tpl) {
+        const data = {};
+        tpl.fields.forEach(f => { data[f.key] = document.getElementById(`revision-field-${f.key}`)?.value || ''; });
+        content = JSON.stringify(data);
+      }
+    }
+    const member = (DB.members||[]).find(m => m.username === currentUser?.username || m.id === currentUser?.memberId);
+    const newVersion = {
+      id: Date.now(), label,
+      authorName: member?.name || currentUser?.username || '나',
+      authorUsername: currentUser?.username || '',
+      content, attachments, inlineComments: [], createdAt: Date.now()
+    };
+    if (!d.versions) d.versions = [];
+    d.versions.push(newVersion);
+    d.updatedAt = Date.now();
+    db.collection('drafts').doc(String(d.id)).update({ versions: d.versions, updatedAt: d.updatedAt }).catch(e => console.error(e));
+    document.getElementById('modal-add-revision').classList.add('hidden');
+    showToast('첨삭본이 등록되었습니다');
+    renderVersionTabs(d);
+    _currentVersionId = newVersion.id;
+    renderDetailContent(d, newVersion.id);
+  }
+
   return {
     render,
     filterDrafts: filterDrafts_fn,
@@ -5545,6 +5847,20 @@ Pages.drafts = (() => {
     _setReviewLine(rl) { _reviewLine = rl; },
     _setDraftAttachments(a) { _draftAttachments = a; },
     _setRevisionAttachments(a) { _revisionAttachments = a; },
+    openAddModal: openAddModal_fn,
+    editDraft: editDraft_fn,
+    saveDraft: saveDraft_fn,
+    deleteDraft: deleteDraft_fn,
+    editCurrentDraft: editCurrentDraft_fn,
+    deleteCurrentDraft: deleteCurrentDraft_fn,
+    selectDraftType: selectDraftType_fn,
+    toggleDraftMemberDropdown: toggleDraftMemberDropdown_fn,
+    addMemberToReviewLine: addMemberToReviewLine_fn,
+    addManualReviewer: addManualReviewer_fn,
+    removeReviewer: removeReviewer_fn,
+    moveReviewer: moveReviewer_fn,
+    openRevisionModal: openAddRevisionModal_fn,
+    saveRevision: saveRevision_fn,
   };
 })();
 
@@ -5553,6 +5869,27 @@ function openDraftDetail(id) { Pages.drafts.openDetail(id); }
 function closeDraftDetail() { Pages.drafts.closeDetail(); }
 function selectDraftVersion(did, vid) { Pages.drafts.selectVersion(did, vid); }
 function openInlineCommentInput(did, vid, li) { Pages.drafts.openInlineCommentInput(did, vid, li); }
+function openAddDraftModal()            { Pages.drafts.openAddModal(); }
+function saveDraft()                    { Pages.drafts.saveDraft(); }
+function editDraft(id)                  { Pages.drafts.editDraft(id); }
+function deleteDraft(id)               { Pages.drafts.deleteDraft(id); }
+function editCurrentDraft()             { Pages.drafts.editCurrentDraft(); }
+function deleteCurrentDraft()           { Pages.drafts.deleteCurrentDraft(); }
+function selectDraftType(t)             { Pages.drafts.selectDraftType(t); }
+function toggleDraftMemberDropdown()    { Pages.drafts.toggleDraftMemberDropdown(); }
+function addMemberToReviewLine(id)      { Pages.drafts.addMemberToReviewLine(id); }
+function addManualReviewer()            { Pages.drafts.addManualReviewer(); }
+function removeReviewer(i)              { Pages.drafts.removeReviewer(i); }
+function moveReviewer(i, d)             { Pages.drafts.moveReviewer(i, d); }
+function openAddRevisionModal()         { Pages.drafts.openRevisionModal(); }
+function saveRevision()                 { Pages.drafts.saveRevision(); }
+
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('draft-member-dropdown-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('draft-member-dropdown-panel')?.classList.add('hidden');
+  }
+});
 
 // ---- Library global shims ----
 function libNavigate(id, name)         { Pages.library.navigateTo(id, name); }
