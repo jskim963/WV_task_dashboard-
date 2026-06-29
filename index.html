@@ -2347,13 +2347,17 @@ Pages.dashboard = (() => {
       if (dup) { if (!confirm('동일한 담당자에게 같은 업무명이 이미 존재합니다.\n그래도 추가하겠습니까?')) return; }
       const newTaskId = Date.now();
       DB.tasks.push({id: newTaskId, name, assigneeIds, centerId, projectId, status, priority, deadline, desc, comments:[], createdAt: newTaskId, updatedAt: newTaskId});
-      if ((priority === '긴급' || priority === '높음') && deadline) {
+      if (priority === '긴급' || priority === '높음') {
         const prefix = priority === '긴급' ? '[긴급]' : '[중요]';
+        const evDate = deadline || formatDate(new Date());
         if (!DB.events) DB.events = [];
-        DB.events.push({id: newTaskId + 1, title: `${prefix} ${name}`, date: deadline, dateEnd: null, personId: 0, personIds: [], type: '업무보고', memo: '', createdAt: newTaskId + 1});
-        saveDB();
+        const evId = newTaskId + 1;
+        DB.events.push({id: evId, title: `${prefix} ${name}`, date: evDate, dateEnd: null, personId: 0, personIds: [], type: '업무보고', memo: '', createdAt: evId});
+        db.collection('events').doc(String(evId)).set({id: evId, title: `${prefix} ${name}`, date: evDate, dateEnd: null, personId: 0, personIds: [], type: '업무보고', memo: '', createdAt: evId}).catch(e => console.error(e));
+        showToast(`캘린더에 자동 등록되었습니다 (${evDate})`);
+      } else {
+        showToast('업무가 추가되었습니다');
       }
-      showToast('업무가 추가되었습니다');
     }
     saveDB();
     document.getElementById('modal-add-task').classList.add('hidden');
@@ -5920,10 +5924,13 @@ Pages.projects = (() => {
       if (projectData.endDate) {
         if (!DB.events) DB.events = [];
         const evId = id + 2;
-        DB.events.push({id: evId, title: `[프로젝트] ${title}`, date: projectData.endDate, dateEnd: null, personId: 0, personIds: [], type: '업무보고', memo: '', createdAt: evId});
-        saveDB();
+        const projEv = {id: evId, title: `[프로젝트] ${title}`, date: projectData.endDate, dateEnd: null, personId: 0, personIds: [], type: '업무보고', memo: '', createdAt: evId};
+        DB.events.push(projEv);
+        db.collection('events').doc(String(evId)).set(projEv).catch(e => console.error(e));
+        showToast(`프로젝트가 추가되고 목표일(${projectData.endDate})이 캘린더에 등록되었습니다`);
+      } else {
+        showToast('프로젝트가 추가되었습니다');
       }
-      showToast('프로젝트가 추가되었습니다');
     }
     document.getElementById('modal-add-project').classList.add('hidden');
     render();
