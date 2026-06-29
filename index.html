@@ -999,13 +999,14 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
           <!-- 폰트 크기 -->
           <select onchange="draftExecFontSize(this.value)" id="draft-font-size-select" class="border border-outline-variant rounded px-1.5 py-0.5 text-xs mr-1">
             <option value="">크기</option>
-            <option value="1">10px</option>
-            <option value="2">12px</option>
-            <option value="3">14px</option>
-            <option value="4">16px</option>
-            <option value="5">18px</option>
-            <option value="6">22px</option>
-            <option value="7">28px</option>
+            <option value="10px">10px</option>
+            <option value="12px">12px</option>
+            <option value="14px">14px</option>
+            <option value="16px">16px</option>
+            <option value="18px">18px</option>
+            <option value="22px">22px</option>
+            <option value="28px">28px</option>
+            <option value="36px">36px</option>
           </select>
           <!-- 텍스트 서식 -->
           <button onclick="draftExec('bold')" title="굵게" class="editor-btn"><b>B</b></button>
@@ -6136,24 +6137,19 @@ function draftExecFontSize(val) {
   if (!val) return;
   _draftRestoreRange();
   const sel = window.getSelection();
-  if (!sel || !sel.rangeCount) return;
-  const range = sel.getRangeAt(0);
-  if (range.collapsed) return;
-  // Remove existing font-size spans inside selection first
-  document.execCommand('removeFormat', false, null);
-  // Re-select (removeFormat collapses in some browsers, restore)
-  if (_draftEditorSavedRange) { sel.removeAllRanges(); sel.addRange(_draftEditorSavedRange); }
-  const span = document.createElement('span');
-  span.style.fontSize = val;
-  try {
-    range.surroundContents(span);
-  } catch(e) {
-    // If selection spans multiple elements, use execCommand fallback
-    document.execCommand('insertHTML', false, `<span style="font-size:${val}">${range.toString()}</span>`);
+  if (!sel || !sel.rangeCount || sel.getRangeAt(0).collapsed) {
+    document.getElementById('draft-font-size-select').value = '';
+    return;
   }
-  // Reset select to default label
-  const sel2 = document.getElementById('draft-font-size-select');
-  if (sel2) sel2.value = '';
+  // Capture selected HTML before any DOM changes
+  const range = sel.getRangeAt(0);
+  const frag = range.cloneContents();
+  const tmp = document.createElement('div');
+  tmp.appendChild(frag);
+  const inner = tmp.innerHTML || range.toString();
+  // Replace selection with size-wrapped span
+  document.execCommand('insertHTML', false, `<span style="font-size:${val}">${inner}</span>`);
+  document.getElementById('draft-font-size-select').value = '';
 }
 
 function draftExecForeColor(val) {
@@ -6271,18 +6267,18 @@ function draftDeleteTableCol() {
   let _rz = null; // { startX, startW, cell, colIdx, table }
 
   function _fixTableLayout(table) {
-    // Snapshot widths of ALL cells per column (not just first row)
-    // so each column has an explicit width before switching to fixed layout
-    const rows = table.querySelectorAll('tr');
-    rows.forEach(row => {
-      Array.from(row.children).forEach(cell => {
-        cell.style.width = cell.offsetWidth + 'px';
-      });
+    // Lock each first-row cell width explicitly, then set tableLayout:fixed
+    // Table total width = sum of column widths (must be explicit for fixed layout to work)
+    const firstRow = table.querySelector('tr');
+    if (!firstRow) return;
+    let totalW = 0;
+    Array.from(firstRow.children).forEach(cell => {
+      const w = cell.offsetWidth;
+      cell.style.width = w + 'px';
+      totalW += w;
     });
-    // Do NOT fix table total width — let it be auto so resizing a column
-    // shrinks/grows the table itself rather than redistributing to other columns
-    table.style.width = 'auto';
     table.style.tableLayout = 'fixed';
+    table.style.width = totalW + 'px';
   }
 
   function _onHandleMousedown(e) {
@@ -6295,7 +6291,9 @@ function draftDeleteTableCol() {
     if (!table) return;
     _fixTableLayout(table);
     const colIdx = Array.from(cell.parentNode.children).indexOf(cell);
-    _rz = { startX: e.clientX, startW: cell.offsetWidth, cell, colIdx, table };
+    const startW = cell.offsetWidth;
+    const startTableW = parseFloat(table.style.width) || table.offsetWidth;
+    _rz = { startX: e.clientX, startW, lastW: startW, startTableW, colIdx, table };
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   }
@@ -6304,11 +6302,16 @@ function draftDeleteTableCol() {
     if (!_rz) return;
     const dx = e.clientX - _rz.startX;
     const newW = Math.max(30, _rz.startW + dx);
-    // Apply to all cells in this column
+    const delta = newW - _rz.lastW;
+    _rz.lastW = newW;
+    // Update target column in all rows
     _rz.table.querySelectorAll('tr').forEach(row => {
       const c = row.children[_rz.colIdx];
       if (c) c.style.width = newW + 'px';
     });
+    // Shrink/grow table total width by same delta so other columns stay unchanged
+    const curTableW = parseFloat(_rz.table.style.width) || _rz.table.offsetWidth;
+    _rz.table.style.width = Math.max(80, curTableW + delta) + 'px';
   });
 
   document.addEventListener('mouseup', () => {
