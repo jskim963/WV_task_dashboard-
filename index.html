@@ -1280,6 +1280,7 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
         <div>
           <label class="block text-xs font-semibold text-secondary mb-1.5">우선순위</label>
           <select id="task-priority" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="긴급">🚨 긴급</option>
             <option value="높음">🔴 높음</option>
             <option value="보통" selected>🟡 보통</option>
             <option value="낮음">🟢 낮음</option>
@@ -2112,9 +2113,9 @@ Pages.dashboard = (() => {
             <td class="px-4 py-3 text-secondary text-xs whitespace-nowrap">${start + i + 1}</td>
             <td class="px-4 py-3" style="min-width:220px">
               <div class="flex items-center gap-2">
-                <div class="priority-bar h-8 flex-shrink-0 ${t.priority==='높음'?'bg-red-400':t.priority==='낮음'?'bg-green-400':'bg-yellow-400'}"></div>
+                <div class="priority-bar h-8 flex-shrink-0 ${t.priority==='긴급'?'bg-red-600':t.priority==='높음'?'bg-red-400':t.priority==='낮음'?'bg-green-400':'bg-yellow-400'}"></div>
                 ${t.status==='지연' ? '<span class="material-symbols-outlined text-orange-500 flex-shrink-0" style="font-size:16px" title="지연">schedule</span>' : ''}
-                ${t.priority==='높음' && t.status!=='완료' && t.status!=='지연' ? '<span class="material-symbols-outlined text-red-500 flex-shrink-0" style="font-size:16px" title="긴급">warning</span>' : ''}
+                ${(t.priority==='긴급'||t.priority==='높음') && t.status!=='완료' && t.status!=='지연' ? '<span class="material-symbols-outlined text-red-500 flex-shrink-0" style="font-size:16px" title="긴급">warning</span>' : ''}
                 ${(() => { const proj = t.projectId ? (DB.projects||[]).find(p=>p.id===t.projectId) : null; return proj ? `<div class="flex flex-col"><span class="text-xs text-primary/70 font-semibold leading-none mb-0.5">${proj.title}</span><span class="font-medium text-on-surface text-sm whitespace-nowrap">${t.name}</span></div>` : `<span class="font-medium text-on-surface text-sm whitespace-nowrap">${t.name}</span>`; })()}${isNew(t)?'<span class="new-badge">NEW</span>':''}
               </div>
             </td>
@@ -2124,7 +2125,7 @@ Pages.dashboard = (() => {
               </div>
             </td>
             <td class="px-4 py-3">
-              <span class="text-xs px-2 py-0.5 rounded-full font-medium ${t.priority==='높음'?'badge-high':t.priority==='낮음'?'badge-low':'badge-normal'}">${t.priority}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full font-medium ${t.priority==='긴급'?'badge-urgent':t.priority==='높음'?'badge-high':t.priority==='낮음'?'badge-low':'badge-normal'}">${t.priority}</span>
             </td>
             <td class="px-4 py-3 text-sm ${isOverdue?'text-red-500 font-medium':''}">${t.deadline || '-'}</td>
             <td class="px-4 py-3">
@@ -2225,6 +2226,7 @@ Pages.dashboard = (() => {
 
   const PRIORITY_OPTIONS = [
     {value:'', label:'우선순위 (전체)'},
+    {value:'긴급', label:'🚨 긴급'},
     {value:'높음', label:'🔴 높음'},
     {value:'보통', label:'🟡 보통'},
     {value:'낮음', label:'🟢 낮음'},
@@ -2343,7 +2345,14 @@ Pages.dashboard = (() => {
     } else {
       const dup = DB.tasks.find(t => t.name === name && t.status !== '완료' && getAssigneeIds(t).some(id => assigneeIds.includes(id)));
       if (dup) { if (!confirm('동일한 담당자에게 같은 업무명이 이미 존재합니다.\n그래도 추가하겠습니까?')) return; }
-      DB.tasks.push({id: Date.now(), name, assigneeIds, centerId, projectId, status, priority, deadline, desc, comments:[], createdAt: Date.now(), updatedAt: Date.now()});
+      const newTaskId = Date.now();
+      DB.tasks.push({id: newTaskId, name, assigneeIds, centerId, projectId, status, priority, deadline, desc, comments:[], createdAt: newTaskId, updatedAt: newTaskId});
+      if ((priority === '긴급' || priority === '높음') && deadline) {
+        const prefix = priority === '긴급' ? '[긴급]' : '[중요]';
+        if (!DB.events) DB.events = [];
+        DB.events.push({id: newTaskId + 1, title: `${prefix} ${name}`, date: deadline, dateEnd: null, personId: 0, personIds: [], type: '업무보고', memo: '', createdAt: newTaskId + 1});
+        saveDB();
+      }
       showToast('업무가 추가되었습니다');
     }
     saveDB();
@@ -5908,6 +5917,12 @@ Pages.projects = (() => {
       DB.projects.push(newProject);
       db.collection('projects').doc(String(id)).set(newProject)
         .catch(e => console.error(e));
+      if (projectData.endDate) {
+        if (!DB.events) DB.events = [];
+        const evId = id + 2;
+        DB.events.push({id: evId, title: `[프로젝트] ${title}`, date: projectData.endDate, dateEnd: null, personId: 0, personIds: [], type: '업무보고', memo: '', createdAt: evId});
+        saveDB();
+      }
       showToast('프로젝트가 추가되었습니다');
     }
     document.getElementById('modal-add-project').classList.add('hidden');
