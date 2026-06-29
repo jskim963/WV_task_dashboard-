@@ -298,6 +298,9 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       <div class="nav-item" onclick="showPage('centers')" id="nav-centers">
         <span class="material-symbols-outlined">map</span> 센터별 현황
       </div>
+      <div class="nav-item" onclick="showPage('projects')" id="nav-projects">
+        <span class="material-symbols-outlined">folder_special</span> 프로젝트
+      </div>
       <div class="nav-item" onclick="showPage('library')" id="nav-library">
         <span class="material-symbols-outlined">folder_open</span> 자료실
       </div>
@@ -656,6 +659,7 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
     </div>
 
     <!-- ====== PAGE: LIBRARY ====== -->
+    <div id="page-projects" class="page"></div>
     <div id="page-library" class="page">
       <!-- 헤더 -->
       <div class="flex items-center justify-between mb-3 flex-wrap gap-3">
@@ -1287,7 +1291,7 @@ db.enablePersistence().catch(err => {
   }
 });
 
-const FS_COLLS = ['tasks', 'members', 'centers', 'events', 'notices', 'users', 'memos', 'library'];
+const FS_COLLS = ['tasks', 'members', 'centers', 'events', 'notices', 'users', 'memos', 'library', 'projects'];
 
 // ============================================================
 //  DATA STORE (localStorage persistence)
@@ -1302,6 +1306,7 @@ let DB = {
   todos: [],
   memos: [],
   library: [],
+  projects: [],
   myProfile: { name: '나', email: '', rank: '' },
 };
 let currentUser = null;
