@@ -659,7 +659,37 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
     </div>
 
     <!-- ====== PAGE: LIBRARY ====== -->
-    <div id="page-projects" class="page"></div>
+    <!-- Projects Page -->
+    <div id="page-projects" class="page">
+      <div class="p-6">
+        <!-- 헤더 -->
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">프로젝트</h1>
+            <p class="text-sm text-secondary mt-0.5">프로젝트별 진척률 및 업무 현황 관리</p>
+          </div>
+          <button onclick="openAddProjectModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700">
+            <span class="material-symbols-outlined text-base">add</span> 프로젝트 추가
+          </button>
+        </div>
+        <!-- 프로젝트 레이아웃: 카드 그리드(기본) / 마스터-디테일(선택 시) -->
+        <div id="projects-layout" class="flex gap-6">
+          <!-- 카드 목록 -->
+          <div id="projects-card-area" class="w-full">
+            <div id="projects-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            <div id="projects-empty" class="hidden flex flex-col items-center justify-center py-20 text-secondary">
+              <span class="material-symbols-outlined text-5xl mb-3 opacity-40">folder_special</span>
+              <p class="text-sm">아직 프로젝트가 없습니다</p>
+              <button onclick="openAddProjectModal()" class="mt-4 text-primary text-sm hover:underline">+ 첫 프로젝트 만들기</button>
+            </div>
+          </div>
+          <!-- 상세 패널 (기본: hidden) -->
+          <div id="projects-detail-panel" class="hidden w-2/3 flex-shrink-0 bg-surface rounded-2xl border border-outline-variant overflow-y-auto" style="max-height:calc(100vh - 180px)">
+            <div id="projects-detail-content" class="p-6"></div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div id="page-library" class="page">
       <!-- 헤더 -->
       <div class="flex items-center justify-between mb-3 flex-wrap gap-3">
