@@ -6268,59 +6268,85 @@ function draftDeleteTableCol() {
 
 // ---- Table column resize ----
 (function() {
-  let _resizing = false, _startX = 0, _startW = 0, _targetCell = null;
+  let _rz = null; // { startX, startW, cell, colIdx, table }
 
-  function _attachTableResize(editor) {
-    editor.addEventListener('mousemove', e => {
-      if (_resizing) return;
-      const cell = e.target.closest('td, th');
-      if (!cell) { editor.style.cursor = ''; return; }
-      const rect = cell.getBoundingClientRect();
-      const nearRight = e.clientX > rect.right - 6 && e.clientX < rect.right + 6;
-      editor.style.cursor = nearRight ? 'col-resize' : '';
+  function _fixTableLayout(table) {
+    // Snapshot all current widths and lock layout
+    table.querySelectorAll('tr:first-child td, tr:first-child th').forEach(cell => {
+      cell.style.width = cell.offsetWidth + 'px';
     });
+    table.style.tableLayout = 'fixed';
+    table.style.width = table.offsetWidth + 'px';
+  }
 
-    editor.addEventListener('mousedown', e => {
-      const cell = e.target.closest('td, th');
-      if (!cell) return;
-      const rect = cell.getBoundingClientRect();
-      const nearRight = e.clientX > rect.right - 6 && e.clientX < rect.right + 6;
-      if (!nearRight) return;
-      e.preventDefault();
-      _resizing = true;
-      _startX = e.clientX;
-      _startW = cell.offsetWidth;
-      _targetCell = cell;
-      // Fix widths of all cells in the same column so table doesn't reflow other cols
-      const table = cell.closest('table');
-      if (table) {
-        const colIdx = Array.from(cell.parentNode.children).indexOf(cell);
-        table.querySelectorAll('tr').forEach(row => {
-          const c = row.children[colIdx];
-          if (c) c.style.width = c.offsetWidth + 'px';
-        });
-        table.style.width = table.offsetWidth + 'px';
-        table.style.tableLayout = 'fixed';
-      }
-    });
+  function _onHandleMousedown(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const handle = e.currentTarget;
+    const cell = handle.parentElement;
+    if (!cell) return;
+    const table = cell.closest('table');
+    if (!table) return;
+    _fixTableLayout(table);
+    const colIdx = Array.from(cell.parentNode.children).indexOf(cell);
+    _rz = { startX: e.clientX, startW: cell.offsetWidth, cell, colIdx, table };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }
 
-    document.addEventListener('mousemove', e => {
-      if (!_resizing || !_targetCell) return;
-      const dx = e.clientX - _startX;
-      const newW = Math.max(40, _startW + dx);
-      _targetCell.style.width = newW + 'px';
+  document.addEventListener('mousemove', e => {
+    if (!_rz) return;
+    const dx = e.clientX - _rz.startX;
+    const newW = Math.max(30, _rz.startW + dx);
+    // Apply to all cells in this column
+    _rz.table.querySelectorAll('tr').forEach(row => {
+      const c = row.children[_rz.colIdx];
+      if (c) c.style.width = newW + 'px';
     });
+  });
 
-    document.addEventListener('mouseup', () => {
-      if (_resizing) { _resizing = false; _targetCell = null; }
+  document.addEventListener('mouseup', () => {
+    if (_rz) {
+      _rz = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
+
+  function _injectHandles(table) {
+    table.querySelectorAll('td, th').forEach(cell => {
+      // Remove existing handles to avoid duplicates
+      cell.querySelectorAll('.col-resize-handle').forEach(h => h.remove());
+      if (getComputedStyle(cell).position === 'static') cell.style.position = 'relative';
+      const h = document.createElement('div');
+      h.className = 'col-resize-handle';
+      h.contentEditable = 'false';
+      h.style.cssText = 'position:absolute;top:0;right:-3px;width:6px;height:100%;min-height:20px;cursor:col-resize;z-index:5;background:transparent;';
+      h.addEventListener('mousedown', _onHandleMousedown);
+      cell.appendChild(h);
     });
+  }
+
+  function _watchEditor(editor) {
+    // Inject handles into any tables already present
+    editor.querySelectorAll('table').forEach(_injectHandles);
+    // Watch for new tables added via paste or insert
+    const observer = new MutationObserver(() => {
+      editor.querySelectorAll('table').forEach(t => {
+        if (!t.dataset.rzWatched) {
+          t.dataset.rzWatched = '1';
+          _injectHandles(t);
+        }
+      });
+    });
+    observer.observe(editor, { childList: true, subtree: true });
   }
 
   document.addEventListener('DOMContentLoaded', () => {
     const editor = document.getElementById('draft-content');
-    if (editor) _attachTableResize(editor);
+    if (editor) _watchEditor(editor);
     const revision = document.getElementById('revision-content');
-    if (revision) _attachTableResize(revision);
+    if (revision) _watchEditor(revision);
   });
 })();
 
