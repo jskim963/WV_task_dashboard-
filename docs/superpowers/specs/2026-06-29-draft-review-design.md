@@ -7,7 +7,7 @@
 
 ## 1. 개요
 
-공식 결재 전 사전 검토 공간. 누구나 기안서를 작성·업로드하고, 결재라인 검토자들이 인라인 코멘트와 상태 표시로 피드백을 남긴다.
+공식 결재 전 사전 검토 공간. 누구나 기안서를 작성·업로드하고, 검토자들이 인라인 코멘트와 자유 코멘트로 피드백을 남기거나 직접 첨삭본을 작성할 수 있다. 결재라인은 순차 승인 없이 참조 표시 전용이다.
 
 ---
 
@@ -20,29 +20,44 @@
   id: number,                // Date.now()
   title: string,
   type: 'free' | 'template', // 자유형식 or 양식
-  templateId: number | null, // 양식 사용 시 ID
-  content: string,           // 본문 (자유형식: 텍스트 / 양식: JSON.stringify({field:value}))
-  attachments: [{ name: string, url: string, mimeType: string }],
+  templateId: number | null,
   status: '검토중' | '검토완료' | '반려',
   reviewLine: [
     {
       id: number,
-      name: string,           // 표시 이름 (수기 or 멤버명)
-      memberId: number | null, // DB 멤버면 ID, 수기 입력이면 null
+      name: string,           // 표시 이름 (멤버명 or 수기)
+      memberId: number | null, // DB 멤버면 ID, 수기면 null
       role: string,           // 직책 자유입력 (팀장, 부문장, 본부장, 대표이사 등)
-      status: '대기' | '검토완료' | '수정요청',
-      comment: string,        // 전체 코멘트
-      reviewedAt: number | null,
     }
   ],
-  inlineComments: [
+  versions: [
+    {
+      id: number,             // Date.now()
+      authorName: string,     // 작성자 이름
+      authorUsername: string, // currentUser.username
+      label: string,          // 예: "기안자 원본", "이파트장 첨삭"
+      content: string,        // 본문 전체 텍스트 (자유형식) or JSON.stringify({field:value}) (양식)
+      attachments: [{ name: string, url: string, mimeType: string }],
+      inlineComments: [
+        {
+          id: number,
+          authorName: string,
+          authorUsername: string,
+          lineIndex: number,  // 0-based 줄 번호
+          text: string,
+          resolved: boolean,
+          createdAt: number,
+        }
+      ],
+      createdAt: number,
+    }
+  ],
+  comments: [
     {
       id: number,
-      reviewerId: number,     // reviewLine[].id
-      reviewerName: string,
-      lineIndex: number,      // 본문 줄 번호 (0-based)
+      authorName: string,
+      authorUsername: string,
       text: string,
-      resolved: boolean,
       createdAt: number,
     }
   ],
@@ -52,15 +67,16 @@
 }
 ```
 
+- `versions[0]`이 기안자 원본. 이후 검토자가 "내 첨삭본 작성" 시 새 버전 push.
+- 각 버전은 독립적인 `content` + `inlineComments`를 가진다.
+
 ### `draft_templates` 컬렉션 (관리자 전용)
 
 ```js
 {
   id: number,
-  name: string,               // 양식명 (예: "품의서", "업무기안서")
-  fields: [
-    { key: string, label: string, type: 'text' | 'textarea' | 'date' }
-  ],
+  name: string,
+  fields: [{ key: string, label: string, type: 'text' | 'textarea' | 'date' }],
   createdBy: string,
   createdAt: number,
 }
@@ -73,40 +89,51 @@
 ### 3-1. page-drafts (목록)
 
 - 상태 필터 칩: 전체 / 검토중 / 검토완료 / 반려
-- 카드 그리드 (2열): 제목, 양식명or자유형식, 기안자, 날짜, 결재라인 아바타+상태 아이콘
+- 카드 2열 그리드: 제목, 양식명or자유형식, 기안자, 날짜, 결재라인 아바타 표시
 - 우상단: "+ 새 기안서" 버튼
 
 ### 3-2. 상세 뷰 (전체화면 오버레이)
 
-좌측 2/3 — **본문 영역**
-- 제목, 작성자, 날짜, 첨부파일 목록
-- 본문을 줄 단위로 렌더 (`<div data-line-index="N">`)
-- 각 줄 우측에 말풍선 아이콘 (인라인 코멘트 있으면 색상 표시)
-- 말풍선 클릭 → 해당 줄 코멘트 입력/표시 패널 인라인 표시
+**상단 헤더**
+- 제목, 기안자, 날짜
+- 결재라인: 아바타+직책 순서 표시 (보기 전용, 상태 없음)
+- 수정/닫기 버튼
 
-우측 1/3 — **결재라인 패널**
-- 결재자 순서 목록 (이름, 직책, 상태 뱃지)
-- 각 결재자: 상태 변경 버튼 (검토완료 / 수정요청) + 코멘트 입력 (본인 or 관리자만)
-- 작성자·관리자에게 수정/삭제 버튼 표시
+**버전 탭 바** (헤더 아래)
+- 버전별 탭: `[기안자 아바타] 기안자 원본`, `[첨삭자 아바타] OOO 첨삭`, ...
+- "버전 비교" 버튼, "내 첨삭본 작성" 버튼
+
+**본문 영역** (좌 2/3)
+- 현재 선택된 버전의 content를 줄 단위로 렌더
+- 첨삭본 뷰 시 diff 표시: 삭제 줄(빨강 취소선), 추가 줄(초록 배경)
+- 각 줄 우측 말풍선 아이콘: 해당 버전의 인라인 코멘트 표시/입력
+
+**검토 코멘트 패널** (우 1/3)
+- 기안서 전체에 대한 자유 코멘트 목록 (전 버전 공통)
+- 누구나 등록 가능, 작성자/관리자만 삭제
 
 ### 3-3. 기안서 작성/수정 모달
 
-1. 양식 선택: 자유형식 / 관리자 등록 양식 목록
+1. 양식 선택: 자유형식 / 관리자 등록 양식
 2. 제목 입력
-3. 본문 작성
-   - 자유형식: `<textarea>`
-   - 양식: 필드별 입력창 자동 생성
+3. 본문 작성 (자유형식: textarea / 양식: 필드별 입력창)
 4. 결재라인 구성
    - 팀원 선택 (체크박스 드롭박스) + 직책 입력
-   - 수기 추가: 이름 + 직책 텍스트 입력
-   - 순서 변경: 위/아래 버튼
-5. 파일 첨부 (Firebase Storage, 다중 가능)
+   - 수기 추가: 이름 + 직책
+   - 순서 위/아래 버튼
+5. 파일 첨부 (Firebase Storage, 다중)
 
-### 3-4. 양식 관리 (설정 탭 내 관리자 전용 섹션)
+### 3-4. 첨삭본 작성 모달
 
-- 양식 목록 테이블
-- 양식 추가: 이름 + 필드 동적 추가 (라벨, 타입)
-- 양식 수정/삭제
+- 원본 content를 초기값으로 채운 textarea (또는 양식 필드)
+- 레이블 자동 입력: `{작성자명} 첨삭`
+- 파일 첨부 가능
+- 저장 시 `draft.versions`에 새 항목 push
+
+### 3-5. 양식 관리 (설정 탭 내 관리자 전용)
+
+- 양식 목록, 추가/수정/삭제
+- 필드 구성: 라벨 + 타입(text/textarea/date) 동적 추가
 
 ---
 
@@ -116,16 +143,19 @@
 |------|-----------|
 | 기안서 작성 | 전체 멤버 |
 | 기안서 수정/삭제 | 작성자 또는 관리자 |
-| 검토 상태 변경 + 코멘트 | 결재라인에 포함된 멤버(memberId 일치) 또는 관리자 |
-| 인라인 코멘트 작성 | 결재라인 포함 멤버 또는 관리자 |
-| 인라인 코멘트 resolved | 작성자(기안자) 또는 관리자 |
+| 첨삭본 작성 | 전체 멤버 |
+| 본인 첨삭본 수정/삭제 | 해당 버전 작성자 또는 관리자 |
+| 인라인 코멘트 작성 | 전체 멤버 |
+| 인라인 코멘트 resolved | 해당 버전 기안자 또는 관리자 |
+| 전체 코멘트 작성 | 전체 멤버 |
+| 전체 코멘트 삭제 | 작성자 또는 관리자 |
 | 양식 관리 | 관리자(jungsoo.kim)만 |
 
 ---
 
 ## 5. 네비게이션
 
-사이드바에 `검토방` 항목 추가 (library 위):
+사이드바에 `검토방` 항목 추가 (projects 아래):
 ```html
 <div class="nav-item" onclick="showPage('drafts')" id="nav-drafts">
   <span class="material-symbols-outlined">rate_review</span> 검토방
@@ -138,4 +168,11 @@
 
 `Pages.drafts = (() => { ... })()` IIFE 패턴.
 
-전역 shims: `openAddDraftModal()`, `saveDraft()`, `openDraftDetail(id)`, `closeDraftDetail()`, `setReviewStatus(draftId, reviewerId, status)`, `submitReviewComment(draftId, reviewerId)`, `addInlineComment(draftId, lineIndex)`, `resolveInlineComment(draftId, commentId)`, `deleteInlineComment(draftId, commentId)`, `deleteDraft(id)`, `editDraft(id)`.
+전역 shims:
+- `openAddDraftModal()`, `saveDraft()`, `openDraftDetail(id)`, `closeDraftDetail()`
+- `deleteDraft(id)`, `editDraft(id)`
+- `selectDraftVersion(draftId, versionId)`
+- `openAddRevisionModal(draftId)`, `saveRevision(draftId)`
+- `addInlineComment(draftId, versionId, lineIndex)`, `resolveInlineComment(draftId, versionId, commentId)`, `deleteInlineComment(draftId, versionId, commentId)`
+- `addDraftComment(draftId)`, `deleteDraftComment(draftId, commentId)`
+- `toggleDraftReviewLine()`, `toggleDraftReviewMember(id)`, `addManualReviewer()`, `removeReviewer(idx)`, `moveReviewer(idx, dir)`
