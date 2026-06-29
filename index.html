@@ -4871,7 +4871,12 @@ Pages.projects = (() => {
   function deleteProject_fn(id) {
     if (!confirm('프로젝트를 삭제하겠습니까?\n연결된 업무의 프로젝트 연결은 해제됩니다.')) return;
     DB.projects = (DB.projects||[]).filter(p => p.id !== id);
-    DB.tasks.forEach(t => { if (t.projectId === id) t.projectId = null; });
+    DB.tasks.forEach(t => {
+      if (t.projectId === id) {
+        t.projectId = null;
+        db.collection('tasks').doc(String(t.id)).update({ projectId: null }).catch(e => console.error(e));
+      }
+    });
     db.collection('projects').doc(String(id)).delete().catch(e => console.error(e));
     if (selectedProjectId === id) selectedProjectId = null;
     showToast('프로젝트가 삭제되었습니다');
