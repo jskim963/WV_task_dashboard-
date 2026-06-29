@@ -1012,10 +1012,11 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
         <span class="material-symbols-outlined text-white text-base fill-icon">smart_toy</span>
         <div>
           <div class="text-white font-semibold text-sm">AI 어시스턴트</div>
-          <div class="text-blue-200 text-xs">온라인 · 무엇이든 물어보세요</div>
+          <div class="text-blue-200 text-xs" id="chat-status-label">온라인 · 무엇이든 물어보세요</div>
         </div>
       </div>
       <div class="flex gap-1">
+        <button onclick="setChatApiKey()" class="text-white hover:bg-blue-700 p-1 rounded" title="API 키 설정"><span class="material-symbols-outlined text-base">key</span></button>
         <button onclick="clearChat()" class="text-white hover:bg-blue-700 p-1 rounded" title="대화 초기화"><span class="material-symbols-outlined text-base">restart_alt</span></button>
         <button onclick="toggleChat()" class="text-white hover:bg-blue-700 p-1 rounded"><span class="material-symbols-outlined text-base">close</span></button>
       </div>
@@ -4125,20 +4126,46 @@ function resetData() {
 let chatOpen = false;
 let chatHistory = [];
 
+function getChatApiKey() { return localStorage.getItem('wvteam_claude_key') || ''; }
+
+function setChatApiKey() {
+  const cur = getChatApiKey();
+  const key = prompt('Anthropic API 키를 입력하세요 (sk-ant-...)\n현재 설정된 키: ' + (cur ? cur.slice(0,12)+'...' : '없음'), cur);
+  if (key === null) return;
+  if (key.trim()) {
+    localStorage.setItem('wvteam_claude_key', key.trim());
+    updateChatStatusLabel();
+    showToast('API 키가 저장되었습니다');
+  } else {
+    localStorage.removeItem('wvteam_claude_key');
+    updateChatStatusLabel();
+    showToast('API 키가 삭제되었습니다');
+  }
+}
+
+function updateChatStatusLabel() {
+  const el = document.getElementById('chat-status-label');
+  if (!el) return;
+  el.textContent = getChatApiKey() ? 'Claude AI 연결됨 · 무엇이든 물어보세요' : 'API 키 필요 · 🔑 키 버튼으로 설정';
+  el.className = getChatApiKey() ? 'text-blue-200 text-xs' : 'text-yellow-300 text-xs';
+}
+
 function toggleChat() {
   chatOpen = !chatOpen;
   const win = document.getElementById('chat-window');
   const btn = document.getElementById('chat-toggle-btn');
   win.classList.toggle('hidden', !chatOpen);
   btn.classList.toggle('hidden', chatOpen);
-  if (chatOpen && chatHistory.length === 0) {
-    initChat();
+  if (chatOpen) {
+    updateChatStatusLabel();
+    if (chatHistory.length === 0) initChat();
   }
 }
 
 function initChat() {
-  addAIMessage('안녕하세요! 👋 W&V팀 AI 어시스턴트입니다.\n현재 팀 데이터를 파악하고 있어요. 무엇이든 물어보세요!');
-  renderQuickChips(['팀원 현황', '지연 업무 현황', '긴급한 업무 목록', '센터 이슈 현황']);
+  const hasKey = !!getChatApiKey();
+  addAIMessage('안녕하세요! 👋 W&V팀 AI 어시스턴트입니다.\n팀 업무·센터·일정·프로젝트 등 모든 데이터를 바탕으로 답변드립니다.' + (hasKey ? '' : '\n\n⚠️ API 키가 설정되지 않았습니다. 우측 상단 🔑 버튼으로 Anthropic API 키를 입력해주세요.'));
+  renderQuickChips(['팀원 현황', '지연 업무 현황', '센터 특이사항', '가장 바쁜 사람은?']);
 }
 
 function renderQuickChips(chips) {
@@ -4154,78 +4181,129 @@ async function sendChat() {
   const input = document.getElementById('chat-input');
   const msg = input.value.trim();
   if (!msg) return;
+  const apiKey = getChatApiKey();
+  if (!apiKey) {
+    addAIMessage('⚠️ API 키가 설정되지 않았습니다.\n우측 상단 🔑 버튼을 클릭해 Anthropic API 키를 입력해주세요.');
+    input.value = '';
+    return;
+  }
   input.value = '';
   document.getElementById('quick-chips').innerHTML = '';
   addUserMessage(msg);
   const typingId = addTypingIndicator();
-
-  // Build context from current DB data
-  const context = buildContext();
-
   chatHistory.push({role:'user', content: msg});
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
       body: JSON.stringify({
-        model:'claude-sonnet-4-6',
-        max_tokens: 800,
-        system: `당신은 W&V팀의 내부 업무 관리 AI 어시스턴트입니다. 팀의 실제 데이터를 바탕으로 간결하고 정확하게 답변하세요. 항상 한국어로 답변하고, 친근하면서도 전문적인 어투를 사용하세요.
-
-현재 팀 데이터:
-${context}
-
-규칙:
-- 데이터에 없는 내용은 추측하지 마세요
-- 숫자와 이름은 정확하게 인용하세요  
-- 답변은 3-4문장 내외로 간결하게
-- 이모지를 적절히 활용해 가독성 높이기`,
-        messages: chatHistory.slice(-8)
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1500,
+        system: buildSystemPrompt(),
+        messages: chatHistory.slice(-12),
       })
     });
     const data = await res.json();
     removeTypingIndicator(typingId);
-    const reply = data.content?.[0]?.text || '죄송합니다. 잠시 후 다시 시도해주세요.';
+    if (data.error) throw new Error(data.error.message);
+    const reply = data.content?.[0]?.text || '죄송합니다, 잠시 후 다시 시도해주세요.';
     chatHistory.push({role:'assistant', content: reply});
     addAIMessage(reply);
-    renderQuickChips(['다른 질문하기', '업무 요약', '팀원 현황', '센터 이슈']);
+    renderQuickChips(['더 자세히', '개선 제안', '다른 질문', '전체 현황 요약']);
   } catch(e) {
     removeTypingIndicator(typingId);
-    // Fallback: local answer
-    const answer = localAnswer(msg);
-    chatHistory.push({role:'assistant', content: answer});
-    addAIMessage(answer);
-    renderQuickChips(['업무 현황', '팀원 상태', '센터 이슈', '지연 업무']);
+    addAIMessage('❌ 오류가 발생했습니다: ' + e.message + '\nAPI 키를 확인해주세요 (🔑 버튼).');
   }
 }
 
-function buildContext() {
+function buildSystemPrompt() {
   const today = formatDate(new Date());
-  const delayed = DB.tasks.filter(t => t.status === '지연');
-  const urgent = DB.tasks.filter(t => t.priority === '높음' && t.status !== '완료');
-  const inProgress = DB.tasks.filter(t => t.status === '진행중');
-  const todayEvents = DB.events.filter(e => e.date === today);
-  const todayOff = todayEvents.filter(e => e.type === '휴무');
-  const issueCenters = DB.centers.filter(c => c.status !== '정상');
 
-  const taskLoad = {};
-  DB.tasks.filter(t => t.status !== '완료').forEach(t => {
-    getAssigneeIds(t).forEach(id => { const m=DB.members.find(m=>m.id===id); if(m) taskLoad[m.name]=(taskLoad[m.name]||0)+1; });
-  });
-  const busiestPerson = Object.entries(taskLoad).sort((a,b)=>b[1]-a[1])[0];
+  // ── 업무 ──
+  const allTasks = DB.tasks || [];
+  const taskLines = allTasks.map(t => {
+    const names = getAssigneeIds(t).map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean).join('·') || '미배정';
+    const proj = t.projectId ? (DB.projects||[]).find(p=>p.id===t.projectId)?.title : null;
+    return `  - [${t.status}][${t.priority}] ${t.name} / 담당:${names} / 마감:${t.deadline||'미정'}${proj?` / 프로젝트:${proj}`:''}`;
+  }).join('\n');
 
-  return `
-팀원 수: ${DB.members.length}명
-전체 업무: ${DB.tasks.length}건 (완료: ${DB.tasks.filter(t=>t.status==='완료').length}, 진행중: ${inProgress.length}, 지연: ${delayed.length}, 대기: ${DB.tasks.filter(t=>t.status==='대기').length})
-긴급(높음 우선순위) 미완료: ${urgent.length}건
-지연 업무: ${delayed.map(t => { const names=getAssigneeIds(t).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean).join('·')||'미배정'; return `${t.name}(담당:${names})`; }).join(', ') || '없음'}
-오늘 휴무: ${todayOff.flatMap(e => getEventPersonIds(e).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean)).join(', ') || '없음'}
-오늘 일정: ${todayEvents.length}건
-가장 바쁜 담당자: ${busiestPerson ? `${busiestPerson[0]}(${busiestPerson[1]}건)` : '없음'}
-이슈 센터: ${issueCenters.length}개 (${issueCenters.map(c=>c.name).join(', ')||'없음'})
-전체 센터: ${DB.centers.length}개
-팀원 상태: ${DB.members.map(m=>`${m.name}(${m.status})`).join(', ')}`;
+  // ── 팀원 ──
+  const memberLines = (DB.members||[]).map(m => {
+    const load = allTasks.filter(t => t.status!=='완료' && getAssigneeIds(t).includes(m.id)).length;
+    const todayEvs = (DB.events||[]).filter(e => eventFallsOnDate(e,today) && getEventPersonIds(e).includes(m.id));
+    const todayEvStr = todayEvs.map(e=>e.type+':'+e.title).join(',') || '없음';
+    return `  - ${m.name}(${m.rank||''}) 상태:${m.status} 미완료업무:${load}건 오늘일정:${todayEvStr}`;
+  }).join('\n');
+
+  // ── 센터 ──
+  const centerLines = (DB.centers||[]).map(c => {
+    const unresolvedNotes = (c.operationNotes||[]).filter(n=>!n.resolved);
+    const noteStr = unresolvedNotes.length ? unresolvedNotes.map(n=>`[미해결특이사항:${n.text}]`).join(' ') : '특이사항없음';
+    if (c.type === 'W') {
+      const pct = c.occupancy?.total > 0 ? Math.round((c.occupancy.leased/c.occupancy.total)*100) : 0;
+      const tenants = (c.tenants||[]).map(t=>`${t.name}(임차료:${t.rent||'-'})`).join(', ');
+      return `  - [W] ${c.name} 상태:${c.status||'정상'} 가동률:${pct}% 임차사:${tenants||'없음'} ${noteStr}`;
+    } else {
+      return `  - [V] ${c.name} 상태:${c.status||'정상'} 고객사:${c.client||'-'} ${noteStr}`;
+    }
+  }).join('\n');
+
+  // ── 프로젝트 ──
+  const projectLines = (DB.projects||[]).map(p => {
+    const names = (p.assigneeIds||[]).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean).join('·');
+    const doneMs = (p.milestones||[]).filter(m=>m.done).length;
+    return `  - ${p.title} / 기간:${p.startDate||'?'}~${p.endDate||'?'} / 담당:${names||'-'} / 마일스톤:${doneMs}/${(p.milestones||[]).length}완료`;
+  }).join('\n') || '  (없음)';
+
+  // ── 오늘 일정 ──
+  const todayEvLines = (DB.events||[]).filter(e=>eventFallsOnDate(e,today)).map(e => {
+    const eNames = getEventPersonIds(e).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean).join('·');
+    return `  - [${e.type}] ${e.title} / ${eNames||'팀전체'}`;
+  }).join('\n') || '  (없음)';
+
+  // ── 업무부하 순위 ──
+  const loadRank = Object.entries(
+    allTasks.filter(t=>t.status!=='완료').reduce((acc,t) => {
+      getAssigneeIds(t).forEach(id => { const m=DB.members.find(m=>m.id===id); if(m) acc[m.name]=(acc[m.name]||0)+1; });
+      return acc;
+    }, {})
+  ).sort((a,b)=>b[1]-a[1]).map(([n,c])=>`${n}(${c}건)`).join(', ') || '없음';
+
+  return `당신은 W&V팀 내부 업무관리 시스템의 AI 어시스턴트입니다.
+아래의 실시간 팀 데이터를 완전히 숙지하고, 어떤 질문이든 데이터를 근거로 정확하고 통찰력 있게 답변하세요.
+단순 조회뿐 아니라 패턴 분석, 업무 배분 제안, 리스크 경고 등 능동적 인사이트를 제공하세요.
+항상 한국어로, 친근하면서도 전문적인 어투로 답변하세요. 이모지로 가독성을 높이세요.
+
+═══ 오늘 날짜: ${today} ═══
+
+【팀원 현황】
+${memberLines}
+
+【업무 전체 목록 (총 ${allTasks.length}건)】
+진행중:${allTasks.filter(t=>t.status==='진행중').length} / 대기:${allTasks.filter(t=>t.status==='대기').length} / 지연:${allTasks.filter(t=>t.status==='지연').length} / 완료:${allTasks.filter(t=>t.status==='완료').length}
+업무부하 순위: ${loadRank}
+${taskLines}
+
+【센터 현황 (총 ${(DB.centers||[]).length}개)】
+${centerLines}
+
+【프로젝트】
+${projectLines}
+
+【오늘(${today}) 일정】
+${todayEvLines}
+
+규칙:
+- 데이터에 없는 내용은 추측하지 말고 "데이터에 없음"이라고 말하세요
+- 센터 operationNotes의 미해결 특이사항은 반드시 이슈로 인식하세요
+- 업무 배분 제안 시 현재 부하량을 근거로 구체적으로 제시하세요
+- 수치는 정확하게 인용하고, 이름·센터명은 오기하지 마세요`;
 }
 
 function clearChat() {
@@ -4233,51 +4311,6 @@ function clearChat() {
   document.getElementById('chat-messages').innerHTML = '';
   document.getElementById('quick-chips').innerHTML = '';
   initChat();
-}
-
-function localAnswer(msg) {
-  const ctx = buildContext();
-  const today = formatDate(new Date());
-  const taskLoad = {};
-  DB.tasks.filter(t => t.status !== '완료').forEach(t => {
-    getAssigneeIds(t).forEach(id => { const m=DB.members.find(m=>m.id===id); if(m) taskLoad[m.name]=(taskLoad[m.name]||0)+1; });
-  });
-  const busiestPerson = Object.entries(taskLoad).sort((a,b)=>b[1]-a[1])[0];
-
-  if (msg.includes('바쁜') || msg.includes('담당자')) {
-    return busiestPerson ? `📊 현재 가장 바쁜 담당자는 **${busiestPerson[0]}** 님으로 미완료 업무가 **${busiestPerson[1]}건** 있습니다.` : '현재 미완료 업무가 없습니다.';
-  }
-  if (msg.includes('긴급') || msg.includes('높음')) {
-    const urgent = DB.tasks.filter(t => t.priority==='높음' && t.status!=='완료');
-    return `⚠️ 긴급(높음 우선순위) 미완료 업무는 **${urgent.length}건**입니다.\n${urgent.map(t=>`• ${t.name}`).join('\n')}`;
-  }
-  if (msg.includes('지연')) {
-    const delayed = DB.tasks.filter(t => t.status==='지연');
-    return delayed.length ? `🔴 지연 업무 **${delayed.length}건**:\n${delayed.map(t=>`• ${t.name} (마감: ${t.deadline||'미정'})`).join('\n')}` : '현재 지연 업무가 없습니다 ✅';
-  }
-  if (msg.includes('센터') || msg.includes('이슈')) {
-    const issues = DB.centers.filter(c => c.status !== '정상');
-    return issues.length ? `🏭 이슈 발생 센터 **${issues.length}개**:\n${issues.map(c=>`• ${c.name}: ${c.issue||c.status}`).join('\n')}` : '현재 모든 센터가 정상 운영 중입니다 ✅';
-  }
-  if (msg.includes('팀원') || msg.includes('상태') || msg.includes('현황')) {
-    const today = formatDate(new Date());
-    const total = DB.members.length;
-    const tripIds = DB.events.filter(e => eventFallsOnDate(e, today) && e.type === '출장').flatMap(e => getEventPersonIds(e));
-    const leaveIds = DB.events.filter(e => eventFallsOnDate(e, today) && e.type === '휴무').flatMap(e => getEventPersonIds(e));
-    const onTrip = [...new Set(tripIds)].filter(id => id !== 0).length;
-    const onLeave = [...new Set(leaveIds)].filter(id => id !== 0).length;
-    const current = Math.max(0, total - onTrip - onLeave);
-    const tripNames = [...new Set(tripIds)].filter(id=>id!==0).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean);
-    const leaveNames = [...new Set(leaveIds)].filter(id=>id!==0).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean);
-    return `👥 **팀원 현황 (오늘 기준)**\n• 총원: **${total}명**\n• 출장/외근: **${onTrip}명**${tripNames.length?` (${tripNames.join(', ')})`:''}\n• 휴무: **${onLeave}명**${leaveNames.length?` (${leaveNames.join(', ')})`:''}\n• 현재 근무: **${current}명**`;
-  }
-  if (msg.includes('휴무') || msg.includes('휴가') || msg.includes('오늘')) {
-    const todayEvents = DB.events.filter(e => e.date === today);
-    const off = todayEvents.filter(e => e.type==='휴무');
-    const names = off.flatMap(e => getEventPersonIds(e).map(id=>DB.members.find(m=>m.id===id)?.name).filter(Boolean));
-    return names.length ? `📅 오늘 휴무자: **${names.join(', ')}** (총 ${names.length}명)` : '오늘 휴무자가 없습니다.';
-  }
-  return `현재 팀 현황을 간략히 알려드릴게요:\n• 전체 업무: ${DB.tasks.length}건\n• 진행중: ${DB.tasks.filter(t=>t.status==='진행중').length}건, 지연: ${DB.tasks.filter(t=>t.status==='지연').length}건\n• 팀원: ${DB.members.length}명\n• 관리 센터: ${DB.centers.length}개`;
 }
 
 function addUserMessage(text) {
