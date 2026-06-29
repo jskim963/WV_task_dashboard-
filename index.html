@@ -3354,23 +3354,52 @@ Pages.centers = (() => {
       const leased = c.occupancy?.leased ?? 0;
       const total = c.occupancy?.total ?? 0;
       const pct = total > 0 ? Math.round(leased / total * 100) : 0;
+      const tenants = c.tenants || [];
+      const tenantCount = tenants.length;
+      const rentsWithVal = tenants.filter(t => t.rent && Number(t.rent) > 0);
+      const avgRent = rentsWithVal.length > 0 ? Math.round(rentsWithVal.reduce((s,t) => s + Number(t.rent), 0) / rentsWithVal.length) : null;
+      const favorsWithRF = tenants.filter(t => t.favor?.rf != null && t.favor.rf !== '');
+      const avgRF = favorsWithRF.length > 0 ? (favorsWithRF.reduce((s,t) => s + Number(t.favor.rf||0), 0) / favorsWithRF.length).toFixed(1) : null;
+      const favorsWithFO = tenants.filter(t => t.favor?.fitout != null && t.favor.fitout !== '');
+      const avgFO = favorsWithFO.length > 0 ? (favorsWithFO.reduce((s,t) => s + Number(t.favor.fitout||0), 0) / favorsWithFO.length).toFixed(1) : null;
+      const favorsWithTI = tenants.filter(t => t.favor?.ti != null && Number(t.favor.ti) > 0);
+      const avgTI = favorsWithTI.length > 0 ? Math.round(favorsWithTI.reduce((s,t) => s + Number(t.favor.ti||0), 0) / favorsWithTI.length) : null;
       const occupancyHtml = `
       <div class="mb-6">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-bold text-sm">가동률</h3>
           ${edit ? `<button onclick="openEditOccupancyModal(${c.id})" class="text-xs text-primary font-semibold hover:underline">수정</button>` : ''}
         </div>
-        <div class="flex items-center gap-6">
-          <div class="relative w-24 h-24 flex-shrink-0">
-            <svg viewBox="0 0 36 36" class="w-24 h-24 -rotate-90">
-              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3"/>
-              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#2563eb" stroke-width="3" stroke-dasharray="${pct} ${100-pct}" stroke-linecap="round"/>
-            </svg>
-            <div class="absolute inset-0 flex items-center justify-center text-lg font-bold text-on-surface">${pct}%</div>
+        <div class="flex items-start gap-6 flex-wrap">
+          <div class="flex items-center gap-4">
+            <div class="relative w-24 h-24 flex-shrink-0">
+              <svg viewBox="0 0 36 36" class="w-24 h-24 -rotate-90">
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3"/>
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="#2563eb" stroke-width="3" stroke-dasharray="${pct} ${100-pct}" stroke-linecap="round"/>
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center text-lg font-bold text-on-surface">${pct}%</div>
+            </div>
+            <div class="space-y-1">
+              <div class="text-sm"><span class="text-secondary">임차 평수</span> <span class="font-semibold ml-2">${leased}평</span></div>
+              <div class="text-sm"><span class="text-secondary">전체 평수</span> <span class="font-semibold ml-2">${total}평</span></div>
+            </div>
           </div>
-          <div class="space-y-1">
-            <div class="text-sm"><span class="text-secondary">임차 평수</span> <span class="font-semibold ml-2">${leased}평</span></div>
-            <div class="text-sm"><span class="text-secondary">전체 평수</span> <span class="font-semibold ml-2">${total}평</span></div>
+          <div class="flex gap-3 flex-wrap">
+            <div class="bg-surface-container-low rounded-xl px-4 py-3 min-w-[90px] text-center">
+              <div class="text-xs text-secondary mb-1">총 임차사</div>
+              <div class="text-xl font-bold text-on-surface">${tenantCount}<span class="text-sm font-medium text-secondary ml-0.5">개사</span></div>
+            </div>
+            <div class="bg-surface-container-low rounded-xl px-4 py-3 min-w-[110px] text-center">
+              <div class="text-xs text-secondary mb-1">평균 임차료</div>
+              <div class="text-base font-bold text-on-surface">${avgRent != null ? Number(avgRent).toLocaleString()+'<span class="text-xs font-medium text-secondary ml-0.5">원</span>' : '<span class="text-sm text-secondary">-</span>'}</div>
+            </div>
+            <div class="bg-surface-container-low rounded-xl px-4 py-3 min-w-[140px] text-center">
+              <div class="text-xs text-secondary mb-1">평균 Favor</div>
+              <div class="text-xs font-semibold text-on-surface mt-1 space-y-0.5">
+                <div>RF <span class="font-bold text-sm">${avgRF ?? '-'}</span>개 &nbsp; FO <span class="font-bold text-sm">${avgFO ?? '-'}</span>개</div>
+                <div>TI <span class="font-bold text-sm">${avgTI != null ? Number(avgTI).toLocaleString() : '-'}</span><span class="text-secondary">원</span></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>`;
