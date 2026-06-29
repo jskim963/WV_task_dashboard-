@@ -218,10 +218,11 @@ tailwind.config = {
   #notif-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.2); z-index:390; display:none; }
 
   /* Weekly grid */
-  .wk-table { border-collapse:collapse; width:100%; min-width:700px; }
-  .wk-table th, .wk-table td { border:1px solid #e2e8f0; padding:6px 8px; vertical-align:top; }
+  .wk-table { border-collapse:collapse; width:100%; min-width:700px; table-layout:fixed; }
+  .wk-table th, .wk-table td { border:1px solid #e2e8f0; padding:6px 8px; vertical-align:top; overflow:hidden; }
   .wk-table th { background:#f8fafc; font-size:11px; text-align:center; font-weight:600; color:#505f76; }
-  .wk-cell { height:56px; max-height:56px; overflow:hidden; vertical-align:top; }
+  .wk-table th:first-child, .wk-table td:first-child { width:90px; }
+  .wk-cell { height:56px; overflow:hidden; vertical-align:top; }
   .wk-event { font-size:11px; padding:2px 6px; border-radius:4px; margin-bottom:2px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; max-width:100%; }
   .wk-today { background:#eff6ff !important; }
   @media (max-width: 1023px) {
@@ -4375,7 +4376,7 @@ Pages.weekly = (() => {
       ${days.map((d,i) => {
         const ds = formatDate(d); const isToday = ds === todayStr;
         const isSat = i===5; const isSun = i===6;
-        return `<th class="px-2 py-2 ${isToday?'wk-today':''}" style="min-width:110px">
+        return `<th class="px-2 py-2 ${isToday?'wk-today':''}"
           <div class="text-xs font-semibold ${isSun?'text-red-500':isSat?'text-blue-500':isToday?'text-primary':''}">${dayNames[i]}</div>
           <div class="text-xs font-normal text-secondary">${d.getMonth()+1}/${d.getDate()}</div>
         </th>`;
