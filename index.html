@@ -48,6 +48,11 @@ tailwind.config = {
   h1, h2, h3 { font-family: 'Hanken Grotesk', sans-serif; }
   .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
   .draft-type-btn.active-type { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+  .draft-content-html table { border-collapse: collapse; width: 100%; margin: 0.5rem 0; }
+  .draft-content-html th, .draft-content-html td { border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; font-size: 0.8rem; }
+  .draft-content-html th { background: #f3f4f6; font-weight: 600; }
+  .draft-content-html p { margin: 0.3rem 0; }
+  .draft-content-html [contenteditable]:empty:before { content: attr(data-placeholder); color: #9ca3af; }
   .fill-icon { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -983,7 +988,7 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       <!-- 본문 (자유형식) -->
       <div id="draft-free-content-wrap">
         <label class="block text-xs font-semibold text-secondary mb-1.5">본문</label>
-        <textarea id="draft-content" rows="8" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none" placeholder="내용을 입력하세요..."></textarea>
+        <div id="draft-content" contenteditable="true" class="draft-content-html w-full border border-outline-variant rounded-lg px-3 py-2 text-sm min-h-[160px] focus:outline-none focus:border-primary" data-placeholder="내용을 입력하세요..."></div>
       </div>
       <!-- 본문 (양식 필드) -->
       <div id="draft-template-fields-wrap" class="hidden space-y-3"></div>
@@ -1081,7 +1086,7 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       </div>
       <div id="revision-content-wrap">
         <label class="block text-xs font-semibold text-secondary mb-1.5">본문 (원본을 수정하세요)</label>
-        <textarea id="revision-content" rows="12" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none font-mono text-xs"></textarea>
+        <div id="revision-content" contenteditable="true" class="draft-content-html w-full border border-outline-variant rounded-lg px-3 py-2 text-sm min-h-[200px] focus:outline-none focus:border-primary"></div>
       </div>
       <div id="revision-template-fields-wrap" class="hidden space-y-3"></div>
       <div>
@@ -5529,9 +5534,7 @@ Pages.drafts = (() => {
     if (d.type === 'template' && d.templateId) {
       html += renderTemplateContent(version.content, d.templateId);
     } else {
-      html += `<div class="border border-outline-variant rounded-xl overflow-hidden mb-4">
-        ${renderContentLines(version, d.id, isRevision, isRevision ? origVersion : null)}
-      </div>`;
+      html += `<div class="border border-outline-variant rounded-xl overflow-hidden mb-4 p-3 text-sm draft-content-html">${version.content || ''}</div>`;
     }
 
     if ((version.attachments||[]).length) {
@@ -5707,7 +5710,7 @@ Pages.drafts = (() => {
     _draftType = 'free';
     document.getElementById('editing-draft-id').value = '';
     document.getElementById('draft-title').value = '';
-    document.getElementById('draft-content').value = '';
+    document.getElementById('draft-content').innerHTML = '';
     document.getElementById('draft-template-fields-wrap').innerHTML = '';
     document.getElementById('draft-template-select').classList.add('hidden');
     document.getElementById('draft-template-select').value = '';
@@ -5734,7 +5737,7 @@ Pages.drafts = (() => {
     document.getElementById('draft-modal-title').textContent = '기안서 수정';
     selectDraftType_fn(d.type);
     if (d.type === 'free') {
-      document.getElementById('draft-content').value = v0.content || '';
+      document.getElementById('draft-content').innerHTML = v0.content || '';
     } else {
       renderDraftTemplateSelect();
       document.getElementById('draft-template-select').value = d.templateId || '';
@@ -5760,7 +5763,7 @@ Pages.drafts = (() => {
     let content = '';
     let templateId = null;
     if (_draftType === 'free') {
-      content = document.getElementById('draft-content').value;
+      content = document.getElementById('draft-content').innerHTML;
     } else {
       templateId = parseInt(document.getElementById('draft-template-select').value) || null;
       const tpl = (DB.draft_templates||[]).find(t => t.id === templateId);
@@ -5834,7 +5837,7 @@ Pages.drafts = (() => {
     document.getElementById('revision-content-wrap').classList.toggle('hidden', d.type !== 'free');
     document.getElementById('revision-template-fields-wrap').classList.toggle('hidden', d.type !== 'template');
     if (d.type === 'free') {
-      document.getElementById('revision-content').value = v0.content || '';
+      document.getElementById('revision-content').innerHTML = v0.content || '';
     } else {
       renderTemplateFieldsInModal(d.templateId, 'revision');
       try {
@@ -5858,7 +5861,7 @@ Pages.drafts = (() => {
     const attachments = await uploadDraftFiles('revision-file-input', _revisionAttachments);
     let content = '';
     if (d.type === 'free') {
-      content = document.getElementById('revision-content').value;
+      content = document.getElementById('revision-content').innerHTML;
     } else {
       const tpl = (DB.draft_templates||[]).find(t => t.id === d.templateId);
       if (tpl) {
