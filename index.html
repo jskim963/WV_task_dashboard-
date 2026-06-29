@@ -48,11 +48,12 @@ tailwind.config = {
   h1, h2, h3 { font-family: 'Hanken Grotesk', sans-serif; }
   .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
   .draft-type-btn.active-type { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
-  .draft-content-html table { border-collapse: collapse; width: 100%; margin: 0.5rem 0; }
-  .draft-content-html th, .draft-content-html td { border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; font-size: 0.8rem; }
+  .draft-content-html { overflow-x: auto; }
+  .draft-content-html table { border-collapse: collapse; min-width: 100%; margin: 0.5rem 0; }
+  .draft-content-html th, .draft-content-html td { border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; font-size: 0.8rem; white-space: nowrap; }
   .draft-content-html th { background: #f3f4f6; font-weight: 600; }
   .draft-content-html p { margin: 0.3rem 0; }
-  .draft-content-html [contenteditable]:empty:before { content: attr(data-placeholder); color: #9ca3af; }
+  .draft-content-html:empty:before { content: attr(data-placeholder); color: #9ca3af; }
   .fill-icon { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -960,7 +961,7 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
 <!-- ===== MODALS ===== -->
 <!-- Draft Add/Edit Modal -->
 <div id="modal-add-draft" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
-  <div class="modal-box" style="width:640px;max-height:90vh;overflow-y:auto;">
+  <div class="modal-box" style="width:min(92vw,860px);max-height:92vh;overflow-y:auto;">
     <div class="flex items-center justify-between mb-5">
       <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="draft-modal-title">새 기안서</h3>
       <button onclick="document.getElementById('modal-add-draft').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
