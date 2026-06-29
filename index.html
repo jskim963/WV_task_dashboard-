@@ -1220,6 +1220,9 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       <div class="flex justify-between text-xs"><span class="text-secondary">날짜</span><span class="font-medium text-on-surface" id="lib-file-modal-date"></span></div>
     </div>
     <div class="flex gap-3">
+      <button id="lib-file-modal-preview-btn" onclick="libOpenPdfViewer()" class="hidden flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-indigo-700">
+        <span class="material-symbols-outlined text-base">picture_as_pdf</span> 미리보기
+      </button>
       <a id="lib-file-modal-download" href="#" target="_blank" class="flex-1 flex items-center justify-center gap-2 bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700">
         <span class="material-symbols-outlined text-base">download</span> 다운로드
       </a>
@@ -1227,6 +1230,27 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
         <span class="material-symbols-outlined text-base">delete</span>
       </button>
     </div>
+  </div>
+</div>
+
+<!-- Library: PDF Viewer Modal -->
+<div id="modal-pdf-viewer" class="fixed inset-0 z-50 hidden flex-col" style="background:rgba(0,0,0,0.85)">
+  <div class="flex items-center justify-between px-5 py-3 bg-gray-900 flex-shrink-0">
+    <div class="flex items-center gap-3">
+      <span class="material-symbols-outlined text-red-400">picture_as_pdf</span>
+      <span id="pdf-viewer-title" class="text-white text-sm font-semibold truncate max-w-lg"></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <a id="pdf-viewer-download" href="#" target="_blank" class="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white border border-gray-600 rounded-lg px-3 py-1.5">
+        <span class="material-symbols-outlined text-sm">download</span> 다운로드
+      </a>
+      <button onclick="libClosePdfViewer()" class="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-gray-700">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+  </div>
+  <div class="flex-1 min-h-0 p-4">
+    <iframe id="pdf-viewer-frame" src="" class="w-full h-full rounded-lg bg-white border-0"></iframe>
   </div>
 </div>
 
@@ -4270,11 +4294,33 @@ Pages.library = (() => {
         previewImg.src = '';
         previewWrap.classList.add('hidden');
       }
+      // PDF 미리보기 버튼
+      const previewBtn = document.getElementById('lib-file-modal-preview-btn');
+      previewBtn.classList.toggle('hidden', file.mimeType !== 'application/pdf');
       // 삭제 버튼 권한
       const canDel = currentUser?.username === 'jungsoo.kim' || currentUser?.memberId === file.uploadedBy;
       document.getElementById('lib-file-modal-delete').style.display = canDel ? '' : 'none';
       document.getElementById('modal-lib-file').classList.remove('hidden');
     }).catch(e => console.error(e));
+  }
+
+  function openPdfViewer() {
+    if (!_currentFileForModal) return;
+    document.getElementById('pdf-viewer-title').textContent = _currentFileForModal.name;
+    document.getElementById('pdf-viewer-download').href = _currentFileForModal.downloadURL;
+    document.getElementById('pdf-viewer-frame').src = _currentFileForModal.downloadURL;
+    document.getElementById('modal-lib-file').classList.add('hidden');
+    const viewer = document.getElementById('modal-pdf-viewer');
+    viewer.classList.remove('hidden');
+    viewer.classList.add('flex');
+  }
+
+  function closePdfViewer() {
+    const viewer = document.getElementById('modal-pdf-viewer');
+    viewer.classList.add('hidden');
+    viewer.classList.remove('flex');
+    document.getElementById('pdf-viewer-frame').src = '';
+    document.getElementById('modal-lib-file').classList.remove('hidden');
   }
 
   function deleteFromModal() {
@@ -4301,6 +4347,8 @@ Pages.library = (() => {
     openFileModal,
     deleteFromModal,
     setSearch,
+    openPdfViewer,
+    closePdfViewer,
   };
 })();
 
@@ -4313,6 +4361,8 @@ function libDeleteFolder(id)           { Pages.library.deleteFolder(id); }
 function libDeleteFile(id, path)       { Pages.library.deleteFile(id, path); }
 function libUploadFiles(files)         { Pages.library.uploadFiles(files); }
 function libOpenFileModal(id)          { Pages.library.openFileModal(id); }
+function libOpenPdfViewer()            { Pages.library.openPdfViewer(); }
+function libClosePdfViewer()           { Pages.library.closePdfViewer(); }
 function libDeleteFromModal()          { Pages.library.deleteFromModal(); }
 function libSearch(q)                  { Pages.library.setSearch(q); }
 function libDragOver(e)                { e.preventDefault(); document.getElementById('lib-drop-zone').classList.add('drag-over'); }
