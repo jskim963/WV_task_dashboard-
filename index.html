@@ -2059,6 +2059,14 @@ document.addEventListener('click', function(e) {
   }
 });
 
+// 프로젝트 담당자 드롭다운 외부 클릭 시 닫기
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('project-assignee-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('project-assignee-panel')?.classList.add('hidden');
+  }
+});
+
 // ============================================================
 //  PAGE: CALENDAR
 // ============================================================
@@ -4727,21 +4735,248 @@ Pages.projects = (() => {
     </div>`;
   }
 
+  function renderProjectAssigneeList() {
+    const list = document.getElementById('project-assignee-list');
+    if (!list) return;
+    list.innerHTML = DB.members.map(m => `
+      <label class="assignee-cb-row">
+        <input type="checkbox" value="${m.id}" ${_selectedAssigneeIds.includes(m.id)?'checked':''}
+          onchange="toggleProjectAssignee(${m.id})">
+        <div class="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">${m.name[0]}</div>
+        <span>${m.name}</span>
+      </label>`).join('');
+    const btn = document.getElementById('project-assignee-label');
+    if (btn) btn.textContent = _selectedAssigneeIds.length
+      ? DB.members.filter(m => _selectedAssigneeIds.includes(m.id)).map(m=>m.name).join(', ')
+      : '담당자 선택';
+  }
+
+  function toggleProjectAssigneeDropdown_fn() {
+    const panel = document.getElementById('project-assignee-panel');
+    if (!panel) return;
+    const isHidden = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !isHidden);
+    if (isHidden) renderProjectAssigneeList();
+  }
+
+  function toggleProjectAssignee_fn(id) {
+    const idx = _selectedAssigneeIds.indexOf(id);
+    if (idx === -1) _selectedAssigneeIds.push(id);
+    else _selectedAssigneeIds.splice(idx, 1);
+    renderProjectAssigneeList();
+  }
+
+  function renderModalMilestones() {
+    const list = document.getElementById('project-milestone-list');
+    if (!list) return;
+    list.innerHTML = _modalMilestones.map((m, i) => `
+      <div class="flex items-center gap-2 text-xs text-secondary">
+        <span class="material-symbols-outlined text-sm">flag</span>
+        <span class="flex-1">${m.title}</span>
+        <span>${m.date}</span>
+        <button type="button" onclick="removeModalMilestone(${i})" class="text-red-300 hover:text-red-500">
+          <span class="material-symbols-outlined text-sm">close</span>
+        </button>
+      </div>`).join('');
+  }
+
+  function addModalMilestone_fn() {
+    const title = document.getElementById('new-milestone-title')?.value.trim();
+    const date = document.getElementById('new-milestone-date')?.value;
+    if (!title) { alert('마일스톤명을 입력하세요'); return; }
+    _modalMilestones.push({ id: Date.now(), title, date: date || '', done: false });
+    document.getElementById('new-milestone-title').value = '';
+    document.getElementById('new-milestone-date').value = '';
+    renderModalMilestones();
+  }
+
+  function removeModalMilestone_fn(idx) {
+    _modalMilestones.splice(idx, 1);
+    renderModalMilestones();
+  }
+
+  function openAddModal() {
+    _modalMilestones = [];
+    _selectedAssigneeIds = [];
+    document.getElementById('editing-project-id').value = '';
+    document.getElementById('project-title').value = '';
+    document.getElementById('project-summary').value = '';
+    document.getElementById('project-description').value = '';
+    document.getElementById('project-start-date').value = '';
+    document.getElementById('project-end-date').value = '';
+    document.getElementById('project-modal-title').textContent = '새 프로젝트';
+    document.getElementById('project-assignee-label').textContent = '담당자 선택';
+    document.getElementById('project-assignee-panel').classList.add('hidden');
+    renderModalMilestones();
+    document.getElementById('modal-add-project').classList.remove('hidden');
+  }
+
+  function editProject_fn(id) {
+    const p = (DB.projects||[]).find(p => p.id === id);
+    if (!p) return;
+    _modalMilestones = (p.milestones||[]).map(m => ({...m}));
+    _selectedAssigneeIds = [...(p.assigneeIds||[])];
+    document.getElementById('editing-project-id').value = id;
+    document.getElementById('project-title').value = p.title;
+    document.getElementById('project-summary').value = p.summary || '';
+    document.getElementById('project-description').value = p.description || '';
+    document.getElementById('project-start-date').value = p.startDate || '';
+    document.getElementById('project-end-date').value = p.endDate || '';
+    document.getElementById('project-modal-title').textContent = '프로젝트 수정';
+    renderModalMilestones();
+    renderProjectAssigneeList();
+    document.getElementById('project-assignee-panel').classList.add('hidden');
+    document.getElementById('modal-add-project').classList.remove('hidden');
+  }
+
+  function saveProject_fn() {
+    const title = document.getElementById('project-title').value.trim();
+    if (!title) { alert('프로젝트명을 입력하세요'); return; }
+    const editId = document.getElementById('editing-project-id').value;
+    const projectData = {
+      title,
+      summary: document.getElementById('project-summary').value.trim(),
+      description: document.getElementById('project-description').value.trim(),
+      startDate: document.getElementById('project-start-date').value,
+      endDate: document.getElementById('project-end-date').value,
+      assigneeIds: [..._selectedAssigneeIds],
+      milestones: _modalMilestones.map(m => ({...m})),
+    };
+    if (editId) {
+      const p = (DB.projects||[]).find(p => p.id === parseInt(editId));
+      if (!p) return;
+      Object.assign(p, projectData, { updatedAt: Date.now() });
+      db.collection('projects').doc(String(p.id)).update({...projectData, updatedAt: Date.now()})
+        .catch(e => console.error(e));
+      showToast('프로젝트가 수정되었습니다');
+    } else {
+      const id = Date.now();
+      const newProject = {
+        id,
+        ...projectData,
+        comments: [],
+        createdBy: currentUser?.username || '',
+        createdAt: id,
+      };
+      if (!DB.projects) DB.projects = [];
+      DB.projects.push(newProject);
+      db.collection('projects').doc(String(id)).set(newProject)
+        .catch(e => console.error(e));
+      showToast('프로젝트가 추가되었습니다');
+    }
+    document.getElementById('modal-add-project').classList.add('hidden');
+    render();
+  }
+
+  function deleteProject_fn(id) {
+    if (!confirm('프로젝트를 삭제하겠습니까?\n연결된 업무의 프로젝트 연결은 해제됩니다.')) return;
+    DB.projects = (DB.projects||[]).filter(p => p.id !== id);
+    DB.tasks.forEach(t => { if (t.projectId === id) t.projectId = null; });
+    db.collection('projects').doc(String(id)).delete().catch(e => console.error(e));
+    if (selectedProjectId === id) selectedProjectId = null;
+    showToast('프로젝트가 삭제되었습니다');
+    render();
+  }
+
+  function toggleMilestone_fn(projectId, milestoneId) {
+    const p = (DB.projects||[]).find(p => p.id === projectId);
+    if (!p) return;
+    const m = (p.milestones||[]).find(m => m.id === milestoneId);
+    if (!m) return;
+    m.done = !m.done;
+    db.collection('projects').doc(String(projectId)).update({ milestones: p.milestones })
+      .catch(e => console.error(e));
+    render();
+  }
+
+  function addMilestone_fn(projectId) {
+    const p = (DB.projects||[]).find(p => p.id === projectId);
+    if (!p) return;
+    const title = document.getElementById(`detail-ms-title-${projectId}`)?.value.trim();
+    const date = document.getElementById(`detail-ms-date-${projectId}`)?.value;
+    if (!title) { alert('마일스톤명을 입력하세요'); return; }
+    if (!p.milestones) p.milestones = [];
+    p.milestones.push({ id: Date.now(), title, date: date || '', done: false });
+    db.collection('projects').doc(String(projectId)).update({ milestones: p.milestones })
+      .catch(e => console.error(e));
+    render();
+  }
+
+  function deleteMilestone_fn(projectId, milestoneId) {
+    const p = (DB.projects||[]).find(p => p.id === projectId);
+    if (!p) return;
+    p.milestones = (p.milestones||[]).filter(m => m.id !== milestoneId);
+    db.collection('projects').doc(String(projectId)).update({ milestones: p.milestones })
+      .catch(e => console.error(e));
+    render();
+  }
+
+  function addComment_fn(projectId) {
+    const p = (DB.projects||[]).find(p => p.id === projectId);
+    const input = document.getElementById(`project-comment-input-${projectId}`);
+    if (!p || !input || !input.value.trim()) return;
+    const uploader = DB.members.find(m => m.id === currentUser?.memberId);
+    if (!p.comments) p.comments = [];
+    const comment = {
+      id: Date.now(),
+      text: input.value.trim(),
+      authorId: currentUser?.memberId || null,
+      authorName: uploader?.name || currentUser?.username || '?',
+      createdAt: Date.now(),
+    };
+    p.comments.push(comment);
+    db.collection('projects').doc(String(projectId)).update({ comments: p.comments })
+      .catch(e => console.error(e));
+    input.value = '';
+    render();
+  }
+
+  function deleteComment_fn(projectId, commentId) {
+    const p = (DB.projects||[]).find(p => p.id === projectId);
+    if (!p) return;
+    p.comments = (p.comments||[]).filter(c => c.id !== commentId);
+    db.collection('projects').doc(String(projectId)).update({ comments: p.comments })
+      .catch(e => console.error(e));
+    render();
+  }
+
   return {
     render,
     selectProject,
     closeDetail,
     calcProgress,
+    openAddModal,
+    editProject: editProject_fn,
+    saveProject: saveProject_fn,
+    deleteProject: deleteProject_fn,
+    toggleMilestone: toggleMilestone_fn,
+    addMilestone: addMilestone_fn,
+    deleteMilestone: deleteMilestone_fn,
+    addComment: addComment_fn,
+    deleteComment: deleteComment_fn,
+    toggleProjectAssigneeDropdown: toggleProjectAssigneeDropdown_fn,
+    toggleProjectAssignee: toggleProjectAssignee_fn,
+    addModalMilestone: addModalMilestone_fn,
+    removeModalMilestone: removeModalMilestone_fn,
     get selectedId() { return selectedProjectId; },
-    get modalMilestones() { return _modalMilestones; },
-    get selectedAssigneeIds() { return _selectedAssigneeIds; },
-    set selectedAssigneeIds(v) { _selectedAssigneeIds = v; },
-    set modalMilestones(v) { _modalMilestones = v; },
   };
 })();
 
 function selectProject(id) { Pages.projects.selectProject(id); }
 function closeProjectDetail() { Pages.projects.closeDetail(); }
+function openAddProjectModal()              { Pages.projects.openAddModal(); }
+function saveProject()                      { Pages.projects.saveProject(); }
+function editProject(id)                    { Pages.projects.editProject(id); }
+function deleteProject(id)                  { Pages.projects.deleteProject(id); }
+function toggleProjectMilestone(pid, mid)   { Pages.projects.toggleMilestone(pid, mid); }
+function addProjectMilestone(pid)           { Pages.projects.addMilestone(pid); }
+function deleteProjectMilestone(pid, mid)   { Pages.projects.deleteMilestone(pid, mid); }
+function addProjectComment(pid)             { Pages.projects.addComment(pid); }
+function deleteProjectComment(pid, cid)     { Pages.projects.deleteComment(pid, cid); }
+function toggleProjectAssigneeDropdown()    { Pages.projects.toggleProjectAssigneeDropdown(); }
+function toggleProjectAssignee(id)          { Pages.projects.toggleProjectAssignee(id); }
+function addModalMilestone()                { Pages.projects.addModalMilestone(); }
+function removeModalMilestone(i)            { Pages.projects.removeModalMilestone(i); }
 
 // ---- Library global shims ----
 function libNavigate(id, name)         { Pages.library.navigateTo(id, name); }
