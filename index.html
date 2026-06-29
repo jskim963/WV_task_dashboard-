@@ -4387,7 +4387,7 @@ Pages.weekly = (() => {
     const tbody = DB.members.map(m => {
       const cells = days.map((d,i) => {
         const ds = formatDate(d); const isToday = ds === todayStr; const isSat=i===5; const isSun=i===6;
-        const evs = DB.events.filter(e => eventFallsOnDate(e, ds) && (isTeamEvent(e) || getEventPersonIds(e).includes(m.id)));
+        const evs = DB.events.filter(e => e.type !== '업무보고' && eventFallsOnDate(e, ds) && (isTeamEvent(e) || getEventPersonIds(e).includes(m.id)));
         const evHtml = evs.map(e => {
           const s = evColors[e.type] || evColors['기타'];
           const label = (e.personId===0?'(팀) ':'')+e.title;
