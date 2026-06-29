@@ -5830,6 +5830,82 @@ Pages.drafts = (() => {
     renderDetailContent(d, newVersion.id);
   }
 
+  // ---- 인라인 코멘트 ----
+  function submitInlineComment_fn(draftId, versionId, lineIndex) {
+    const d = (DB.drafts||[]).find(d => d.id === draftId);
+    if (!d) return;
+    const version = (d.versions||[]).find(v => v.id === versionId);
+    if (!version) return;
+    const input = document.getElementById(`inline-text-${draftId}-${versionId}-${lineIndex}`);
+    const text = input?.value.trim();
+    if (!text) return;
+    const member = (DB.members||[]).find(m => m.username === currentUser?.username || m.id === currentUser?.memberId);
+    if (!version.inlineComments) version.inlineComments = [];
+    version.inlineComments.push({
+      id: Date.now(),
+      authorName: member?.name || currentUser?.username || '나',
+      authorUsername: currentUser?.username || '',
+      lineIndex, text, resolved: false, createdAt: Date.now()
+    });
+    d.updatedAt = Date.now();
+    db.collection('drafts').doc(String(draftId)).update({ versions: d.versions, updatedAt: d.updatedAt }).catch(e => console.error(e));
+    document.getElementById(`inline-input-${draftId}-${versionId}-${lineIndex}`)?.classList.add('hidden');
+    renderDetailContent(d, versionId);
+  }
+
+  function resolveInlineComment_fn(draftId, versionId, commentId) {
+    const d = (DB.drafts||[]).find(d => d.id === draftId);
+    if (!d) return;
+    const version = (d.versions||[]).find(v => v.id === versionId);
+    if (!version) return;
+    const c = (version.inlineComments||[]).find(c => c.id === commentId);
+    if (c) c.resolved = true;
+    d.updatedAt = Date.now();
+    db.collection('drafts').doc(String(draftId)).update({ versions: d.versions, updatedAt: d.updatedAt }).catch(e => console.error(e));
+    renderDetailContent(d, versionId);
+  }
+
+  function deleteInlineComment_fn(draftId, versionId, commentId) {
+    const d = (DB.drafts||[]).find(d => d.id === draftId);
+    if (!d) return;
+    const version = (d.versions||[]).find(v => v.id === versionId);
+    if (!version) return;
+    version.inlineComments = (version.inlineComments||[]).filter(c => c.id !== commentId);
+    d.updatedAt = Date.now();
+    db.collection('drafts').doc(String(draftId)).update({ versions: d.versions, updatedAt: d.updatedAt }).catch(e => console.error(e));
+    renderDetailContent(d, versionId);
+  }
+
+  // ---- 전체 코멘트 ----
+  function addDraftComment_fn() {
+    if (!_currentDraftId) return;
+    const d = (DB.drafts||[]).find(d => d.id === _currentDraftId);
+    const input = document.getElementById('draft-comment-input');
+    const text = input?.value.trim();
+    if (!d || !text) return;
+    const member = (DB.members||[]).find(m => m.username === currentUser?.username || m.id === currentUser?.memberId);
+    if (!d.comments) d.comments = [];
+    d.comments.push({
+      id: Date.now(),
+      authorName: member?.name || currentUser?.username || '나',
+      authorUsername: currentUser?.username || '',
+      text, createdAt: Date.now()
+    });
+    d.updatedAt = Date.now();
+    db.collection('drafts').doc(String(d.id)).update({ comments: d.comments, updatedAt: d.updatedAt }).catch(e => console.error(e));
+    input.value = '';
+    renderDetailComments(d);
+  }
+
+  function deleteDraftComment_fn(draftId, commentId) {
+    const d = (DB.drafts||[]).find(d => d.id === draftId);
+    if (!d) return;
+    d.comments = (d.comments||[]).filter(c => c.id !== commentId);
+    d.updatedAt = Date.now();
+    db.collection('drafts').doc(String(d.id)).update({ comments: d.comments, updatedAt: d.updatedAt }).catch(e => console.error(e));
+    renderDetailComments(d);
+  }
+
   return {
     render,
     filterDrafts: filterDrafts_fn,
@@ -5861,6 +5937,11 @@ Pages.drafts = (() => {
     moveReviewer: moveReviewer_fn,
     openRevisionModal: openAddRevisionModal_fn,
     saveRevision: saveRevision_fn,
+    submitInlineComment: submitInlineComment_fn,
+    resolveInlineComment: resolveInlineComment_fn,
+    deleteInlineComment: deleteInlineComment_fn,
+    addComment: addDraftComment_fn,
+    deleteComment: deleteDraftComment_fn,
   };
 })();
 
@@ -5882,6 +5963,11 @@ function addManualReviewer()            { Pages.drafts.addManualReviewer(); }
 function removeReviewer(i)              { Pages.drafts.removeReviewer(i); }
 function moveReviewer(i, d)             { Pages.drafts.moveReviewer(i, d); }
 function openAddRevisionModal()         { Pages.drafts.openRevisionModal(); }
+function submitInlineComment(did, vid, li) { Pages.drafts.submitInlineComment(did, vid, li); }
+function resolveInlineComment(did, vid, cid) { Pages.drafts.resolveInlineComment(did, vid, cid); }
+function deleteInlineComment(did, vid, cid) { Pages.drafts.deleteInlineComment(did, vid, cid); }
+function addDraftComment()                  { Pages.drafts.addComment(); }
+function deleteDraftComment(did, cid)       { Pages.drafts.deleteComment(did, cid); }
 function saveRevision()                 { Pages.drafts.saveRevision(); }
 
 document.addEventListener('click', function(e) {
