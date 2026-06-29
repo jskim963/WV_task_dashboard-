@@ -5315,9 +5315,226 @@ Pages.drafts = (() => {
     render();
   }
 
+  // ---- 줄 단위 diff (LCS 기반 간이 버전) ----
+  function computeDiff(origLines, newLines) {
+    const m = origLines.length, n = newLines.length;
+    const dp = Array.from({length: m+1}, () => new Array(n+1).fill(0));
+    for (let i = m-1; i >= 0; i--)
+      for (let j = n-1; j >= 0; j--)
+        dp[i][j] = origLines[i] === newLines[j]
+          ? 1 + dp[i+1][j+1]
+          : Math.max(dp[i+1][j], dp[i][j+1]);
+    const result = [];
+    let i = 0, j = 0;
+    while (i < m || j < n) {
+      if (i < m && j < n && origLines[i] === newLines[j]) {
+        result.push({type:'same', text: origLines[i]}); i++; j++;
+      } else if (j < n && (i >= m || dp[i+1]?.[j] <= dp[i]?.[j+1])) {
+        result.push({type:'add', text: newLines[j]}); j++;
+      } else {
+        result.push({type:'del', text: origLines[i]}); i++;
+      }
+    }
+    return result;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function renderContentLines(version, draftId, showDiff, origVersion) {
+    const content = version.content || '';
+    const inlineComments = version.inlineComments || [];
+    const isAdmin = currentUser?.username === 'jungsoo.kim';
+
+    if (showDiff && origVersion) {
+      const origLines = (origVersion.content || '').split('\n');
+      const newLines = content.split('\n');
+      const diff = computeDiff(origLines, newLines);
+      return diff.map((d, idx) => {
+        const bgClass = d.type === 'add' ? 'bg-green-50 border-l-2 border-green-500'
+          : d.type === 'del' ? 'bg-red-50 border-l-2 border-red-400 line-through text-secondary'
+          : '';
+        return `<div class="flex items-start gap-2 px-3 py-1 text-sm ${bgClass}" data-line="${idx}">
+          <span class="text-xs text-secondary w-5 flex-shrink-0 mt-0.5">${d.type === 'del' ? '-' : d.type === 'add' ? '+' : idx+1}</span>
+          <span class="flex-1 leading-relaxed whitespace-pre-wrap">${escapeHtml(d.text)}</span>
+        </div>`;
+      }).join('');
+    }
+
+    return content.split('\n').map((line, idx) => {
+      const lineComments = inlineComments.filter(c => c.lineIndex === idx && !c.resolved);
+      const hasComment = lineComments.length > 0;
+      const commentHtml = hasComment ? `
+        <div class="ml-7 mb-1 space-y-1">
+          ${lineComments.map(c => `
+            <div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 text-xs flex items-start gap-2">
+              <div class="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">${(c.authorName||'?')[0]}</div>
+              <div class="flex-1">
+                <span class="font-semibold">${c.authorName}</span>
+                <span class="text-secondary ml-1">${c.text}</span>
+              </div>
+              ${isAdmin || currentUser?.username === c.authorUsername
+                ? `<button onclick="resolveInlineComment(${draftId},${version.id},${c.id})" class="text-green-600 hover:text-green-800 flex-shrink-0" title="해결됨"><span class="material-symbols-outlined text-sm">check_circle</span></button>`
+                : ''}
+            </div>
+          `).join('')}
+        </div>` : '';
+      return `<div class="${hasComment ? 'bg-amber-50/50' : ''}">
+        <div class="flex items-start gap-2 px-3 py-1 text-sm group" data-line="${idx}">
+          <span class="text-xs text-secondary w-5 flex-shrink-0 mt-0.5">${idx+1}</span>
+          <span class="flex-1 leading-relaxed whitespace-pre-wrap">${escapeHtml(line)}</span>
+          <button onclick="openInlineCommentInput(${draftId},${version.id},${idx})"
+            class="opacity-0 group-hover:opacity-100 text-secondary hover:text-primary flex-shrink-0 transition-opacity" title="이 줄에 코멘트">
+            <span class="material-symbols-outlined text-sm">${hasComment ? 'comment' : 'add_comment'}</span>
+          </button>
+        </div>
+        ${commentHtml}
+        <div id="inline-input-${draftId}-${version.id}-${idx}" class="hidden ml-7 mb-2 flex gap-2">
+          <input type="text" class="flex-1 border border-outline-variant rounded-lg px-2 py-1.5 text-xs" placeholder="코멘트..." id="inline-text-${draftId}-${version.id}-${idx}">
+          <button onclick="submitInlineComment(${draftId},${version.id},${idx})" class="bg-primary text-white rounded-lg px-3 py-1.5 text-xs">등록</button>
+          <button onclick="document.getElementById('inline-input-${draftId}-${version.id}-${idx}').classList.add('hidden')" class="text-secondary text-xs px-2">취소</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderTemplateContent(content, templateId) {
+    const tpl = (DB.draft_templates||[]).find(t => t.id === templateId);
+    if (!tpl) return `<pre class="text-sm text-secondary whitespace-pre-wrap">${escapeHtml(content)}</pre>`;
+    let data = {};
+    try { data = JSON.parse(content); } catch(e) {}
+    return tpl.fields.map(f => `
+      <div class="mb-3">
+        <div class="text-xs font-semibold text-secondary mb-1">${f.label}</div>
+        <div class="text-sm text-on-surface bg-surface-container-low rounded-lg px-3 py-2 whitespace-pre-wrap">${escapeHtml(data[f.key] || '')}</div>
+      </div>`).join('');
+  }
+
+  function openDetail_fn(id) {
+    const d = (DB.drafts||[]).find(d => d.id === id);
+    if (!d) return;
+    _currentDraftId = id;
+    const versions = d.versions || [];
+    _currentVersionId = versions[0]?.id || null;
+
+    document.getElementById('draft-detail-title').textContent = d.title;
+    document.getElementById('draft-detail-meta').textContent =
+      `${d.type === 'free' ? '자유형식' : (DB.draft_templates||[]).find(t=>t.id===d.templateId)?.name||'양식'} · ${d.createdBy} · ${new Date(d.createdAt).toLocaleDateString('ko-KR')}`;
+
+    const rlDisplay = document.getElementById('draft-review-line-display');
+    rlDisplay.innerHTML = (d.reviewLine||[]).map((r, i) => `
+      <div class="flex flex-col items-center">
+        <div class="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold" title="${r.name}">${r.name[0]}</div>
+        <span class="text-xs text-secondary">${r.role}</span>
+      </div>
+      ${i < d.reviewLine.length-1 ? '<span class="text-secondary pb-3">›</span>' : ''}`).join('');
+
+    const isAdmin = currentUser?.username === 'jungsoo.kim';
+    const isOwner = currentUser?.username === d.createdBy;
+    document.getElementById('draft-edit-btn').classList.toggle('hidden', !(isAdmin || isOwner));
+    document.getElementById('draft-delete-btn').classList.toggle('hidden', !(isAdmin || isOwner));
+
+    renderVersionTabs(d);
+    renderDetailContent(d, _currentVersionId);
+    renderDetailComments(d);
+
+    document.getElementById('draft-detail-overlay').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function renderVersionTabs(d) {
+    const versions = d.versions || [];
+    const tabs = document.getElementById('draft-version-tabs');
+    tabs.innerHTML = versions.map(v => `
+      <button onclick="selectDraftVersion(${d.id},${v.id})"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${v.id === _currentVersionId ? 'bg-primary text-white border-transparent' : 'border-outline-variant text-secondary hover:border-primary hover:text-primary'}">
+        <div class="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">${(v.authorName||'?')[0]}</div>
+        ${escapeHtml(v.label)}
+      </button>`).join('');
+  }
+
+  function renderDetailContent(d, versionId) {
+    const versions = d.versions || [];
+    const version = versions.find(v => v.id === versionId) || versions[0];
+    if (!version) { document.getElementById('draft-content-panel').innerHTML = '<p class="text-secondary text-sm">내용 없음</p>'; return; }
+
+    const origVersion = versions[0];
+    const isRevision = version.id !== origVersion.id;
+
+    let html = '';
+    if (isRevision) {
+      html += `<div class="flex items-center gap-2 mb-3 px-3 py-2 bg-surface-container rounded-lg text-xs text-secondary">
+        <span class="material-symbols-outlined text-sm">compare_arrows</span>
+        <span>원본 대비 변경 내역</span>
+        <span class="ml-auto text-primary font-medium">${escapeHtml(version.label)}</span>
+      </div>`;
+    }
+
+    if (d.type === 'template' && d.templateId) {
+      html += renderTemplateContent(version.content, d.templateId);
+    } else {
+      html += `<div class="border border-outline-variant rounded-xl overflow-hidden mb-4">
+        ${renderContentLines(version, d.id, isRevision, isRevision ? origVersion : null)}
+      </div>`;
+    }
+
+    if ((version.attachments||[]).length) {
+      html += `<div class="space-y-1.5 mt-2">
+        ${version.attachments.map(a => `
+          <div class="flex items-center gap-2 bg-surface-container-low rounded-lg px-3 py-2 text-sm">
+            <span class="material-symbols-outlined text-sm text-secondary">attach_file</span>
+            <a href="${a.url}" target="_blank" class="text-primary hover:underline flex-1 truncate">${escapeHtml(a.name)}</a>
+          </div>`).join('')}
+      </div>`;
+    }
+
+    document.getElementById('draft-content-panel').innerHTML = html;
+  }
+
+  function renderDetailComments(d) {
+    const comments = d.comments || [];
+    const isAdmin = currentUser?.username === 'jungsoo.kim';
+    document.getElementById('draft-comments-list').innerHTML = comments.map(c => `
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <div class="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">${(c.authorName||'?')[0]}</div>
+          <span class="text-xs font-semibold text-on-surface">${c.authorName}</span>
+          ${isAdmin || currentUser?.username === c.authorUsername
+            ? `<button onclick="deleteDraftComment(${d.id},${c.id})" class="ml-auto text-red-300 hover:text-red-500"><span class="material-symbols-outlined text-sm">close</span></button>`
+            : ''}
+        </div>
+        <div class="ml-8 text-xs text-on-surface bg-surface-container-low rounded-xl px-3 py-2">${escapeHtml(c.text)}</div>
+      </div>`).join('');
+  }
+
+  function selectVersion_fn(draftId, versionId) {
+    _currentVersionId = versionId;
+    const d = (DB.drafts||[]).find(d => d.id === draftId);
+    if (!d) return;
+    renderVersionTabs(d);
+    renderDetailContent(d, versionId);
+  }
+
+  function closeDraftDetail_fn() {
+    document.getElementById('draft-detail-overlay').classList.add('hidden');
+    document.body.style.overflow = '';
+    _currentDraftId = null;
+    _currentVersionId = null;
+  }
+
+  function openInlineCommentInput_fn(draftId, versionId, lineIndex) {
+    const el = document.getElementById(`inline-input-${draftId}-${versionId}-${lineIndex}`);
+    el?.classList.toggle('hidden');
+  }
+
   return {
     render,
     filterDrafts: filterDrafts_fn,
+    openDetail: openDetail_fn,
+    closeDetail: closeDraftDetail_fn,
+    selectVersion: selectVersion_fn,
+    openInlineCommentInput: openInlineCommentInput_fn,
     get currentDraftId() { return _currentDraftId; },
     get currentVersionId() { return _currentVersionId; },
     get reviewLine() { return _reviewLine; },
@@ -5333,6 +5550,9 @@ Pages.drafts = (() => {
 
 function filterDrafts(f) { Pages.drafts.filterDrafts(f); }
 function openDraftDetail(id) { Pages.drafts.openDetail(id); }
+function closeDraftDetail() { Pages.drafts.closeDetail(); }
+function selectDraftVersion(did, vid) { Pages.drafts.selectVersion(did, vid); }
+function openInlineCommentInput(did, vid, li) { Pages.drafts.openInlineCommentInput(did, vid, li); }
 
 // ---- Library global shims ----
 function libNavigate(id, name)         { Pages.library.navigateTo(id, name); }
