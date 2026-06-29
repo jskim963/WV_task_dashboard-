@@ -853,11 +853,59 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
           </div>
         </div>
       </div>
+
+      <!-- 양식 관리 (관리자 전용) -->
+      <div id="settings-templates-section" class="hidden">
+        <div class="bg-surface rounded-2xl border border-outline-variant p-5 mt-4">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-on-surface" style="font-family:'Hanken Grotesk'">기안서 양식 관리</h3>
+            <button onclick="openAddTemplateModal()" class="flex items-center gap-1 bg-primary text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700">
+              <span class="material-symbols-outlined text-base">add</span> 양식 추가
+            </button>
+          </div>
+          <div id="template-list" class="space-y-2"></div>
+          <p id="template-empty" class="hidden text-sm text-secondary text-center py-6">등록된 양식이 없습니다</p>
+        </div>
+      </div>
     </div>
 
     <!-- 하단 네비게이션바 safe-area 스페이서 (모바일) -->
     <div class="lg:hidden flex-shrink-0" style="height: max(88px, env(safe-area-inset-bottom, 88px))"></div>
   </main>
+</div>
+
+<!-- Template Modal -->
+<div id="modal-add-template" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:560px;max-height:90vh;overflow-y:auto;">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="template-modal-title">새 양식</h3>
+      <button onclick="document.getElementById('modal-add-template').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <input type="hidden" id="editing-template-id">
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">양식명 *</label>
+        <input type="text" id="template-name" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="예: 품의서">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">필드 구성</label>
+        <div id="template-fields-editor" class="space-y-2 mb-2"></div>
+        <div class="flex gap-2">
+          <input type="text" id="new-field-label" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="필드 라벨">
+          <select id="new-field-type" class="border border-outline-variant rounded-lg px-3 py-2 text-sm">
+            <option value="text">한 줄</option>
+            <option value="textarea">여러 줄</option>
+            <option value="date">날짜</option>
+          </select>
+          <button onclick="addTemplateField()" class="bg-surface-container border border-outline-variant rounded-lg px-3 py-2 text-sm text-secondary hover:bg-surface-container-high">추가</button>
+        </div>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-6">
+      <button onclick="document.getElementById('modal-add-template').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2.5 text-sm text-secondary hover:bg-surface-container">취소</button>
+      <button onclick="saveTemplate()" class="flex-1 bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700">저장</button>
+    </div>
+  </div>
 </div>
 
 <!-- ===== NOTIFICATION PANEL ===== -->
@@ -3331,6 +3379,13 @@ function loadSettings() {
   document.getElementById('my-name').value = DB.myProfile.name || '';
   document.getElementById('my-email').value = DB.myProfile.email || '';
   document.getElementById('my-rank').value = DB.myProfile.rank || '';
+  // 관리자 전용 양식 관리 섹션
+  const tplSection = document.getElementById('settings-templates-section');
+  if (tplSection) {
+    const isAdmin = currentUser?.username === 'jungsoo.kim';
+    tplSection.classList.toggle('hidden', !isAdmin);
+    if (isAdmin) renderTemplateList();
+  }
 }
 
 function saveProfile() {
@@ -5969,6 +6024,103 @@ function deleteInlineComment(did, vid, cid) { Pages.drafts.deleteInlineComment(d
 function addDraftComment()                  { Pages.drafts.addComment(); }
 function deleteDraftComment(did, cid)       { Pages.drafts.deleteComment(did, cid); }
 function saveRevision()                 { Pages.drafts.saveRevision(); }
+
+// ---- Template management ----
+let _templateFields = [];
+
+function renderTemplateList() {
+  const list = document.getElementById('template-list');
+  const empty = document.getElementById('template-empty');
+  const templates = DB.draft_templates || [];
+  if (!list) return;
+  if (!templates.length) { list.innerHTML = ''; empty?.classList.remove('hidden'); return; }
+  empty?.classList.add('hidden');
+  list.innerHTML = templates.map(t => `
+    <div class="flex items-center gap-3 bg-surface-container-low rounded-xl px-4 py-3 border border-outline-variant">
+      <span class="material-symbols-outlined text-secondary text-sm">description</span>
+      <span class="flex-1 text-sm font-medium">${t.name}</span>
+      <span class="text-xs text-secondary">${(t.fields||[]).length}개 필드</span>
+      <button onclick="editTemplate(${t.id})" class="p-1 text-secondary hover:text-primary"><span class="material-symbols-outlined text-sm">edit</span></button>
+      <button onclick="deleteTemplate(${t.id})" class="p-1 text-red-400 hover:text-red-600"><span class="material-symbols-outlined text-sm">delete</span></button>
+    </div>`).join('');
+}
+
+function renderTemplateFieldsEditor() {
+  const editor = document.getElementById('template-fields-editor');
+  if (!editor) return;
+  editor.innerHTML = _templateFields.map((f, i) => `
+    <div class="flex items-center gap-2 bg-surface-container-low rounded-lg px-3 py-2 text-sm border border-outline-variant">
+      <span class="flex-1">${f.label}</span>
+      <span class="text-xs text-secondary">${f.type === 'textarea' ? '여러 줄' : f.type === 'date' ? '날짜' : '한 줄'}</span>
+      <button onclick="removeTemplateField(${i})" class="text-red-300 hover:text-red-500"><span class="material-symbols-outlined text-sm">close</span></button>
+    </div>`).join('');
+}
+
+function openAddTemplateModal() {
+  _templateFields = [];
+  document.getElementById('editing-template-id').value = '';
+  document.getElementById('template-name').value = '';
+  document.getElementById('template-modal-title').textContent = '새 양식';
+  document.getElementById('new-field-label').value = '';
+  renderTemplateFieldsEditor();
+  document.getElementById('modal-add-template').classList.remove('hidden');
+}
+
+function editTemplate(id) {
+  const t = (DB.draft_templates||[]).find(t => t.id === id);
+  if (!t) return;
+  _templateFields = (t.fields||[]).map(f => ({...f}));
+  document.getElementById('editing-template-id').value = id;
+  document.getElementById('template-name').value = t.name;
+  document.getElementById('template-modal-title').textContent = '양식 수정';
+  renderTemplateFieldsEditor();
+  document.getElementById('modal-add-template').classList.remove('hidden');
+}
+
+function addTemplateField() {
+  const label = document.getElementById('new-field-label')?.value.trim();
+  const type = document.getElementById('new-field-type')?.value || 'text';
+  if (!label) { alert('필드 라벨을 입력하세요'); return; }
+  const key = label.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9가-힣_]/g, '') + '_' + Date.now();
+  _templateFields.push({ key, label, type });
+  document.getElementById('new-field-label').value = '';
+  renderTemplateFieldsEditor();
+}
+
+function removeTemplateField(idx) {
+  _templateFields.splice(idx, 1);
+  renderTemplateFieldsEditor();
+}
+
+function saveTemplate() {
+  const name = document.getElementById('template-name')?.value.trim();
+  if (!name) { alert('양식명을 입력하세요'); return; }
+  const editId = document.getElementById('editing-template-id').value;
+  if (editId) {
+    const t = (DB.draft_templates||[]).find(t => t.id === parseInt(editId));
+    if (!t) return;
+    t.name = name; t.fields = [..._templateFields];
+    db.collection('draft_templates').doc(String(t.id)).update({ name, fields: t.fields }).catch(e => console.error(e));
+    showToast('양식이 수정되었습니다');
+  } else {
+    const id = Date.now();
+    const newTpl = { id, name, fields: [..._templateFields], createdBy: currentUser?.username || '', createdAt: id };
+    if (!DB.draft_templates) DB.draft_templates = [];
+    DB.draft_templates.push(newTpl);
+    db.collection('draft_templates').doc(String(id)).set(newTpl).catch(e => console.error(e));
+    showToast('양식이 추가되었습니다');
+  }
+  document.getElementById('modal-add-template').classList.add('hidden');
+  renderTemplateList();
+}
+
+function deleteTemplate(id) {
+  if (!confirm('양식을 삭제하겠습니까?')) return;
+  DB.draft_templates = (DB.draft_templates||[]).filter(t => t.id !== id);
+  db.collection('draft_templates').doc(String(id)).delete().catch(e => console.error(e));
+  showToast('삭제되었습니다');
+  renderTemplateList();
+}
 
 document.addEventListener('click', function(e) {
   const wrap = document.getElementById('draft-member-dropdown-wrap');
