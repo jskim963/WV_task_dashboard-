@@ -1481,26 +1481,36 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
           </select>
         </div>
       </div>
-      <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">면적 (평)</label>
+        <input type="number" id="center-area" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0">
+      </div>
+      <!-- 소유 형태 -->
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-2">소유 형태</label>
+        <div class="flex gap-3">
+          <button type="button" onclick="selectCenterOwnership('자가')" id="center-own-btn-자가" class="draft-type-btn flex-1 border border-outline-variant rounded-lg py-2 text-sm font-semibold text-secondary">자가센터</button>
+          <button type="button" onclick="selectCenterOwnership('임차')" id="center-own-btn-임차" class="draft-type-btn flex-1 border border-outline-variant rounded-lg py-2 text-sm font-semibold text-secondary">임차 / 마스터리스</button>
+        </div>
+        <input type="hidden" id="center-ownership-value">
+      </div>
+      <!-- 임차 전용 필드 (임차/마스터리스 선택 시 활성화) -->
+      <div id="center-lease-fields" class="space-y-3 hidden">
         <div>
-          <label class="block text-xs font-semibold text-secondary mb-1.5">면적 (평)</label>
-          <input type="number" id="center-area" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0">
+          <label class="block text-xs font-semibold text-secondary mb-1.5">임대인</label>
+          <input type="text" id="center-landlord" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="임대인명">
         </div>
         <div>
-          <label class="block text-xs font-semibold text-secondary mb-1.5">월 임대료 (원)</label>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">월 임차료 (원)</label>
           <input type="number" id="center-monthly-rent" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0">
         </div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-secondary mb-1.5">임대인 <span class="text-xs text-secondary font-normal">(미입력 시 자가센터)</span></label>
-        <input type="text" id="center-landlord" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="임대인명 (자가센터는 비워두세요)">
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-secondary mb-1.5">임대기간</label>
-        <div class="flex gap-2 items-center">
-          <input type="date" id="center-lease-start" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm">
-          <span class="text-secondary text-sm">~</span>
-          <input type="date" id="center-lease-end" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm">
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">임차기간</label>
+          <div class="flex gap-2 items-center">
+            <input type="date" id="center-lease-start" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm">
+            <span class="text-secondary text-sm">~</span>
+            <input type="date" id="center-lease-end" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm">
+          </div>
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
@@ -1512,10 +1522,6 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
           <label class="block text-xs font-semibold text-secondary mb-1.5">센터원</label>
           <input type="text" id="center-members" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="예: 홍길동, 김철수">
         </div>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-secondary mb-1.5">운영 특이사항</label>
-        <textarea id="center-operation-note" rows="2" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none"></textarea>
       </div>
     </div>
     <div class="flex gap-3 mt-6">
@@ -3065,7 +3071,7 @@ Pages.centers = (() => {
   // ── 탭 1: 기본정보·사진 ─────────────────────────────────────
   function buildTabInfo(c) {
     const manager = (DB.members||[]).find(m => m.id === c.managerId);
-    const isSelf = !c.landlord;
+    const isLease = c.ownership === '임차';
     const edit = canEdit(c);
     return `
     <div class="grid grid-cols-2 gap-6">
@@ -3073,10 +3079,12 @@ Pages.centers = (() => {
         <div><div class="center-field-label">센터코드</div><div class="center-field-value">${c.code||'-'}</div></div>
         <div><div class="center-field-label">주소</div><div class="center-field-value">${c.address||'-'}</div></div>
         <div><div class="center-field-label">면적</div><div class="center-field-value">${c.area ? c.area+'평' : '-'}</div></div>
-        <div><div class="center-field-label">임대인</div><div class="center-field-value">${isSelf ? '<span class="text-secondary">자가센터</span>' : c.landlord}</div></div>
-        ${!isSelf ? `<div><div class="center-field-label">임대기간</div><div class="center-field-value">${c.leaseStart||'?'} ~ ${c.leaseEnd||'?'}</div></div>` : ''}
-        <div><div class="center-field-label">월 임대료</div><div class="center-field-value">${c.monthlyRent ? Number(c.monthlyRent).toLocaleString()+'원' : '-'}</div></div>
-        <div><div class="center-field-label">운영 특이사항</div><div class="center-field-value whitespace-pre-line">${c.operationNote||'-'}</div></div>
+        <div><div class="center-field-label">소유 형태</div><div class="center-field-value">${c.ownership === '임차' ? '임차 / 마스터리스' : c.ownership === '자가' ? '자가센터' : '-'}</div></div>
+        ${isLease ? `
+        <div><div class="center-field-label">임대인</div><div class="center-field-value">${c.landlord||'-'}</div></div>
+        <div><div class="center-field-label">월 임차료</div><div class="center-field-value">${c.monthlyRent ? Number(c.monthlyRent).toLocaleString()+'원' : '-'}</div></div>
+        <div><div class="center-field-label">임차기간</div><div class="center-field-value">${c.leaseStart||'?'} ~ ${c.leaseEnd||'?'}</div></div>
+        ` : ''}
         ${edit ? `<button onclick="editCenterFromPanel()" class="text-xs text-primary font-semibold hover:underline">기본정보 수정</button>` : ''}
       </div>
       <div class="space-y-4">
@@ -3123,7 +3131,7 @@ Pages.centers = (() => {
   function buildTabContractW(c, edit) {
     const tenants = c.tenants || [];
     const sales = c.salesList || [];
-    const cols1 = edit ? 7 : 6;
+    const cols1 = edit ? 8 : 7;
     const cols2 = edit ? 6 : 5;
     return `
     <div class="space-y-8">
@@ -3133,7 +3141,7 @@ Pages.centers = (() => {
           ${edit ? `<button onclick="addTenantRow(${c.id})" class="text-xs text-primary font-semibold hover:underline">+ 추가</button>` : ''}
         </div>
         <div class="overflow-x-auto">
-          <table class="w-full text-xs border-collapse">
+          <table class="w-full text-xs border-collapse" style="min-width:700px">
             <thead><tr class="bg-surface-container-low">
               <th class="border border-outline-variant px-3 py-2 text-left">임차사명</th>
               <th class="border border-outline-variant px-3 py-2 text-left">계약기간</th>
@@ -3141,18 +3149,25 @@ Pages.centers = (() => {
               <th class="border border-outline-variant px-3 py-2 text-right">월 임차료</th>
               <th class="border border-outline-variant px-3 py-2 text-right">관리비</th>
               <th class="border border-outline-variant px-3 py-2 text-center">통보기간</th>
+              <th class="border border-outline-variant px-3 py-2 text-center">Favor (RF/Fitout/TI)</th>
               ${edit ? '<th class="border border-outline-variant px-2 py-2"></th>' : ''}
             </tr></thead>
             <tbody>
-              ${tenants.length ? tenants.map(t => `<tr>
-                <td class="border border-outline-variant px-3 py-2">${t.name||'-'}</td>
+              ${tenants.length ? tenants.map(t => {
+                const hasFavor = t.favor && (t.favor.rf || t.favor.fitout || t.favor.ti);
+                const favorTxt = hasFavor
+                  ? `RF ${t.favor.rf||0}개 / FO ${t.favor.fitout||0}개 / TI ${Number(t.favor.ti||0).toLocaleString()}원`
+                  : '-';
+                return `<tr>
+                <td class="border border-outline-variant px-3 py-2 font-medium">${t.name||'-'}</td>
                 <td class="border border-outline-variant px-3 py-2 whitespace-nowrap">${t.contractStart||''}~${t.contractEnd||''}</td>
                 <td class="border border-outline-variant px-3 py-2 text-right">${t.area||0}평</td>
                 <td class="border border-outline-variant px-3 py-2 text-right">${(t.monthlyRent||0).toLocaleString()}원</td>
                 <td class="border border-outline-variant px-3 py-2 text-right">${(t.managementFee||0).toLocaleString()}원</td>
                 <td class="border border-outline-variant px-3 py-2 text-center">${t.noticePeriod||0}개월</td>
+                <td class="border border-outline-variant px-3 py-2 text-center text-secondary">${favorTxt}${t.favor?.note ? `<div class="text-xs mt-0.5 italic">${t.favor.note}</div>` : ''}</td>
                 ${edit ? `<td class="border border-outline-variant px-2 py-2 text-center"><button onclick="deleteTenantRow(${c.id},${t.id})" class="text-red-400 hover:text-red-600"><span class="material-symbols-outlined" style="font-size:14px">delete</span></button></td>` : ''}
-              </tr>`).join('') : `<tr><td colspan="${cols1}" class="border border-outline-variant px-3 py-4 text-center text-secondary">임차사 없음</td></tr>`}
+              </tr>`;}).join('') : `<tr><td colspan="${cols1}" class="border border-outline-variant px-3 py-4 text-center text-secondary">임차사 없음</td></tr>`}
             </tbody>
           </table>
         </div>
@@ -3253,6 +3268,16 @@ Pages.centers = (() => {
       </div>`;
     }
     const statusColors2 = { '완료':'badge-complete','진행중':'badge-inprogress','지연':'badge-delayed','예정':'badge-pending' };
+    const noteHtml = `
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-bold text-sm">운영 특이사항</h3>
+      </div>
+      ${edit ? `
+      <textarea id="ops-note-input-${c.id}" rows="3" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none mb-2" placeholder="운영 특이사항 입력...">${c.operationNote||''}</textarea>
+      <button onclick="saveOperationNote(${c.id})" class="text-xs bg-primary text-white rounded-lg px-3 py-1.5 font-semibold hover:bg-blue-700">저장</button>
+      ` : `<p class="text-sm text-on-surface whitespace-pre-line ${c.operationNote ? '' : 'text-secondary'}">${c.operationNote || '내용 없음'}</p>`}
+    </div>`;
     const tasksHtml = `
     <div>
       <h3 class="font-bold text-sm mb-3">관련 업무 (${relatedTasks.length}건)</h3>
@@ -3262,14 +3287,14 @@ Pages.centers = (() => {
           <span class="text-xs px-2 py-0.5 rounded-full font-medium ${statusColors2[t.status]||'badge-normal'}">${t.status}</span>
         </div>`).join('') : '<p class="text-sm text-secondary">진행 중인 업무 없음</p>'}
     </div>`;
-    return metricsHtml + tasksHtml;
+    return metricsHtml + noteHtml + tasksHtml;
   }
 
   // ── CRUD ────────────────────────────────────────────────────
   function openAddModal() {
     if (!isAdmin()) { showToast('센터 추가는 관리자만 가능합니다'); return; }
     document.getElementById('editing-center-id').value = '';
-    ['center-name','center-code','center-address','center-chief','center-members','center-operation-note','center-landlord'].forEach(id => {
+    ['center-name','center-code','center-address','center-chief','center-members','center-landlord'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
@@ -3279,6 +3304,10 @@ Pages.centers = (() => {
     document.getElementById('center-type-value').value = '';
     document.querySelectorAll('#center-type-btn-W, #center-type-btn-V').forEach(b => b.classList.remove('active-type'));
     document.getElementById('center-type-err').classList.add('hidden');
+    // 소유형태 초기화
+    document.getElementById('center-ownership-value').value = '';
+    document.querySelectorAll('#center-own-btn-자가, #center-own-btn-임차').forEach(b => b.classList.remove('active-type'));
+    document.getElementById('center-lease-fields').classList.add('hidden');
     document.getElementById('center-modal-title').textContent = '센터 추가';
     populateManagerSelect();
     document.getElementById('center-manager').disabled = false;
@@ -3299,12 +3328,17 @@ Pages.centers = (() => {
     document.getElementById('center-lease-end').value = c.leaseEnd || '';
     document.getElementById('center-chief').value = c.centerChief || '';
     document.getElementById('center-members').value = c.centerMembers || '';
-    document.getElementById('center-operation-note').value = c.operationNote || '';
     document.getElementById('center-status').value = c.status || '정상';
     document.getElementById('center-type-value').value = c.type || '';
     document.getElementById(`center-type-btn-W`)?.classList.toggle('active-type', c.type === 'W');
     document.getElementById(`center-type-btn-V`)?.classList.toggle('active-type', c.type === 'V');
     document.getElementById('center-type-err').classList.add('hidden');
+    // 소유형태 복원
+    const own = c.ownership || '';
+    document.getElementById('center-ownership-value').value = own;
+    document.getElementById('center-own-btn-자가')?.classList.toggle('active-type', own === '자가');
+    document.getElementById('center-own-btn-임차')?.classList.toggle('active-type', own === '임차');
+    document.getElementById('center-lease-fields').classList.toggle('hidden', own !== '임차');
     document.getElementById('center-modal-title').textContent = '센터 수정';
     populateManagerSelect();
     document.getElementById('center-manager').value = c.managerId || '';
@@ -3319,24 +3353,32 @@ Pages.centers = (() => {
     document.getElementById('center-type-err').classList.add('hidden');
   }
 
+  function selectOwnership(type) {
+    document.getElementById('center-ownership-value').value = type;
+    document.getElementById('center-own-btn-자가')?.classList.toggle('active-type', type === '자가');
+    document.getElementById('center-own-btn-임차')?.classList.toggle('active-type', type === '임차');
+    document.getElementById('center-lease-fields').classList.toggle('hidden', type !== '임차');
+  }
+
   function saveCenter() {
     const name = document.getElementById('center-name').value.trim();
     if (!name) { alert('센터명을 입력하세요.'); return; }
     const type = document.getElementById('center-type-value').value;
     if (!type) { document.getElementById('center-type-err').classList.remove('hidden'); return; }
+    const ownership = document.getElementById('center-ownership-value').value;
+    const isLease = ownership === '임차';
     const editId = parseInt(document.getElementById('editing-center-id').value);
     const fields = {
-      name, type,
+      name, type, ownership,
       code: document.getElementById('center-code').value.trim(),
       address: document.getElementById('center-address').value.trim(),
       area: parseFloat(document.getElementById('center-area').value) || 0,
-      monthlyRent: parseFloat(document.getElementById('center-monthly-rent').value) || 0,
-      landlord: document.getElementById('center-landlord').value.trim() || null,
-      leaseStart: document.getElementById('center-lease-start').value,
-      leaseEnd: document.getElementById('center-lease-end').value,
+      monthlyRent: isLease ? (parseFloat(document.getElementById('center-monthly-rent').value) || 0) : 0,
+      landlord: isLease ? (document.getElementById('center-landlord').value.trim() || null) : null,
+      leaseStart: isLease ? document.getElementById('center-lease-start').value : '',
+      leaseEnd: isLease ? document.getElementById('center-lease-end').value : '',
       centerChief: document.getElementById('center-chief').value.trim(),
       centerMembers: document.getElementById('center-members').value.trim(),
-      operationNote: document.getElementById('center-operation-note').value.trim(),
       status: document.getElementById('center-status').value,
       updatedAt: Date.now(),
     };
@@ -3347,7 +3389,7 @@ Pages.centers = (() => {
       Object.assign(c, fields);
       showToast('센터 정보가 수정되었습니다');
     } else {
-      const newC = { id: Date.now(), ...fields, favor:{rf:0,fitout:0,ti:0,note:''}, occupancy:{leased:0,total:0}, tenants:[], salesList:[], volumes:[], photos:[], order: DB.centers.length, createdAt: Date.now() };
+      const newC = { id: Date.now(), ...fields, operationNote:'', favor:{rf:0,fitout:0,ti:0,note:''}, occupancy:{leased:0,total:0}, tenants:[], salesList:[], volumes:[], photos:[], order: DB.centers.length, createdAt: Date.now() };
       DB.centers.push(newC);
       showToast('센터가 추가되었습니다');
     }
@@ -3406,6 +3448,7 @@ Pages.centers = (() => {
     openAddModal,
     editCenterModal,
     selectType,
+    selectOwnership,
     saveCenter,
     deleteCenter,
     searchCenters,
@@ -3418,26 +3461,39 @@ Pages.centers = (() => {
 })();
 
 // --- Centers shims (HTML onclick 호환) ---
-function renderCenters()          { Pages.centers.render(); }
-function toggleCenterCard(id)     { Pages.centers.toggleCard(id); }
-function selectCenter(id)         { Pages.centers.openDetail(id); }
-function moveCenter(id, dir)      { Pages.centers.moveCenter(id, dir); }
-function searchCenters(q)         { Pages.centers.searchCenters(q); }
-function openCenterDetail(id)     { Pages.centers.openDetail(id); }
-function closeCenterDetail()      { Pages.centers.closeDetail(); }
-function selectCenterTab(tab)     { Pages.centers.selectTab(tab); }
-function openAddCenterModal()     { Pages.centers.openAddModal(); }
-function editCenterFromPanel()    { Pages.centers.editCenterFromPanel(); }
-function deleteCenterFromPanel()  { Pages.centers.deleteCenterFromPanel(); }
-function selectCenterType(t)      { Pages.centers.selectType(t); }
-function saveCenter()             { Pages.centers.saveCenter(); }
-function deleteCenter(id)         { Pages.centers.deleteCenter(id); }
-function editCenter(id)           { Pages.centers.editCenterModal(id); }
+function renderCenters()               { Pages.centers.render(); }
+function toggleCenterCard(id)          { Pages.centers.toggleCard(id); }
+function selectCenter(id)              { Pages.centers.openDetail(id); }
+function moveCenter(id, dir)           { Pages.centers.moveCenter(id, dir); }
+function searchCenters(q)              { Pages.centers.searchCenters(q); }
+function openCenterDetail(id)          { Pages.centers.openDetail(id); }
+function closeCenterDetail()           { Pages.centers.closeDetail(); }
+function selectCenterTab(tab)          { Pages.centers.selectTab(tab); }
+function openAddCenterModal()          { Pages.centers.openAddModal(); }
+function editCenterFromPanel()         { Pages.centers.editCenterFromPanel(); }
+function deleteCenterFromPanel()       { Pages.centers.deleteCenterFromPanel(); }
+function selectCenterType(t)           { Pages.centers.selectType(t); }
+function selectCenterOwnership(t)      { Pages.centers.selectOwnership(t); }
+function saveCenter()                  { Pages.centers.saveCenter(); }
+function deleteCenter(id)              { Pages.centers.deleteCenter(id); }
+function editCenter(id)                { Pages.centers.editCenterModal(id); }
+
+function saveOperationNote(centerId) {
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c) return;
+  const ta = document.getElementById(`ops-note-input-${centerId}`);
+  if (!ta) return;
+  c.operationNote = ta.value.trim();
+  c.updatedAt = Date.now();
+  saveDB();
+  showToast('운영 특이사항이 저장되었습니다');
+}
 
 // ---- Center sub-item CRUD ----
 function addTenantRow(centerId) {
   document.getElementById('tenant-center-id').value = centerId;
-  ['tenant-name','tenant-area','tenant-start','tenant-end','tenant-rent','tenant-mgmt','tenant-notice'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['tenant-name','tenant-area','tenant-start','tenant-end','tenant-rent','tenant-mgmt','tenant-notice','tenant-favor-note'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['tenant-favor-rf','tenant-favor-fitout','tenant-favor-ti'].forEach(id => { const el = document.getElementById(id); if(el) el.value = '0'; });
   document.getElementById('modal-center-tenant').classList.remove('hidden');
 }
 
@@ -3456,6 +3512,12 @@ function saveTenantRow() {
     monthlyRent: parseFloat(document.getElementById('tenant-rent').value) || 0,
     managementFee: parseFloat(document.getElementById('tenant-mgmt').value) || 0,
     noticePeriod: parseInt(document.getElementById('tenant-notice').value) || 0,
+    favor: {
+      rf: parseFloat(document.getElementById('tenant-favor-rf').value) || 0,
+      fitout: parseFloat(document.getElementById('tenant-favor-fitout').value) || 0,
+      ti: parseFloat(document.getElementById('tenant-favor-ti').value) || 0,
+      note: document.getElementById('tenant-favor-note').value.trim(),
+    },
   });
   saveDB();
   document.getElementById('modal-center-tenant').classList.add('hidden');
@@ -6749,6 +6811,15 @@ window.addEventListener('resize', () => {
         <div><label class="block text-xs font-semibold text-secondary mb-1">월 임차료(원)</label><input type="number" id="tenant-rent" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
         <div><label class="block text-xs font-semibold text-secondary mb-1">관리비(원)</label><input type="number" id="tenant-mgmt" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
         <div><label class="block text-xs font-semibold text-secondary mb-1">통보기간(개월)</label><input type="number" id="tenant-notice" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+      </div>
+      <div class="border-t border-outline-variant pt-3">
+        <p class="text-xs font-bold text-secondary mb-2">Favor</p>
+        <div class="grid grid-cols-3 gap-3">
+          <div><label class="block text-xs font-semibold text-secondary mb-1">RF (개)</label><input type="number" id="tenant-favor-rf" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" value="0"></div>
+          <div><label class="block text-xs font-semibold text-secondary mb-1">Fitout (개)</label><input type="number" id="tenant-favor-fitout" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" value="0"></div>
+          <div><label class="block text-xs font-semibold text-secondary mb-1">TI (원)</label><input type="number" id="tenant-favor-ti" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" value="0"></div>
+        </div>
+        <div class="mt-2"><label class="block text-xs font-semibold text-secondary mb-1">Favor 특이사항</label><input type="text" id="tenant-favor-note" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder=""></div>
       </div>
     </div>
     <div class="flex gap-3 mt-5">
