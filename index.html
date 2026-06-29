@@ -2368,6 +2368,11 @@ Pages.dashboard = (() => {
     if (!confirm('이 업무를 삭제하겠습니까?')) return;
     DB.tasks = DB.tasks.filter(t => t.id !== id);
     db.collection('tasks').doc(String(id)).delete().catch(e => console.error(e));
+    const calEvId = id + 1;
+    if (DB.events && DB.events.some(e => e.id === calEvId)) {
+      DB.events = DB.events.filter(e => e.id !== calEvId);
+      db.collection('events').doc(String(calEvId)).delete().catch(e => console.error(e));
+    }
     render();
     showToast('업무가 삭제되었습니다');
   }
