@@ -6271,12 +6271,18 @@ function draftDeleteTableCol() {
   let _rz = null; // { startX, startW, cell, colIdx, table }
 
   function _fixTableLayout(table) {
-    // Snapshot all current widths and lock layout
-    table.querySelectorAll('tr:first-child td, tr:first-child th').forEach(cell => {
-      cell.style.width = cell.offsetWidth + 'px';
+    // Snapshot widths of ALL cells per column (not just first row)
+    // so each column has an explicit width before switching to fixed layout
+    const rows = table.querySelectorAll('tr');
+    rows.forEach(row => {
+      Array.from(row.children).forEach(cell => {
+        cell.style.width = cell.offsetWidth + 'px';
+      });
     });
+    // Do NOT fix table total width — let it be auto so resizing a column
+    // shrinks/grows the table itself rather than redistributing to other columns
+    table.style.width = 'auto';
     table.style.tableLayout = 'fixed';
-    table.style.width = table.offsetWidth + 'px';
   }
 
   function _onHandleMousedown(e) {
