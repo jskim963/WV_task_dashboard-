@@ -221,8 +221,8 @@ tailwind.config = {
   .wk-table { border-collapse:collapse; width:100%; min-width:700px; }
   .wk-table th, .wk-table td { border:1px solid #e2e8f0; padding:6px 8px; vertical-align:top; }
   .wk-table th { background:#f8fafc; font-size:11px; text-align:center; font-weight:600; color:#505f76; }
-  .wk-cell { min-height:64px; }
-  .wk-event { font-size:11px; padding:2px 6px; border-radius:4px; margin-bottom:2px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; }
+  .wk-cell { height:56px; max-height:56px; overflow:hidden; vertical-align:top; }
+  .wk-event { font-size:11px; padding:2px 6px; border-radius:4px; margin-bottom:2px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; max-width:100%; }
   .wk-today { background:#eff6ff !important; }
   @media (max-width: 1023px) {
     #search-wrap.mobile-open {
@@ -2567,7 +2567,12 @@ Pages.calendar = (() => {
       const evHtml = visibleEvs.map(e => {
         const s = EVT_COLORS[e.type] || EVT_COLORS.기타;
         const nb = isNew(e) ? '<span class="new-badge">NEW</span>' : '';
-        return `<div class="cal-event" style="${s}" onclick="event.stopPropagation();openEventDetail(${e.id})">${e.title}${nb}</div>`;
+        let label = e.title;
+        if (e.type !== '업무보고' && !isTeamEvent(e)) {
+          const names = getEventPersonIds(e).map(id => DB.members.find(m=>m.id===id)?.name).filter(Boolean);
+          if (names.length) label = names.join('·') + ' ' + e.title;
+        }
+        return `<div class="cal-event" style="${s}" onclick="event.stopPropagation();openEventDetail(${e.id})" title="${label}">${label}${nb}</div>`;
       }).join('') + (moreCount > 0 ? `<div class="cal-event" style="background:#f1f5f9;color:#64748b" onclick="event.stopPropagation();calDayClick('${dateStr}',event)">+${moreCount}개</div>` : '');
       const dotHtml = dayEvents.length
         ? `<div class="cal-dot-row">${dayEvents.slice(0,4).map(e=>`<div class="cal-dot" style="background:${DOT_COLORS[e.type]||'#7c3aed'}"></div>`).join('')}</div>`
