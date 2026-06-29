@@ -451,7 +451,6 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
           <div class="flex gap-2 flex-wrap" id="status-filters">
             <button class="filter-btn active px-4 py-1.5 rounded-full text-sm font-medium transition-all bg-primary text-white" data-filter="all" onclick="filterTasks('all')">전체</button>
             <button class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary" data-filter="완료" onclick="filterTasks('완료')">완료</button>
-            <button class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary" data-filter="진행중" onclick="filterTasks('진행중')">진행중</button>
             <button class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary" data-filter="지연" onclick="filterTasks('지연')">지연</button>
             <button class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary" data-filter="대기" onclick="filterTasks('대기')">대기</button>
           </div>
@@ -471,6 +470,14 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
                   <button onclick="clearAssigneeFilter()" class="text-xs text-secondary hover:text-primary">전체 해제</button>
                 </div>
               </div>
+            </div>
+            <!-- 프로젝트 드롭박스 -->
+            <div class="relative" id="project-filter-wrap">
+              <button onclick="toggleProjectFilter()" id="project-filter-btn" class="flex items-center gap-1 border border-outline-variant rounded-lg px-3 py-1.5 text-sm text-secondary bg-white hover:border-primary transition-colors" style="min-width:130px;">
+                <span id="project-filter-label" class="truncate flex-1 text-left">프로젝트 (전체)</span>
+                <span class="material-symbols-outlined flex-shrink-0" style="font-size:16px;line-height:1">expand_more</span>
+              </button>
+              <div id="project-filter-panel" class="hidden absolute top-full left-0 mt-1 z-50 bg-white border border-outline-variant rounded-xl shadow-lg w-52 py-1.5 max-h-60 overflow-y-auto"></div>
             </div>
             <!-- 우선순위 커스텀 드롭박스 -->
             <div class="relative" id="priority-dropdown-wrap">
@@ -1613,6 +1620,7 @@ Pages.dashboard = (() => {
   let filter = 'all';
   let assigneeFilters = [];   // 멀티 담당자 (ID 문자열 배열)
   let priorityFilter = '';
+  let projectFilter = null;   // 프로젝트 ID (number) or null = 전체
   let page = 1;
   const PAGE_SIZE = 8;
   let detailTaskId = null;
@@ -1696,6 +1704,7 @@ Pages.dashboard = (() => {
           if (!assigneeFilters.some(id => ids.includes(String(id)))) return false;
         }
         if (priorityFilter && t.priority !== priorityFilter) return false;
+        if (projectFilter !== null && t.projectId !== projectFilter) return false;
         return true;
       })
       .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
@@ -1837,6 +1846,39 @@ Pages.dashboard = (() => {
         ? 'filter-btn active px-4 py-1.5 rounded-full text-sm font-medium transition-all bg-primary text-white'
         : 'filter-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all border border-outline-variant text-secondary hover:border-primary hover:text-primary';
     });
+    renderTaskTable();
+  }
+
+  function renderProjectFilterDropdown() {
+    const panel = document.getElementById('project-filter-panel');
+    if (!panel) return;
+    const projects = DB.projects || [];
+    panel.innerHTML = [
+      `<div class="px-3 py-1.5 text-sm cursor-pointer hover:bg-surface-container rounded-lg mx-1 ${projectFilter === null ? 'text-primary font-semibold' : 'text-on-surface'}" onclick="setProjectFilter(null)">전체</div>`,
+      ...projects.map(p => `<div class="px-3 py-1.5 text-sm cursor-pointer hover:bg-surface-container rounded-lg mx-1 truncate ${projectFilter === p.id ? 'text-primary font-semibold' : 'text-on-surface'}" onclick="setProjectFilter(${p.id})">${p.title}</div>`)
+    ].join('');
+  }
+
+  function toggleProjectFilter_fn() {
+    const panel = document.getElementById('project-filter-panel');
+    if (!panel) return;
+    const willShow = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !willShow);
+    if (willShow) renderProjectFilterDropdown();
+  }
+
+  function setProjectFilter_fn(id) {
+    projectFilter = id;
+    page = 1;
+    const label = document.getElementById('project-filter-label');
+    if (label) {
+      if (id === null) { label.textContent = '프로젝트 (전체)'; }
+      else {
+        const p = (DB.projects||[]).find(p => p.id === id);
+        label.textContent = p ? p.title : '프로젝트 (전체)';
+      }
+    }
+    document.getElementById('project-filter-panel')?.classList.add('hidden');
     renderTaskTable();
   }
 
@@ -2046,6 +2088,8 @@ Pages.dashboard = (() => {
     clearAssigneeFilter: clearAssigneeFilter_fn,
     togglePriorityDropdown: togglePriorityDropdown_fn,
     setPriorityFilter: setPriorityFilter_fn,
+    toggleProjectFilter: toggleProjectFilter_fn,
+    setProjectFilter: setProjectFilter_fn,
   };
 })();
 
@@ -2058,6 +2102,8 @@ function statusBadge(s) {
 function renderDashboard() { Pages.dashboard.render(); }
 function filterTasks(f) { Pages.dashboard.filterTasks(f); }
 function filterByPriority(v) { Pages.dashboard.filterByPriority(v); }
+function toggleProjectFilter() { Pages.dashboard.toggleProjectFilter(); }
+function setProjectFilter(id) { Pages.dashboard.setProjectFilter(id); }
 function togglePriorityDropdown() { Pages.dashboard.togglePriorityDropdown(); }
 function setPriorityFilter_fn(v) { Pages.dashboard.setPriorityFilter(v); }
 function toggleAssigneeDropdown() { Pages.dashboard.toggleAssigneeDropdown(); }
@@ -2093,6 +2139,10 @@ document.addEventListener('click', function(e) {
   const wrap = document.getElementById('project-assignee-wrap');
   if (wrap && !wrap.contains(e.target)) {
     document.getElementById('project-assignee-panel')?.classList.add('hidden');
+  }
+  const pfWrap = document.getElementById('project-filter-wrap');
+  if (pfWrap && !pfWrap.contains(e.target)) {
+    document.getElementById('project-filter-panel')?.classList.add('hidden');
   }
 });
 
