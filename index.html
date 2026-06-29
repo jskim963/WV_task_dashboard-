@@ -79,6 +79,23 @@ tailwind.config = {
   .badge-normal   { background:#f1f5f9; color:#475569; }
   .badge-low      { background:#f0fdf4; color:#16a34a; }
   .badge-high     { background:#fef2f2; color:#dc2626; }
+  .badge-inprogress { background:#dbeafe; color:#2563eb; }
+
+  /* Center dashboard */
+  .center-type-badge { display:inline-flex;align-items:center;padding:2px 8px;border-radius:9999px;font-size:0.7rem;font-weight:700;letter-spacing:.05em; }
+  .center-type-W { background:#dbeafe;color:#1d4ed8; }
+  .center-type-V { background:#dcfce7;color:#15803d; }
+  .center-card { cursor:pointer;border:1.5px solid transparent;transition:border-color .15s,box-shadow .15s; }
+  .center-card:hover { border-color:#93c5fd;box-shadow:0 4px 16px rgba(37,99,235,.1); }
+  .center-card.active { border-color:#2563eb;box-shadow:0 4px 16px rgba(37,99,235,.18); }
+  .occupancy-bar-track { height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden; }
+  .occupancy-bar-fill { height:100%;background:#2563eb;border-radius:4px;transition:width .3s; }
+  #center-detail-overlay { background:rgba(0,0,0,.35); }
+  #center-detail-panel { transition:transform .25s cubic-bezier(.4,0,.2,1); }
+  .center-tab-btn { padding:8px 16px;border-bottom:2px solid transparent;font-size:.8rem;font-weight:600;color:#6b7280;cursor:pointer;white-space:nowrap; }
+  .center-tab-btn.active { border-bottom-color:#2563eb;color:#2563eb; }
+  .center-field-label { font-size:.7rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px; }
+  .center-field-value { font-size:.875rem;font-weight:500;color:#111827; }
 
   /* Sidebar active */
   .nav-item { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:8px; cursor:pointer; transition:all 0.15s; color:#434655; font-size:14px; font-weight:500; }
@@ -660,25 +677,47 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
 
     <!-- ====== PAGE: CENTERS ====== -->
     <div id="page-centers" class="page">
-      <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center justify-between mb-5">
         <div>
           <h1 class="text-xl lg:text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">센터별 현황</h1>
-          <p class="text-sm text-secondary mt-0.5">관리 센터의 이슈 및 특이사항을 관리합니다</p>
+          <p class="text-sm text-secondary mt-0.5">W센터 · V센터 운영 현황 관리</p>
         </div>
-        <div class="flex gap-2">
-          <button onclick="openAddCenterModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm">
-            <span class="material-symbols-outlined text-base">add_location</span> 센터 추가
-          </button>
-        </div>
+        <button id="btn-add-center" onclick="openAddCenterModal()" class="hidden flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 shadow-sm">
+          <span class="material-symbols-outlined text-base">add_location</span> 센터 추가
+        </button>
       </div>
-      <div class="mb-4">
-        <div class="relative max-w-sm">
+      <div class="mb-4 max-w-sm">
+        <div class="relative">
           <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-sm">search</span>
-          <input type="text" placeholder="센터 검색..." class="pl-9 pr-4 py-1.5 bg-white border border-outline-variant rounded-lg text-sm w-full shadow-sm" oninput="searchCenters(this.value)">
+          <input type="text" id="center-search-input" placeholder="센터 검색..." class="pl-9 pr-4 py-1.5 bg-white border border-outline-variant rounded-lg text-sm w-full shadow-sm" oninput="searchCenters(this.value)">
         </div>
       </div>
-      <!-- Center accordion list -->
-      <div id="center-list"></div>
+      <!-- W / V 2열 그리드 -->
+      <div class="grid grid-cols-2 gap-6">
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <span class="center-type-badge center-type-W">W센터</span>
+            <span id="center-count-W" class="text-xs text-secondary"></span>
+          </div>
+          <div id="center-grid-W" class="grid grid-cols-2 gap-3"></div>
+          <div id="center-empty-W" class="hidden text-center py-6 text-secondary text-sm">W센터 없음</div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <span class="center-type-badge center-type-V">V센터</span>
+            <span id="center-count-V" class="text-xs text-secondary"></span>
+          </div>
+          <div id="center-grid-V" class="grid grid-cols-2 gap-3"></div>
+          <div id="center-empty-V" class="hidden text-center py-6 text-secondary text-sm">V센터 없음</div>
+        </div>
+      </div>
+      <!-- 미분류 -->
+      <div id="center-unset-section" class="hidden mt-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-xs font-semibold text-secondary uppercase tracking-wide">미분류 (타입 미설정)</span>
+        </div>
+        <div id="center-grid-null" class="grid grid-cols-4 gap-3 opacity-50"></div>
+      </div>
     </div>
 
     <!-- ====== PAGE: PROJECTS ====== -->
@@ -1397,17 +1436,27 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
 
 <!-- Add Center Modal -->
 <div id="modal-add-center" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
-  <div class="modal-box" style="width:500px;">
+  <div class="modal-box" style="width:min(96vw,640px);max-height:90vh;overflow-y:auto;">
     <div class="flex items-center justify-between mb-5">
       <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="center-modal-title">센터 추가</h3>
       <button onclick="document.getElementById('modal-add-center').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
     </div>
     <div class="space-y-4">
       <input type="hidden" id="editing-center-id">
+      <!-- 타입 선택 (필수) -->
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-2">센터 타입 * <span class="text-red-500 text-xs hidden" id="center-type-err">필수 선택</span></label>
+        <div class="flex gap-3">
+          <button type="button" onclick="selectCenterType('W')" id="center-type-btn-W" class="draft-type-btn flex-1 border border-outline-variant rounded-lg py-2 text-sm font-semibold text-secondary">W센터</button>
+          <button type="button" onclick="selectCenterType('V')" id="center-type-btn-V" class="draft-type-btn flex-1 border border-outline-variant rounded-lg py-2 text-sm font-semibold text-secondary">V센터</button>
+        </div>
+        <input type="hidden" id="center-type-value">
+      </div>
+      <!-- 기본 정보 -->
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-semibold text-secondary mb-1.5">센터명 *</label>
-          <input type="text" id="center-name" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="OO 센터">
+          <input type="text" id="center-name" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">
         </div>
         <div>
           <label class="block text-xs font-semibold text-secondary mb-1.5">센터 코드</label>
@@ -1416,7 +1465,7 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       </div>
       <div>
         <label class="block text-xs font-semibold text-secondary mb-1.5">주소</label>
-        <input type="text" id="center-address" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="센터 주소">
+        <input type="text" id="center-address" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
@@ -1432,29 +1481,41 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
           </select>
         </div>
       </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">면적 (평)</label>
+          <input type="number" id="center-area" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">월 임대료 (원)</label>
+          <input type="number" id="center-monthly-rent" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0">
+        </div>
+      </div>
       <div>
-        <label class="block text-xs font-semibold text-secondary mb-1.5">특이사항/이슈</label>
-        <textarea id="center-issue" rows="2" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none" placeholder="현재 이슈나 특이사항을 입력하세요..."></textarea>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">임대인 <span class="text-xs text-secondary font-normal">(미입력 시 자가센터)</span></label>
+        <input type="text" id="center-landlord" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="임대인명 (자가센터는 비워두세요)">
       </div>
-      <div class="border-t border-outline-variant pt-4">
-        <p class="text-xs font-bold text-secondary mb-2">센터장 정보</p>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-semibold text-secondary mb-1.5">센터장 이름</label>
-            <input type="text" id="center-director-name" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="홍길동">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-secondary mb-1.5">연락처</label>
-            <input type="text" id="center-director-phone" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="010-0000-0000">
-          </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">임대기간</label>
+        <div class="flex gap-2 items-center">
+          <input type="date" id="center-lease-start" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm">
+          <span class="text-secondary text-sm">~</span>
+          <input type="date" id="center-lease-end" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm">
         </div>
       </div>
-      <div class="border-t border-outline-variant pt-4">
-        <div class="flex items-center justify-between mb-2">
-          <p class="text-xs font-bold text-secondary">센터원</p>
-          <button type="button" onclick="addStaffRow()" class="text-xs text-primary font-semibold hover:underline">+ 추가</button>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">센터장</label>
+          <input type="text" id="center-chief" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="이름">
         </div>
-        <div id="staff-list" class="space-y-2"></div>
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">센터원</label>
+          <input type="text" id="center-members" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="예: 홍길동, 김철수">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">운영 특이사항</label>
+        <textarea id="center-operation-note" rows="2" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none"></textarea>
       </div>
     </div>
     <div class="flex gap-3 mt-6">
@@ -2863,398 +2924,756 @@ function deleteMember(id) { Pages.team.deleteMember(id); }
 //  PAGE: CENTERS
 // ============================================================
 Pages.centers = (() => {
-  let selectedId = null;
+  let _selectedId = null;
+  let _activeTab = 'info';
+  const isAdmin = () => currentUser?.username === 'jungsoo.kim';
+  const canEdit = (c) => isAdmin() || currentUser?.memberId === c?.managerId;
 
+  // ── Render ──────────────────────────────────────────────────
   function render() {
     if (!requireAuth()) return;
-    const list = document.getElementById('center-list');
-    if (!list) return;
-    const statusColors = {정상:'badge-complete', 이슈:'badge-delayed', 점검:'badge-pending'};
-    list.innerHTML = DB.centers.map(c => {
-      const manager = DB.members.find(m => m.id === c.managerId);
-      const relatedTasks = DB.tasks.filter(t => t.centerId === c.id && t.status !== '완료');
-      const isOpen = selectedId === c.id;
-      return `
-      <div class="center-accordion-card border border-outline-variant rounded-xl mb-2 overflow-hidden bg-white shadow-sm" id="center-card-${c.id}">
-        <div class="flex items-center gap-1 pr-4 cursor-pointer hover:bg-surface-container-low transition-all ${isOpen ? 'bg-primary-container' : ''}" onclick="toggleCenterCard(${c.id})">
-          <div class="flex flex-col gap-0.5 py-3 pl-2 shrink-0">
-            <button onclick="event.stopPropagation();moveCenter(${c.id},-1)" class="p-0.5 rounded hover:bg-surface-container text-secondary" title="위로"><span class="material-symbols-outlined" style="font-size:14px">arrow_upward</span></button>
-            <button onclick="event.stopPropagation();moveCenter(${c.id},1)" class="p-0.5 rounded hover:bg-surface-container text-secondary" title="아래로"><span class="material-symbols-outlined" style="font-size:14px">arrow_downward</span></button>
-          </div>
-          <div class="flex-1 py-3 pl-2 min-w-0">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="font-semibold text-sm text-on-surface">${c.name}</span>
-              <span class="text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[c.status]||'badge-normal'}">${c.status}</span>
-            </div>
-            <div class="text-xs text-secondary">${c.code || ''}${c.address ? ' · ' + c.address : ''}</div>
-            ${c.issue ? `<div class="text-xs text-orange-600 mt-1 truncate">⚠ ${c.issue}</div>` : ''}
-          </div>
-          <div class="flex items-center gap-3 shrink-0">
-            <div class="text-right hidden sm:block">
-              <div class="text-xs text-secondary">${manager ? manager.name : '미배정'}</div>
-              <div class="text-xs text-secondary">${relatedTasks.length}건</div>
-            </div>
-            <span class="material-symbols-outlined text-secondary transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}" id="center-chev-${c.id}" style="font-size:18px">expand_more</span>
-          </div>
-        </div>
-        <div id="center-body-${c.id}" class="${isOpen ? '' : 'hidden'} border-t border-outline-variant">
-          ${buildDetail(c)}
-        </div>
-      </div>`;
-    }).join('') || '<div class="text-center py-8 text-secondary text-sm">센터가 없습니다</div>';
 
-    populateCenterManagerSelect();
+    const addBtn = document.getElementById('btn-add-center');
+    if (addBtn) addBtn.classList.toggle('hidden', !isAdmin());
+
+    const centers = [...(DB.centers || [])].sort((a,b) => (a.order??0)-(b.order??0));
+    const W = centers.filter(c => c.type === 'W');
+    const V = centers.filter(c => c.type === 'V');
+    const U = centers.filter(c => !c.type);
+
+    renderGrid('W', W);
+    renderGrid('V', V);
+
+    const unsetSec = document.getElementById('center-unset-section');
+    if (unsetSec) unsetSec.classList.toggle('hidden', U.length === 0);
+    renderGridRaw('center-grid-null', U);
+
+    if (_selectedId) {
+      const c = (DB.centers||[]).find(c => c.id === _selectedId);
+      if (c) renderPanelContent(c);
+    }
   }
 
-  function buildDetail(c) {
-    const manager = DB.members.find(m => m.id === c.managerId);
-    const statusColors = {정상:'badge-complete', 이슈:'badge-delayed', 점검:'badge-pending'};
+  function renderGrid(type, list) {
+    const grid = document.getElementById(`center-grid-${type}`);
+    const empty = document.getElementById(`center-empty-${type}`);
+    const count = document.getElementById(`center-count-${type}`);
+    if (!grid) return;
+    if (count) count.textContent = `${list.length}개`;
+    if (!list.length) { grid.innerHTML = ''; empty?.classList.remove('hidden'); return; }
+    empty?.classList.add('hidden');
+    grid.innerHTML = list.map(c => buildCard(c)).join('');
+  }
+
+  function renderGridRaw(gridId, list) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    grid.innerHTML = list.map(c => buildCard(c)).join('');
+  }
+
+  function buildCard(c) {
+    const manager = (DB.members||[]).find(m => m.id === c.managerId);
+    const statusColors = { 정상:'badge-complete', 이슈:'badge-delayed', 점검:'badge-pending' };
+    const isActive = _selectedId === c.id;
+    let metricHtml = '';
+    if (c.type === 'W') {
+      const leased = c.occupancy?.leased ?? 0;
+      const total = c.occupancy?.total ?? 0;
+      const pct = total > 0 ? Math.round(leased / total * 100) : 0;
+      metricHtml = `
+        <div class="mt-2">
+          <div class="flex justify-between text-xs text-secondary mb-1">
+            <span>가동률</span><span class="font-semibold text-on-surface">${pct}%</span>
+          </div>
+          <div class="occupancy-bar-track"><div class="occupancy-bar-fill" style="width:${pct}%"></div></div>
+          <div class="text-xs text-secondary mt-0.5">${leased}평 / ${total}평</div>
+        </div>`;
+    } else if (c.type === 'V') {
+      const vols = (c.volumes || []).slice(0, 3);
+      if (vols.length) {
+        metricHtml = `<div class="mt-2 flex flex-wrap gap-1.5">` +
+          vols.map(v => `<div class="text-xs bg-surface-container-low rounded px-2 py-0.5"><span class="text-secondary">${v.label}</span> <span class="font-semibold">${(v.value||0).toLocaleString()} ${v.unit}</span></div>`).join('') +
+          `</div>`;
+      }
+    }
     return `
-      <div class="p-6">
-        <div class="flex items-start justify-between mb-4">
-          <div>
-            <div class="flex items-center gap-3 mb-2">
-              <span class="text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[c.status]||'badge-normal'}">${c.status}</span>
-              <span class="text-xs text-secondary font-mono">${c.code||''}</span>
-            </div>
-            <h2 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'">${c.name}</h2>
-            <p class="text-sm text-secondary mt-1">${c.address||''}</p>
-          </div>
-          <div class="flex gap-2">
-            <button onclick="editCenter(${c.id})" class="flex items-center gap-1.5 border border-outline-variant rounded-lg px-3 py-2 text-sm text-secondary hover:bg-surface-container"><span class="material-symbols-outlined text-sm">edit</span>수정</button>
-            <button onclick="deleteCenter(${c.id})" class="flex items-center gap-1.5 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-500 hover:bg-red-50"><span class="material-symbols-outlined text-sm">delete</span>삭제</button>
+    <div class="center-card bg-white rounded-xl p-4 shadow-sm ${isActive ? 'active' : ''}" id="center-card-${c.id}" onclick="openCenterDetail(${c.id})">
+      <div class="flex items-start justify-between gap-2 mb-1">
+        <span class="font-semibold text-sm text-on-surface leading-tight">${c.name}</span>
+        <span class="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusColors[c.status]||'badge-normal'}">${c.status||''}</span>
+      </div>
+      <div class="text-xs text-secondary">${c.code||''}</div>
+      <div class="text-xs text-secondary mt-0.5">${manager ? manager.name : '담당자 미배정'}</div>
+      ${metricHtml}
+    </div>`;
+  }
+
+  // ── 패널 열기/닫기/탭 ───────────────────────────────────────
+  function openDetail(id) {
+    const c = (DB.centers||[]).find(c => c.id === id);
+    if (!c) return;
+    _selectedId = id;
+    _activeTab = 'info';
+
+    document.querySelectorAll('.center-card').forEach(el => el.classList.remove('active'));
+    document.getElementById(`center-card-${id}`)?.classList.add('active');
+
+    const typeBadge = document.getElementById('cdp-type-badge');
+    if (typeBadge) { typeBadge.textContent = c.type ? `${c.type}센터` : '미분류'; typeBadge.className = `center-type-badge ${c.type ? 'center-type-'+c.type : ''}`; }
+    const titleEl = document.getElementById('cdp-title');
+    if (titleEl) titleEl.textContent = c.name;
+    const sb = document.getElementById('cdp-status-badge');
+    const statusColors = { 정상:'badge-complete', 이슈:'badge-delayed', 점검:'badge-pending' };
+    if (sb) { sb.textContent = c.status||''; sb.className = `text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[c.status]||'badge-normal'}`; }
+
+    const editBtn = document.getElementById('cdp-edit-btn');
+    const delBtn = document.getElementById('cdp-delete-btn');
+    if (editBtn) { editBtn.classList.toggle('hidden', !canEdit(c)); editBtn.style.display = canEdit(c) ? 'inline-flex' : 'none'; }
+    if (delBtn) { delBtn.classList.toggle('hidden', !isAdmin()); delBtn.style.display = isAdmin() ? 'inline-flex' : 'none'; }
+
+    selectTab('info');
+
+    const overlay = document.getElementById('center-detail-overlay');
+    overlay?.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeDetail() {
+    _selectedId = null;
+    document.getElementById('center-detail-overlay')?.classList.add('hidden');
+    document.body.style.overflow = '';
+    document.querySelectorAll('.center-card').forEach(el => el.classList.remove('active'));
+  }
+
+  function selectTab(tab) {
+    _activeTab = tab;
+    ['info','contract','ops'].forEach(t => {
+      document.getElementById(`cdp-tab-${t}`)?.classList.toggle('active', t === tab);
+    });
+    const c = (DB.centers||[]).find(c => c.id === _selectedId);
+    if (c) renderPanelContent(c);
+  }
+
+  function renderPanelContent(c) {
+    const el = document.getElementById('cdp-content');
+    if (!el) return;
+    if (_activeTab === 'info') el.innerHTML = buildTabInfo(c);
+    else if (_activeTab === 'contract') el.innerHTML = buildTabContract(c);
+    else if (_activeTab === 'ops') el.innerHTML = buildTabOps(c);
+  }
+
+  // ── 탭 1: 기본정보·사진 ─────────────────────────────────────
+  function buildTabInfo(c) {
+    const manager = (DB.members||[]).find(m => m.id === c.managerId);
+    const isSelf = !c.landlord;
+    const edit = canEdit(c);
+    return `
+    <div class="grid grid-cols-2 gap-6">
+      <div class="space-y-4">
+        <div><div class="center-field-label">센터코드</div><div class="center-field-value">${c.code||'-'}</div></div>
+        <div><div class="center-field-label">주소</div><div class="center-field-value">${c.address||'-'}</div></div>
+        <div><div class="center-field-label">면적</div><div class="center-field-value">${c.area ? c.area+'평' : '-'}</div></div>
+        <div><div class="center-field-label">임대인</div><div class="center-field-value">${isSelf ? '<span class="text-secondary">자가센터</span>' : c.landlord}</div></div>
+        ${!isSelf ? `<div><div class="center-field-label">임대기간</div><div class="center-field-value">${c.leaseStart||'?'} ~ ${c.leaseEnd||'?'}</div></div>` : ''}
+        <div><div class="center-field-label">월 임대료</div><div class="center-field-value">${c.monthlyRent ? Number(c.monthlyRent).toLocaleString()+'원' : '-'}</div></div>
+        <div><div class="center-field-label">운영 특이사항</div><div class="center-field-value whitespace-pre-line">${c.operationNote||'-'}</div></div>
+        ${edit ? `<button onclick="editCenterFromPanel()" class="text-xs text-primary font-semibold hover:underline">기본정보 수정</button>` : ''}
+      </div>
+      <div class="space-y-4">
+        <div>
+          <div class="center-field-label">본사 담당자</div>
+          <div class="flex items-center gap-2 mt-1">
+            <div class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold">${manager ? manager.name[0] : '?'}</div>
+            <div><div class="text-sm font-semibold">${manager ? manager.name : '미배정'}</div><div class="text-xs text-secondary">${manager?.rank||''}</div></div>
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-4 mb-4">
-          <div class="bg-surface-container-low rounded-lg p-4">
-            <div class="text-xs text-secondary mb-1">본사 담당자</div>
-            <div class="flex items-center gap-2">
-              <div class="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">${manager?manager.name[0]:'?'}</div>
-              <span class="font-semibold text-sm">${manager?manager.name:'미배정'}</span>
-              ${manager?`<span class="text-xs text-secondary">${manager.rank||''}</span>`:''}
-            </div>
+        <div><div class="center-field-label">센터장</div><div class="center-field-value">${c.centerChief||'-'}</div></div>
+        <div><div class="center-field-label">센터원</div><div class="center-field-value">${c.centerMembers||'-'}</div></div>
+        <div>
+          <div class="center-field-label mb-2">Favor</div>
+          <div class="grid grid-cols-3 gap-2 text-sm">
+            <div class="bg-surface-container-low rounded-lg p-2 text-center"><div class="text-xs text-secondary">RF</div><div class="font-semibold">${c.favor?.rf ?? '-'}개</div></div>
+            <div class="bg-surface-container-low rounded-lg p-2 text-center"><div class="text-xs text-secondary">Fitout</div><div class="font-semibold">${c.favor?.fitout ?? '-'}개</div></div>
+            <div class="bg-surface-container-low rounded-lg p-2 text-center"><div class="text-xs text-secondary">TI</div><div class="font-semibold">${c.favor?.ti != null ? Number(c.favor.ti).toLocaleString()+'원' : '-'}</div></div>
           </div>
-          <div class="bg-surface-container-low rounded-lg p-4 cursor-pointer select-none" onclick="toggleCenterTasks(${c.id},this)">
-            <div class="flex items-center justify-between">
-              <div>
-                <div class="text-xs text-secondary mb-0.5">관련 업무</div>
-                <div class="font-semibold text-sm">${DB.tasks.filter(t=>t.centerId===c.id&&t.status!=='완료').length}건 진행 중</div>
-              </div>
-              <span class="material-symbols-outlined text-secondary transition-transform duration-200" style="font-size:18px">expand_more</span>
-            </div>
-            <div class="center-task-list hidden mt-3 space-y-2">
-              ${DB.tasks.filter(t=>t.centerId===c.id&&t.status!=='완료').length===0
-                ? '<p class="text-xs text-secondary">관련 업무 없음</p>'
-                : DB.tasks.filter(t=>t.centerId===c.id&&t.status!=='완료').map(t=>{
-                    const assignees=getAssigneeIds(t).map(id=>DB.members.find(m=>m.id===id)).filter(Boolean);
-                    const isOverdue=t.deadline&&new Date(t.deadline)<new Date();
-                    return `<div class="bg-white rounded-lg px-3 py-2 border border-outline-variant cursor-pointer hover:border-primary transition-colors" onclick="event.stopPropagation();showTaskDetail(${t.id})">
-                      <div class="flex items-center justify-between gap-2">
-                        <div class="flex items-center gap-1.5 min-w-0">
-                          ${t.status==='지연'?'<span class="material-symbols-outlined text-orange-500 flex-shrink-0" style="font-size:14px">schedule</span>':''}
-                          ${t.priority==='높음'&&t.status!=='지연'?'<span class="material-symbols-outlined text-red-500 flex-shrink-0" style="font-size:14px">warning</span>':''}
-                          <span class="text-xs font-semibold text-on-surface truncate">${t.name}</span>
-                        </div>
-                        <span class="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusBadge(t.status)}">${t.status}</span>
-                      </div>
-                      <div class="flex items-center justify-between mt-1">
-                        <span class="text-xs text-secondary">${assignees.map(m=>m.name).join(', ')||'미배정'}</span>
-                        <span class="text-xs ${isOverdue?'text-red-500 font-medium':'text-secondary'}">${t.deadline||'-'}</span>
-                      </div>
-                    </div>`;
-                  }).join('')
-              }
-            </div>
-          </div>
+          ${c.favor?.note ? `<div class="text-xs text-secondary mt-2">${c.favor.note}</div>` : ''}
+          ${edit ? `<button onclick="openEditFavorModal(${c.id})" class="text-xs text-primary font-semibold hover:underline block mt-1">Favor 수정</button>` : ''}
         </div>
-        ${c.director ? `
-        <div class="mb-4 bg-surface-container-low rounded-lg p-4">
-          <div class="text-xs text-secondary mb-2 font-semibold">센터장</div>
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <div class="w-7 h-7 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-xs font-bold">${c.director.name[0]}</div>
-              <span class="font-semibold text-sm">${c.director.name}</span>
-            </div>
-            ${c.director.phone ? `<span class="text-xs text-secondary">${c.director.phone}</span>` : ''}
+        <div>
+          <div class="center-field-label mb-2">센터 사진</div>
+          <div id="cdp-photos" class="grid grid-cols-3 gap-2">
+            ${(c.photos||[]).length
+              ? (c.photos||[]).map(p => `<div class="relative group"><img src="${p.url}" alt="${p.name||''}" class="w-full aspect-square object-cover rounded-lg border border-outline-variant">${edit ? `<div class="absolute inset-0 hidden group-hover:flex items-center justify-center bg-black/40 rounded-lg"><button onclick="deleteCenterPhoto(${c.id},'${p.url}')" class="text-white text-xs bg-red-500 rounded px-2 py-1">삭제</button></div>` : ''}</div>`).join('')
+              : '<div class="text-xs text-secondary col-span-3">사진 없음</div>'}
           </div>
-        </div>` : ''}
-        ${c.staff && c.staff.length ? `
-        <div class="mb-4">
-          <div class="text-xs text-secondary mb-2 font-semibold">센터원 (${c.staff.length}명)</div>
-          <div class="grid grid-cols-2 gap-2">
-            ${c.staff.map(s => `<div class="flex items-center gap-2 bg-surface-container-low rounded-lg px-3 py-2">
-              <div class="w-6 h-6 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center text-xs font-bold">${s.name[0]}</div>
-              <div><div class="text-xs font-semibold">${s.name}</div><div class="text-xs text-secondary">${s.role||''}</div></div>
-            </div>`).join('')}
+          ${edit ? `<label class="mt-2 flex items-center gap-1.5 text-xs text-primary font-semibold cursor-pointer hover:underline"><span class="material-symbols-outlined text-sm">upload</span>사진 추가<input type="file" accept="image/*" multiple class="hidden" onchange="uploadCenterPhotos(${c.id},this)"></label>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── 탭 2: 계약/임차 ─────────────────────────────────────────
+  function buildTabContract(c) {
+    const edit = canEdit(c);
+    if (c.type === 'W') return buildTabContractW(c, edit);
+    if (c.type === 'V') return buildTabContractV(c, edit);
+    return '<p class="text-secondary text-sm">센터 타입을 먼저 설정해주세요.</p>';
+  }
+
+  function buildTabContractW(c, edit) {
+    const tenants = c.tenants || [];
+    const sales = c.salesList || [];
+    const cols1 = edit ? 7 : 6;
+    const cols2 = edit ? 6 : 5;
+    return `
+    <div class="space-y-8">
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold text-sm">임차사 목록</h3>
+          ${edit ? `<button onclick="addTenantRow(${c.id})" class="text-xs text-primary font-semibold hover:underline">+ 추가</button>` : ''}
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs border-collapse">
+            <thead><tr class="bg-surface-container-low">
+              <th class="border border-outline-variant px-3 py-2 text-left">임차사명</th>
+              <th class="border border-outline-variant px-3 py-2 text-left">계약기간</th>
+              <th class="border border-outline-variant px-3 py-2 text-right">평수</th>
+              <th class="border border-outline-variant px-3 py-2 text-right">월 임차료</th>
+              <th class="border border-outline-variant px-3 py-2 text-right">관리비</th>
+              <th class="border border-outline-variant px-3 py-2 text-center">통보기간</th>
+              ${edit ? '<th class="border border-outline-variant px-2 py-2"></th>' : ''}
+            </tr></thead>
+            <tbody>
+              ${tenants.length ? tenants.map(t => `<tr>
+                <td class="border border-outline-variant px-3 py-2">${t.name||'-'}</td>
+                <td class="border border-outline-variant px-3 py-2 whitespace-nowrap">${t.contractStart||''}~${t.contractEnd||''}</td>
+                <td class="border border-outline-variant px-3 py-2 text-right">${t.area||0}평</td>
+                <td class="border border-outline-variant px-3 py-2 text-right">${(t.monthlyRent||0).toLocaleString()}원</td>
+                <td class="border border-outline-variant px-3 py-2 text-right">${(t.managementFee||0).toLocaleString()}원</td>
+                <td class="border border-outline-variant px-3 py-2 text-center">${t.noticePeriod||0}개월</td>
+                ${edit ? `<td class="border border-outline-variant px-2 py-2 text-center"><button onclick="deleteTenantRow(${c.id},${t.id})" class="text-red-400 hover:text-red-600"><span class="material-symbols-outlined" style="font-size:14px">delete</span></button></td>` : ''}
+              </tr>`).join('') : `<tr><td colspan="${cols1}" class="border border-outline-variant px-3 py-4 text-center text-secondary">임차사 없음</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold text-sm">영업 리스트</h3>
+          ${edit ? `<button onclick="addSalesRow(${c.id})" class="text-xs text-primary font-semibold hover:underline">+ 추가</button>` : ''}
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs border-collapse">
+            <thead><tr class="bg-surface-container-low">
+              <th class="border border-outline-variant px-3 py-2 text-left">업체명</th>
+              <th class="border border-outline-variant px-3 py-2 text-right">평수</th>
+              <th class="border border-outline-variant px-3 py-2 text-left">기간</th>
+              <th class="border border-outline-variant px-3 py-2 text-left">상품</th>
+              <th class="border border-outline-variant px-3 py-2 text-left">특이사항</th>
+              ${edit ? '<th class="border border-outline-variant px-2 py-2"></th>' : ''}
+            </tr></thead>
+            <tbody>
+              ${sales.length ? sales.map(s => `<tr>
+                <td class="border border-outline-variant px-3 py-2">${s.company||'-'}</td>
+                <td class="border border-outline-variant px-3 py-2 text-right">${s.area||0}평</td>
+                <td class="border border-outline-variant px-3 py-2">${s.period||'-'}</td>
+                <td class="border border-outline-variant px-3 py-2">${s.product||'-'}</td>
+                <td class="border border-outline-variant px-3 py-2">${s.note||'-'}</td>
+                ${edit ? `<td class="border border-outline-variant px-2 py-2 text-center"><button onclick="deleteSalesRow(${c.id},${s.id})" class="text-red-400 hover:text-red-600"><span class="material-symbols-outlined" style="font-size:14px">delete</span></button></td>` : ''}
+              </tr>`).join('') : `<tr><td colspan="${cols2}" class="border border-outline-variant px-3 py-4 text-center text-secondary">영업 항목 없음</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function buildTabContractV(c, edit) {
+    return `
+    <div class="space-y-6">
+      <div class="grid grid-cols-2 gap-4">
+        <div><div class="center-field-label">고객사</div><div class="center-field-value">${c.client||'-'}</div></div>
+        <div><div class="center-field-label">고객사 계약기간</div><div class="center-field-value">${c.clientContractStart||'?'}~${c.clientContractEnd||'?'}</div></div>
+        <div class="col-span-2"><div class="center-field-label">업무범위</div><div class="center-field-value whitespace-pre-line">${c.workScope||'-'}</div></div>
+        <div><div class="center-field-label">도급사</div><div class="center-field-value">${c.contractor||'-'}</div></div>
+        <div><div class="center-field-label">도급계약기간</div><div class="center-field-value">${c.contractorStart||'?'}~${c.contractorEnd||'?'}</div></div>
+        <div class="col-span-2"><div class="center-field-label">위탁업무</div><div class="center-field-value whitespace-pre-line">${c.contractedWork||'-'}</div></div>
+        <div><div class="center-field-label">연 도급비</div><div class="center-field-value">${c.annualContractFee ? Number(c.annualContractFee).toLocaleString()+'원' : '-'}</div></div>
+        <div><div class="center-field-label">도급인원</div><div class="center-field-value">${c.contractorHeadcount ? c.contractorHeadcount+'명' : '-'}</div></div>
+      </div>
+      ${edit ? `<button onclick="openEditContractVModal(${c.id})" class="text-xs text-primary font-semibold hover:underline">계약 정보 수정</button>` : ''}
+    </div>`;
+  }
+
+  // ── 탭 3: 운영현황 ──────────────────────────────────────────
+  function buildTabOps(c) {
+    const edit = canEdit(c);
+    const relatedTasks = (DB.tasks||[]).filter(t => t.centerId === c.id && t.status !== '완료');
+    let metricsHtml = '';
+    if (c.type === 'W') {
+      const leased = c.occupancy?.leased ?? 0;
+      const total = c.occupancy?.total ?? 0;
+      const pct = total > 0 ? Math.round(leased / total * 100) : 0;
+      metricsHtml = `
+      <div class="mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold text-sm">가동률</h3>
+          ${edit ? `<button onclick="openEditOccupancyModal(${c.id})" class="text-xs text-primary font-semibold hover:underline">수정</button>` : ''}
+        </div>
+        <div class="flex items-center gap-6">
+          <div class="relative w-24 h-24 flex-shrink-0">
+            <svg viewBox="0 0 36 36" class="w-24 h-24 -rotate-90">
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3"/>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#2563eb" stroke-width="3" stroke-dasharray="${pct} ${100-pct}" stroke-linecap="round"/>
+            </svg>
+            <div class="absolute inset-0 flex items-center justify-center text-lg font-bold text-on-surface">${pct}%</div>
           </div>
-        </div>` : ''}
-        <div class="border-t border-outline-variant pt-4">
-          <h3 class="font-bold text-sm text-on-surface mb-3 flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-sm ${c.issue?'text-orange-500':'text-secondary'}">report_problem</span>
-            실시간 주요 이슈 및 특이사항
-          </h3>
-          ${c.issue ? `
-            <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
-              <p class="text-sm text-orange-800 leading-relaxed">${c.issue}</p>
-            </div>
-          ` : `
-            <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 flex items-center gap-2">
-              <span class="material-symbols-outlined text-green-600 text-sm">check_circle</span>
-              <p class="text-sm text-green-700">현재 특이사항 없음</p>
-            </div>
-          `}
-          <div class="flex gap-2">
-            <input type="text" id="center-issue-input-${c.id}" placeholder="새 이슈 또는 특이사항 입력..." class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')addCenterIssue(${c.id})">
-            <button onclick="addCenterIssue(${c.id})" class="bg-primary text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">추가</button>
-            ${c.issue ? `<button onclick="clearCenterIssue(${c.id})" class="border border-outline-variant rounded-lg px-3 py-2 text-sm text-secondary hover:bg-surface-container">이슈 해소</button>` : ''}
+          <div class="space-y-1">
+            <div class="text-sm"><span class="text-secondary">임차 평수</span> <span class="font-semibold ml-2">${leased}평</span></div>
+            <div class="text-sm"><span class="text-secondary">전체 평수</span> <span class="font-semibold ml-2">${total}평</span></div>
           </div>
-          ${c.issueHistory && c.issueHistory.length ? `
-          <div class="mt-4">
-            <div class="text-xs font-semibold text-secondary mb-2 flex items-center gap-1">
-              <span class="material-symbols-outlined text-sm">history</span>
-              이슈 이력 (${c.issueHistory.length}건)
-            </div>
-            <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
-              ${c.issueHistory.map((h,idx)=>`
-                <div class="rounded-lg px-3 py-2 border ${h.resolved ? 'bg-surface-container-low border-outline-variant opacity-70' : 'bg-orange-50 border-orange-200'}">
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="text-xs text-secondary">${h.date}</span>
-                    <div class="flex items-center gap-2">
-                      <label class="flex items-center gap-1.5 cursor-pointer select-none" onclick="event.stopPropagation()">
-                        <input type="checkbox" ${h.resolved?'checked':''} onchange="toggleIssueResolved(${c.id},${idx})" class="w-3.5 h-3.5 accent-green-600 cursor-pointer">
-                        <span class="text-xs ${h.resolved?'text-green-600':'text-orange-600'}">${h.resolved?`해소 ${h.resolvedDate||''}`:'미해소'}</span>
-                      </label>
-                      <button onclick="event.stopPropagation();deleteIssueHistory(${c.id},${idx})" class="p-0.5 rounded hover:bg-red-100 text-red-400" title="삭제"><span class="material-symbols-outlined" style="font-size:14px">delete</span></button>
-                    </div>
-                  </div>
-                  <p class="text-xs text-on-surface ${h.resolved?'line-through text-secondary':''}">${h.text}</p>
-                </div>`).join('')}
-            </div>
-          </div>` : ''}
         </div>
       </div>`;
-  }
-
-  function searchCenters(q) {
-    const lower = q.toLowerCase();
-    document.querySelectorAll('.center-accordion-card').forEach(card => {
-      const id = parseInt(card.id.replace('center-card-', ''));
-      const c = DB.centers.find(c => c.id === id);
-      if (!c) return;
-      const match = !q || c.name.toLowerCase().includes(lower) || (c.code||'').toLowerCase().includes(lower) || (c.address||'').toLowerCase().includes(lower);
-      card.style.display = match ? '' : 'none';
-    });
-  }
-
-  function toggleCard(id) {
-    const isOpen = selectedId === id;
-    selectedId = isOpen ? null : id;
-    DB.centers.forEach(c => {
-      const body = document.getElementById(`center-body-${c.id}`);
-      const chev = document.getElementById(`center-chev-${c.id}`);
-      const header = document.querySelector(`#center-card-${c.id} > div:first-child`);
-      if (!body) return;
-      const open = c.id === id && !isOpen;
-      body.classList.toggle('hidden', !open);
-      if (chev) chev.classList.toggle('rotate-180', open);
-      if (header) {
-        header.classList.toggle('bg-primary-container', open);
-      }
-      // Rebuild detail content when opening to get fresh data
-      if (open) body.innerHTML = buildDetail(c);
-    });
-  }
-
-  function selectCenterById(id) { toggleCard(id); }
-
-  function moveCenter(id, dir) {
-    const idx = DB.centers.findIndex(c => c.id === id);
-    const swapIdx = idx + dir;
-    if (swapIdx < 0 || swapIdx >= DB.centers.length) return;
-    const a = DB.centers[idx];
-    const b = DB.centers[swapIdx];
-    const tempOrder = a.order ?? idx;
-    a.order = b.order ?? swapIdx;
-    b.order = tempOrder;
-    [DB.centers[idx], DB.centers[swapIdx]] = [DB.centers[swapIdx], DB.centers[idx]];
-    db.collection('centers').doc(String(a.id)).update({ order: a.order })
-      .catch(e => console.error(e));
-    db.collection('centers').doc(String(b.id)).update({ order: b.order })
-      .catch(e => console.error(e));
-    render();
-  }
-
-  function addCenterIssue(id) {
-    const c = DB.centers.find(c => c.id === id);
-    const input = document.getElementById(`center-issue-input-${id}`);
-    if (!c || !input || !input.value.trim()) return;
-    if (!c.issueHistory) c.issueHistory = [];
-    const now = new Date().toLocaleDateString('ko-KR') + ' ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
-    c.issueHistory.unshift({text: input.value.trim(), date: now, resolved: false});
-    c.issue = input.value.trim();
-    if (c.status === '정상') c.status = '이슈';
-    saveDB();
-    render();
-    showToast('이슈가 등록되었습니다');
-  }
-
-  function deleteIssueHistory(centerId, idx) {
-    const c = DB.centers.find(c => c.id === centerId);
-    if (!c || !c.issueHistory) return;
-    c.issueHistory.splice(idx, 1);
-    const hasActive = c.issueHistory.some(h => !h.resolved);
-    if (!hasActive) { c.issue = ''; if (c.status === '이슈') c.status = '정상'; }
-    saveDB(); render();
-  }
-
-  function toggleIssueResolved(centerId, idx) {
-    const c = DB.centers.find(c => c.id === centerId);
-    if (!c || !c.issueHistory || !c.issueHistory[idx]) return;
-    const h = c.issueHistory[idx];
-    h.resolved = !h.resolved;
-    if (h.resolved) {
-      h.resolvedDate = new Date().toLocaleDateString('ko-KR') + ' ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
-    } else {
-      delete h.resolvedDate;
+    } else if (c.type === 'V') {
+      const volumes = c.volumes || [];
+      metricsHtml = `
+      <div class="mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold text-sm">물동량</h3>
+          ${edit ? `<button onclick="openEditVolumesModal(${c.id})" class="text-xs text-primary font-semibold hover:underline">수정</button>` : ''}
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          ${volumes.length ? volumes.map(v => `
+          <div class="bg-surface-container-low rounded-xl p-3 text-center">
+            <div class="text-xs text-secondary mb-1">${v.label}</div>
+            <div class="text-xl font-bold text-on-surface">${(v.value||0).toLocaleString()}</div>
+            <div class="text-xs text-secondary">${v.unit}</div>
+          </div>`).join('') : '<div class="col-span-3 text-center text-sm text-secondary">물동량 항목 없음</div>'}
+        </div>
+      </div>`;
     }
-    // 미해소 항목이 하나도 없으면 c.issue 초기화
-    const hasActive = c.issueHistory.some(h => !h.resolved);
-    if (!hasActive) { c.issue = ''; c.status = '정상'; }
-    saveDB(); render();
+    const statusColors2 = { '완료':'badge-complete','진행중':'badge-inprogress','지연':'badge-delayed','예정':'badge-pending' };
+    const tasksHtml = `
+    <div>
+      <h3 class="font-bold text-sm mb-3">관련 업무 (${relatedTasks.length}건)</h3>
+      ${relatedTasks.length ? relatedTasks.map(t => `
+        <div class="flex items-center justify-between bg-surface-container-low rounded-lg px-3 py-2 mb-2 cursor-pointer hover:border-primary border border-transparent" onclick="showTaskDetail(${t.id})">
+          <span class="text-sm">${t.name}</span>
+          <span class="text-xs px-2 py-0.5 rounded-full font-medium ${statusColors2[t.status]||'badge-normal'}">${t.status}</span>
+        </div>`).join('') : '<p class="text-sm text-secondary">진행 중인 업무 없음</p>'}
+    </div>`;
+    return metricsHtml + tasksHtml;
   }
 
-  function clearCenterIssue(id) {
-    const c = DB.centers.find(c => c.id === id);
-    if (!c) return;
-    if (c.issueHistory) {
-      const active = c.issueHistory.find(h => !h.resolved);
-      if (active) {
-        active.resolved = true;
-        active.resolvedDate = new Date().toLocaleDateString('ko-KR') + ' ' + new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
-      }
-    }
-    c.issue = '';
-    if (c.status === '이슈') c.status = '정상';
-    saveDB();
-    render();
-    showToast('이슈가 해소되었습니다');
-  }
-
-  function openAddCenterModal() {
+  // ── CRUD ────────────────────────────────────────────────────
+  function openAddModal() {
+    if (!isAdmin()) { showToast('센터 추가는 관리자만 가능합니다'); return; }
     document.getElementById('editing-center-id').value = '';
-    document.getElementById('center-name').value = '';
-    document.getElementById('center-code').value = '';
-    document.getElementById('center-address').value = '';
-    document.getElementById('center-issue').value = '';
+    ['center-name','center-code','center-address','center-chief','center-members','center-operation-note','center-landlord'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    ['center-area','center-monthly-rent'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['center-lease-start','center-lease-end'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     document.getElementById('center-status').value = '정상';
-    document.getElementById('center-director-name').value = '';
-    document.getElementById('center-director-phone').value = '';
-    document.getElementById('staff-list').innerHTML = '';
+    document.getElementById('center-type-value').value = '';
+    document.querySelectorAll('#center-type-btn-W, #center-type-btn-V').forEach(b => b.classList.remove('active-type'));
+    document.getElementById('center-type-err').classList.add('hidden');
     document.getElementById('center-modal-title').textContent = '센터 추가';
-    populateCenterManagerSelect();
+    populateManagerSelect();
+    document.getElementById('center-manager').disabled = false;
     document.getElementById('modal-add-center').classList.remove('hidden');
   }
 
-  function editCenter(id) {
-    const c = DB.centers.find(c => c.id === id);
-    if (!c) return;
+  function editCenterModal(id) {
+    const c = (DB.centers||[]).find(c => c.id === id);
+    if (!c || !canEdit(c)) { showToast('수정 권한이 없습니다'); return; }
     document.getElementById('editing-center-id').value = id;
-    document.getElementById('center-name').value = c.name;
+    document.getElementById('center-name').value = c.name || '';
     document.getElementById('center-code').value = c.code || '';
     document.getElementById('center-address').value = c.address || '';
-    document.getElementById('center-issue').value = c.issue || '';
-    document.getElementById('center-status').value = c.status;
-    document.getElementById('center-director-name').value = c.director?.name || '';
-    document.getElementById('center-director-phone').value = c.director?.phone || '';
-    document.getElementById('staff-list').innerHTML = '';
-    (c.staff || []).forEach(s => addStaffRow(s.name, s.role));
+    document.getElementById('center-area').value = c.area || '';
+    document.getElementById('center-monthly-rent').value = c.monthlyRent || '';
+    document.getElementById('center-landlord').value = c.landlord || '';
+    document.getElementById('center-lease-start').value = c.leaseStart || '';
+    document.getElementById('center-lease-end').value = c.leaseEnd || '';
+    document.getElementById('center-chief').value = c.centerChief || '';
+    document.getElementById('center-members').value = c.centerMembers || '';
+    document.getElementById('center-operation-note').value = c.operationNote || '';
+    document.getElementById('center-status').value = c.status || '정상';
+    document.getElementById('center-type-value').value = c.type || '';
+    document.getElementById(`center-type-btn-W`)?.classList.toggle('active-type', c.type === 'W');
+    document.getElementById(`center-type-btn-V`)?.classList.toggle('active-type', c.type === 'V');
+    document.getElementById('center-type-err').classList.add('hidden');
     document.getElementById('center-modal-title').textContent = '센터 수정';
-    populateCenterManagerSelect();
-    document.getElementById('center-manager').value = c.managerId;
+    populateManagerSelect();
+    document.getElementById('center-manager').value = c.managerId || '';
+    document.getElementById('center-manager').disabled = !isAdmin();
     document.getElementById('modal-add-center').classList.remove('hidden');
+  }
+
+  function selectType(type) {
+    document.getElementById('center-type-value').value = type;
+    document.getElementById('center-type-btn-W')?.classList.toggle('active-type', type === 'W');
+    document.getElementById('center-type-btn-V')?.classList.toggle('active-type', type === 'V');
+    document.getElementById('center-type-err').classList.add('hidden');
   }
 
   function saveCenter() {
     const name = document.getElementById('center-name').value.trim();
     if (!name) { alert('센터명을 입력하세요.'); return; }
-    const code = document.getElementById('center-code').value.trim();
-    const address = document.getElementById('center-address').value.trim();
-    const managerId = parseInt(document.getElementById('center-manager').value) || null;
-    const status = document.getElementById('center-status').value;
-    const issue = document.getElementById('center-issue').value.trim();
-    const dirName = document.getElementById('center-director-name').value.trim();
-    const dirPhone = document.getElementById('center-director-phone').value.trim();
-    const director = dirName ? {name: dirName, phone: dirPhone} : null;
-    const staff = getStaffData();
+    const type = document.getElementById('center-type-value').value;
+    if (!type) { document.getElementById('center-type-err').classList.remove('hidden'); return; }
     const editId = parseInt(document.getElementById('editing-center-id').value);
+    const fields = {
+      name, type,
+      code: document.getElementById('center-code').value.trim(),
+      address: document.getElementById('center-address').value.trim(),
+      area: parseFloat(document.getElementById('center-area').value) || 0,
+      monthlyRent: parseFloat(document.getElementById('center-monthly-rent').value) || 0,
+      landlord: document.getElementById('center-landlord').value.trim() || null,
+      leaseStart: document.getElementById('center-lease-start').value,
+      leaseEnd: document.getElementById('center-lease-end').value,
+      centerChief: document.getElementById('center-chief').value.trim(),
+      centerMembers: document.getElementById('center-members').value.trim(),
+      operationNote: document.getElementById('center-operation-note').value.trim(),
+      status: document.getElementById('center-status').value,
+      updatedAt: Date.now(),
+    };
+    if (isAdmin()) fields.managerId = parseInt(document.getElementById('center-manager').value) || null;
     if (editId) {
-      const c = DB.centers.find(c => c.id === editId);
-      Object.assign(c, {name, code, address, managerId, status, issue, director, staff});
+      const c = (DB.centers||[]).find(c => c.id === editId);
+      if (!c) return;
+      Object.assign(c, fields);
       showToast('센터 정보가 수정되었습니다');
     } else {
-      DB.centers.push({id: Date.now(), name, code, address, managerId, status, issue, director, staff, issues:[], order: DB.centers.length, createdAt: Date.now()});
+      const newC = { id: Date.now(), ...fields, favor:{rf:0,fitout:0,ti:0,note:''}, occupancy:{leased:0,total:0}, tenants:[], salesList:[], volumes:[], photos:[], order: DB.centers.length, createdAt: Date.now() };
+      DB.centers.push(newC);
       showToast('센터가 추가되었습니다');
     }
     saveDB();
     document.getElementById('modal-add-center').classList.add('hidden');
     render();
+    if (editId && _selectedId === editId) openDetail(editId);
   }
 
   function deleteCenter(id) {
+    if (!isAdmin()) { showToast('삭제는 관리자만 가능합니다'); return; }
     if (!confirm('이 센터를 삭제하겠습니까?')) return;
-    DB.centers = DB.centers.filter(c => c.id !== id);
-    if (selectedId === id) selectedId = null;
+    DB.centers = (DB.centers||[]).filter(c => c.id !== id);
     db.collection('centers').doc(String(id)).delete().catch(e => console.error(e));
+    if (_selectedId === id) closeDetail();
     render();
     showToast('센터가 삭제되었습니다');
   }
 
-  function populateCenterManagerSelect() {
+  function populateManagerSelect() {
     const sel = document.getElementById('center-manager');
-    if (sel) sel.innerHTML = '<option value="">미배정</option>' + DB.members.map(m => `<option value="${m.id}">${m.name} ${m.rank||''}</option>`).join('');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">미배정</option>' + (DB.members||[]).map(m => `<option value="${m.id}">${m.name} ${m.rank||''}</option>`).join('');
+  }
+
+  function searchCenters(q) {
+    const lower = q.toLowerCase();
+    document.querySelectorAll('.center-card').forEach(card => {
+      const id = parseInt(card.id.replace('center-card-', ''));
+      const c = (DB.centers||[]).find(c => c.id === id);
+      if (!c) return;
+      card.style.display = (!q || c.name.toLowerCase().includes(lower) || (c.code||'').toLowerCase().includes(lower) || (c.address||'').toLowerCase().includes(lower)) ? '' : 'none';
+    });
+  }
+
+  // ── 기존 코드 호환 (toggleCard → openDetail) ────────────────
+  function toggleCard(id) { openDetail(id); }
+  function moveCenter(id, dir) {
+    const idx = (DB.centers||[]).findIndex(c => c.id === id);
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= DB.centers.length) return;
+    const a = DB.centers[idx]; const b = DB.centers[swapIdx];
+    const tempOrder = a.order ?? idx;
+    a.order = b.order ?? swapIdx; b.order = tempOrder;
+    [DB.centers[idx], DB.centers[swapIdx]] = [DB.centers[swapIdx], DB.centers[idx]];
+    db.collection('centers').doc(String(a.id)).update({ order: a.order }).catch(e => console.error(e));
+    db.collection('centers').doc(String(b.id)).update({ order: b.order }).catch(e => console.error(e));
+    render();
   }
 
   return {
     render,
-    toggleCard,
-    selectCenter: selectCenterById,
-    moveCenter,
-    searchCenters,
-    addCenterIssue,
-    deleteIssueHistory,
-    toggleIssueResolved,
-    clearCenterIssue,
-    openAddCenterModal,
-    editCenter,
+    openDetail,
+    closeDetail,
+    selectTab,
+    openAddModal,
+    editCenterModal,
+    selectType,
     saveCenter,
     deleteCenter,
-    get selectedId() { return selectedId; },
-    toggleCenterTasks(centerId, cardEl) {
-      const list = cardEl.querySelector('.center-task-list');
-      const icon = cardEl.querySelector('.material-symbols-outlined');
-      if (!list) return;
-      const opening = list.classList.contains('hidden');
-      list.classList.toggle('hidden', !opening);
-      if (icon) icon.style.transform = opening ? 'rotate(180deg)' : '';
-    },
+    searchCenters,
+    moveCenter,
+    toggleCard,
+    editCenterFromPanel: () => { if (_selectedId) editCenterModal(_selectedId); },
+    deleteCenterFromPanel: () => { if (_selectedId) deleteCenter(_selectedId); },
+    get selectedId() { return _selectedId; },
   };
 })();
 
 // --- Centers shims (HTML onclick 호환) ---
-function renderCenters() { Pages.centers.render(); }
-function toggleCenterCard(id) { Pages.centers.toggleCard(id); }
-function selectCenter(id) { Pages.centers.selectCenter(id); }
-function moveCenter(id, dir) { Pages.centers.moveCenter(id, dir); }
-function searchCenters(q) { Pages.centers.searchCenters(q); }
-function addCenterIssue(id) { Pages.centers.addCenterIssue(id); }
-function deleteIssueHistory(id, idx) { Pages.centers.deleteIssueHistory(id, idx); }
-function toggleIssueResolved(id, idx) { Pages.centers.toggleIssueResolved(id, idx); }
-function clearCenterIssue(id) { Pages.centers.clearCenterIssue(id); }
-function openAddCenterModal() { Pages.centers.openAddCenterModal(); }
-function editCenter(id) { Pages.centers.editCenter(id); }
-function saveCenter() { Pages.centers.saveCenter(); }
-function deleteCenter(id) { Pages.centers.deleteCenter(id); }
-function toggleCenterTasks(id, el) { Pages.centers.toggleCenterTasks(id, el); }
+function renderCenters()          { Pages.centers.render(); }
+function toggleCenterCard(id)     { Pages.centers.toggleCard(id); }
+function selectCenter(id)         { Pages.centers.openDetail(id); }
+function moveCenter(id, dir)      { Pages.centers.moveCenter(id, dir); }
+function searchCenters(q)         { Pages.centers.searchCenters(q); }
+function openCenterDetail(id)     { Pages.centers.openDetail(id); }
+function closeCenterDetail()      { Pages.centers.closeDetail(); }
+function selectCenterTab(tab)     { Pages.centers.selectTab(tab); }
+function openAddCenterModal()     { Pages.centers.openAddModal(); }
+function editCenterFromPanel()    { Pages.centers.editCenterFromPanel(); }
+function deleteCenterFromPanel()  { Pages.centers.deleteCenterFromPanel(); }
+function selectCenterType(t)      { Pages.centers.selectType(t); }
+function saveCenter()             { Pages.centers.saveCenter(); }
+function deleteCenter(id)         { Pages.centers.deleteCenter(id); }
+function editCenter(id)           { Pages.centers.editCenterModal(id); }
+
+// ---- Center sub-item CRUD ----
+function addTenantRow(centerId) {
+  document.getElementById('tenant-center-id').value = centerId;
+  ['tenant-name','tenant-area','tenant-start','tenant-end','tenant-rent','tenant-mgmt','tenant-notice'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  document.getElementById('modal-center-tenant').classList.remove('hidden');
+}
+
+function saveTenantRow() {
+  const centerId = parseInt(document.getElementById('tenant-center-id').value);
+  const name = document.getElementById('tenant-name').value.trim();
+  if (!name) { alert('임차사명을 입력하세요'); return; }
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c) return;
+  if (!c.tenants) c.tenants = [];
+  c.tenants.push({
+    id: Date.now(), name,
+    area: parseFloat(document.getElementById('tenant-area').value) || 0,
+    contractStart: document.getElementById('tenant-start').value,
+    contractEnd: document.getElementById('tenant-end').value,
+    monthlyRent: parseFloat(document.getElementById('tenant-rent').value) || 0,
+    managementFee: parseFloat(document.getElementById('tenant-mgmt').value) || 0,
+    noticePeriod: parseInt(document.getElementById('tenant-notice').value) || 0,
+  });
+  saveDB();
+  document.getElementById('modal-center-tenant').classList.add('hidden');
+  Pages.centers.openDetail(centerId);
+  showToast('임차사가 추가되었습니다');
+}
+
+function deleteTenantRow(centerId, tenantId) {
+  if (!confirm('삭제하겠습니까?')) return;
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c) return;
+  c.tenants = (c.tenants||[]).filter(t => t.id !== tenantId);
+  saveDB(); Pages.centers.openDetail(centerId);
+}
+
+function addSalesRow(centerId) {
+  document.getElementById('sales-center-id').value = centerId;
+  ['sales-company','sales-area','sales-period','sales-product','sales-note'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  document.getElementById('modal-center-sales').classList.remove('hidden');
+}
+
+function saveSalesRow() {
+  const centerId = parseInt(document.getElementById('sales-center-id').value);
+  const company = document.getElementById('sales-company').value.trim();
+  if (!company) { alert('업체명을 입력하세요'); return; }
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c) return;
+  if (!c.salesList) c.salesList = [];
+  c.salesList.push({
+    id: Date.now(), company,
+    area: parseFloat(document.getElementById('sales-area').value) || 0,
+    period: document.getElementById('sales-period').value.trim(),
+    product: document.getElementById('sales-product').value.trim(),
+    note: document.getElementById('sales-note').value.trim(),
+  });
+  saveDB();
+  document.getElementById('modal-center-sales').classList.add('hidden');
+  Pages.centers.openDetail(centerId);
+  showToast('영업 항목이 추가되었습니다');
+}
+
+function deleteSalesRow(centerId, salesId) {
+  if (!confirm('삭제하겠습니까?')) return;
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c) return;
+  c.salesList = (c.salesList||[]).filter(s => s.id !== salesId);
+  saveDB(); Pages.centers.openDetail(centerId);
+}
+
+function openEditContractVModal(centerId) {
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c) return;
+  document.getElementById('cv-center-id').value = centerId;
+  document.getElementById('cv-client').value = c.client||'';
+  document.getElementById('cv-work-scope').value = c.workScope||'';
+  document.getElementById('cv-client-start').value = c.clientContractStart||'';
+  document.getElementById('cv-client-end').value = c.clientContractEnd||'';
+  document.getElementById('cv-contractor').value = c.contractor||'';
+  document.getElementById('cv-contracted-work').value = c.contractedWork||'';
+  document.getElementById('cv-con-start').value = c.contractorStart||'';
+  document.getElementById('cv-con-end').value = c.contractorEnd||'';
+  document.getElementById('cv-annual-fee').value = c.annualContractFee||'';
+  document.getElementById('cv-headcount').value = c.contractorHeadcount||'';
+  document.getElementById('modal-center-contract-v').classList.remove('hidden');
+}
+
+function saveContractV() {
+  const id = parseInt(document.getElementById('cv-center-id').value);
+  const c = (DB.centers||[]).find(c => c.id === id);
+  if (!c) return;
+  Object.assign(c, {
+    client: document.getElementById('cv-client').value.trim(),
+    workScope: document.getElementById('cv-work-scope').value.trim(),
+    clientContractStart: document.getElementById('cv-client-start').value,
+    clientContractEnd: document.getElementById('cv-client-end').value,
+    contractor: document.getElementById('cv-contractor').value.trim(),
+    contractedWork: document.getElementById('cv-contracted-work').value.trim(),
+    contractorStart: document.getElementById('cv-con-start').value,
+    contractorEnd: document.getElementById('cv-con-end').value,
+    annualContractFee: parseFloat(document.getElementById('cv-annual-fee').value)||0,
+    contractorHeadcount: parseInt(document.getElementById('cv-headcount').value)||0,
+    updatedAt: Date.now(),
+  });
+  saveDB();
+  document.getElementById('modal-center-contract-v').classList.add('hidden');
+  Pages.centers.openDetail(id);
+  showToast('계약 정보가 수정되었습니다');
+}
+
+function openEditOccupancyModal(centerId) {
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c) return;
+  document.getElementById('occ-center-id').value = centerId;
+  document.getElementById('occ-total').value = c.occupancy?.total||0;
+  document.getElementById('occ-leased').value = c.occupancy?.leased||0;
+  document.getElementById('modal-center-occupancy').classList.remove('hidden');
+}
+
+function saveOccupancy() {
+  const id = parseInt(document.getElementById('occ-center-id').value);
+  const c = (DB.centers||[]).find(c => c.id === id);
+  if (!c) return;
+  c.occupancy = { total: parseFloat(document.getElementById('occ-total').value)||0, leased: parseFloat(document.getElementById('occ-leased').value)||0 };
+  c.updatedAt = Date.now();
+  saveDB();
+  document.getElementById('modal-center-occupancy').classList.add('hidden');
+  Pages.centers.openDetail(id);
+  showToast('가동률이 업데이트되었습니다');
+}
+
+function openEditVolumesModal(centerId) {
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c) return;
+  document.getElementById('vol-center-id').value = centerId;
+  _renderVolumeRows(c.volumes||[]);
+  document.getElementById('modal-center-volumes').classList.remove('hidden');
+}
+
+const _UNIT_SUGGESTIONS = ['PLT','Unit','CNTR','Each','BOX','톤','KG'];
+
+function _renderVolumeRows(volumes) {
+  document.getElementById('vol-list').innerHTML = volumes.map((v,i) => `
+  <div class="flex gap-2 items-center vol-row" data-idx="${i}">
+    <input type="text" value="${v.label||''}" placeholder="항목명 (예: 보관)" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm">
+    <input type="number" value="${v.value||0}" min="0" class="w-24 border border-outline-variant rounded-lg px-3 py-2 text-sm">
+    <input type="text" value="${v.unit||''}" placeholder="단위" list="unit-suggestions-list" class="w-24 border border-outline-variant rounded-lg px-3 py-2 text-sm">
+    <button onclick="this.closest('.vol-row').remove()" class="text-red-400 hover:text-red-600 flex-shrink-0"><span class="material-symbols-outlined" style="font-size:16px">delete</span></button>
+  </div>`).join('') +
+  `<datalist id="unit-suggestions-list">${_UNIT_SUGGESTIONS.map(u=>`<option value="${u}">`).join('')}</datalist>`;
+}
+
+function addVolumeRow() {
+  const list = document.getElementById('vol-list');
+  const div = document.createElement('div');
+  div.className = 'flex gap-2 items-center vol-row';
+  div.innerHTML = `
+    <input type="text" placeholder="항목명 (예: 보관)" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm">
+    <input type="number" value="0" min="0" class="w-24 border border-outline-variant rounded-lg px-3 py-2 text-sm">
+    <input type="text" placeholder="단위" list="unit-suggestions-list" class="w-24 border border-outline-variant rounded-lg px-3 py-2 text-sm">
+    <button onclick="this.closest('.vol-row').remove()" class="text-red-400 hover:text-red-600 flex-shrink-0"><span class="material-symbols-outlined" style="font-size:16px">delete</span></button>`;
+  list.appendChild(div);
+}
+
+function saveVolumes() {
+  const id = parseInt(document.getElementById('vol-center-id').value);
+  const c = (DB.centers||[]).find(c => c.id === id);
+  if (!c) return;
+  const rows = document.getElementById('vol-list').querySelectorAll('.vol-row');
+  c.volumes = Array.from(rows).map((row, i) => {
+    const inputs = row.querySelectorAll('input');
+    return { id: Date.now()+i, label: inputs[0].value.trim()||'항목', value: parseFloat(inputs[1].value)||0, unit: inputs[2].value.trim()||'Unit' };
+  }).filter(v => v.label !== '항목' || v.value > 0);
+  c.updatedAt = Date.now();
+  saveDB();
+  document.getElementById('modal-center-volumes').classList.add('hidden');
+  Pages.centers.openDetail(id);
+  showToast('물동량이 업데이트되었습니다');
+}
+
+function openEditFavorModal(centerId) {
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c) return;
+  document.getElementById('favor-center-id').value = centerId;
+  document.getElementById('favor-rf').value = c.favor?.rf||0;
+  document.getElementById('favor-fitout').value = c.favor?.fitout||0;
+  document.getElementById('favor-ti').value = c.favor?.ti||0;
+  document.getElementById('favor-note').value = c.favor?.note||'';
+  document.getElementById('modal-center-favor').classList.remove('hidden');
+}
+
+function saveFavor() {
+  const id = parseInt(document.getElementById('favor-center-id').value);
+  const c = (DB.centers||[]).find(c => c.id === id);
+  if (!c) return;
+  c.favor = {
+    rf: parseFloat(document.getElementById('favor-rf').value)||0,
+    fitout: parseFloat(document.getElementById('favor-fitout').value)||0,
+    ti: parseFloat(document.getElementById('favor-ti').value)||0,
+    note: document.getElementById('favor-note').value.trim(),
+  };
+  c.updatedAt = Date.now();
+  saveDB();
+  document.getElementById('modal-center-favor').classList.add('hidden');
+  Pages.centers.openDetail(id);
+  showToast('Favor 정보가 수정되었습니다');
+}
+
+async function uploadCenterPhotos(centerId, input) {
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c || !input.files.length) return;
+  const storageRef = firebase.storage().ref();
+  showToast('사진 업로드 중...');
+  const uploads = Array.from(input.files).map(async file => {
+    const ref = storageRef.child(`centers/${centerId}/${Date.now()}_${file.name}`);
+    try {
+      const snap = await ref.put(file);
+      const url = await snap.ref.getDownloadURL();
+      return { name: file.name, url };
+    } catch(e) { console.error('사진 업로드 실패:', e); return null; }
+  });
+  const results = (await Promise.all(uploads)).filter(Boolean);
+  if (!c.photos) c.photos = [];
+  c.photos.push(...results);
+  c.updatedAt = Date.now();
+  saveDB();
+  Pages.centers.openDetail(centerId);
+  showToast(`${results.length}장 업로드 완료`);
+}
+
+function deleteCenterPhoto(centerId, url) {
+  if (!confirm('사진을 삭제하겠습니까?')) return;
+  const c = (DB.centers||[]).find(c => c.id === centerId);
+  if (!c) return;
+  c.photos = (c.photos||[]).filter(p => p.url !== url);
+  c.updatedAt = Date.now();
+  saveDB();
+  Pages.centers.openDetail(centerId);
+}
 
 // ============================================================
 //  SEARCH
@@ -6281,5 +6700,185 @@ window.addEventListener('resize', () => {
   _prevIsDesktop = isDesktop;
 });
 </script>
+
+<!-- ====== Center Detail Panel Overlay ====== -->
+<div id="center-detail-overlay" class="hidden fixed inset-0 z-40" onclick="if(event.target===this)closeCenterDetail()">
+  <div id="center-detail-panel" class="absolute right-0 top-0 bottom-0 bg-white shadow-2xl flex flex-col overflow-hidden" style="width:72%;">
+    <!-- 헤더 -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-outline-variant flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <span id="cdp-type-badge" class="center-type-badge"></span>
+        <h2 id="cdp-title" class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'"></h2>
+        <span id="cdp-status-badge" class="text-xs px-2 py-0.5 rounded-full font-medium"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="cdp-edit-btn" onclick="editCenterFromPanel()" class="hidden items-center gap-1.5 border border-outline-variant rounded-lg px-3 py-1.5 text-sm text-secondary hover:bg-surface-container"><span class="material-symbols-outlined text-sm">edit</span>수정</button>
+        <button id="cdp-delete-btn" onclick="deleteCenterFromPanel()" class="hidden items-center gap-1.5 border border-red-200 rounded-lg px-3 py-1.5 text-sm text-red-500 hover:bg-red-50"><span class="material-symbols-outlined text-sm">delete</span>삭제</button>
+        <button onclick="closeCenterDetail()" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">close</span></button>
+      </div>
+    </div>
+    <!-- 탭 바 -->
+    <div class="flex border-b border-outline-variant px-6 flex-shrink-0">
+      <button class="center-tab-btn active" onclick="selectCenterTab('info')" id="cdp-tab-info">기본정보·사진</button>
+      <button class="center-tab-btn" onclick="selectCenterTab('contract')" id="cdp-tab-contract">계약/임차</button>
+      <button class="center-tab-btn" onclick="selectCenterTab('ops')" id="cdp-tab-ops">운영현황</button>
+    </div>
+    <!-- 탭 컨텐츠 -->
+    <div id="cdp-content" class="flex-1 overflow-y-auto p-6"></div>
+  </div>
+</div>
+
+<!-- Center Tenant Modal -->
+<div id="modal-center-tenant" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:min(96vw,560px);">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-on-surface" style="font-family:'Hanken Grotesk'">임차사 추가</h3>
+      <button onclick="document.getElementById('modal-center-tenant').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <input type="hidden" id="tenant-center-id">
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-secondary mb-1">임차사명 *</label><input type="text" id="tenant-name" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">평수</label><input type="number" id="tenant-area" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-secondary mb-1">계약 시작</label><input type="date" id="tenant-start" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">계약 종료</label><input type="date" id="tenant-end" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div><label class="block text-xs font-semibold text-secondary mb-1">월 임차료(원)</label><input type="number" id="tenant-rent" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">관리비(원)</label><input type="number" id="tenant-mgmt" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">통보기간(개월)</label><input type="number" id="tenant-notice" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="document.getElementById('modal-center-tenant').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2 text-sm text-secondary">취소</button>
+      <button onclick="saveTenantRow()" class="flex-1 bg-primary text-white rounded-lg py-2 text-sm font-semibold">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Center Sales Modal -->
+<div id="modal-center-sales" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:min(96vw,520px);">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-on-surface" style="font-family:'Hanken Grotesk'">영업 항목 추가</h3>
+      <button onclick="document.getElementById('modal-center-sales').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <input type="hidden" id="sales-center-id">
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-secondary mb-1">업체명 *</label><input type="text" id="sales-company" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">평수</label><input type="number" id="sales-area" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-secondary mb-1">기간</label><input type="text" id="sales-period" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="예: 2025.01~2025.12"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">상품</label><input type="text" id="sales-product" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+      <div><label class="block text-xs font-semibold text-secondary mb-1">특이사항</label><input type="text" id="sales-note" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="document.getElementById('modal-center-sales').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2 text-sm text-secondary">취소</button>
+      <button onclick="saveSalesRow()" class="flex-1 bg-primary text-white rounded-lg py-2 text-sm font-semibold">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Center Contract V Modal -->
+<div id="modal-center-contract-v" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:min(96vw,600px);max-height:90vh;overflow-y:auto;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-on-surface" style="font-family:'Hanken Grotesk'">V센터 계약 정보 수정</h3>
+      <button onclick="document.getElementById('modal-center-contract-v').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <input type="hidden" id="cv-center-id">
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-secondary mb-1">고객사</label><input type="text" id="cv-client" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">업무범위</label><input type="text" id="cv-work-scope" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-secondary mb-1">고객사 계약 시작</label><input type="date" id="cv-client-start" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">고객사 계약 종료</label><input type="date" id="cv-client-end" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-secondary mb-1">도급사</label><input type="text" id="cv-contractor" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">위탁업무</label><input type="text" id="cv-contracted-work" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-secondary mb-1">도급 계약 시작</label><input type="date" id="cv-con-start" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">도급 계약 종료</label><input type="date" id="cv-con-end" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-secondary mb-1">연 도급비(원)</label><input type="number" id="cv-annual-fee" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">도급인원(명)</label><input type="number" id="cv-headcount" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="document.getElementById('modal-center-contract-v').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2 text-sm text-secondary">취소</button>
+      <button onclick="saveContractV()" class="flex-1 bg-primary text-white rounded-lg py-2 text-sm font-semibold">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Center Occupancy Modal (W) -->
+<div id="modal-center-occupancy" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:360px;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-on-surface" style="font-family:'Hanken Grotesk'">가동률 수정</h3>
+      <button onclick="document.getElementById('modal-center-occupancy').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <input type="hidden" id="occ-center-id">
+    <div class="space-y-3">
+      <div><label class="block text-xs font-semibold text-secondary mb-1">전체 평수</label><input type="number" id="occ-total" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+      <div><label class="block text-xs font-semibold text-secondary mb-1">임차 평수</label><input type="number" id="occ-leased" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="document.getElementById('modal-center-occupancy').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2 text-sm text-secondary">취소</button>
+      <button onclick="saveOccupancy()" class="flex-1 bg-primary text-white rounded-lg py-2 text-sm font-semibold">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Center Volumes Modal (V) -->
+<div id="modal-center-volumes" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:min(96vw,520px);max-height:90vh;overflow-y:auto;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-on-surface" style="font-family:'Hanken Grotesk'">물동량 수정</h3>
+      <button onclick="document.getElementById('modal-center-volumes').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <input type="hidden" id="vol-center-id">
+    <div id="vol-list" class="space-y-2 mb-3"></div>
+    <button onclick="addVolumeRow()" class="text-xs text-primary font-semibold hover:underline">+ 항목 추가</button>
+    <div class="flex gap-3 mt-5">
+      <button onclick="document.getElementById('modal-center-volumes').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2 text-sm text-secondary">취소</button>
+      <button onclick="saveVolumes()" class="flex-1 bg-primary text-white rounded-lg py-2 text-sm font-semibold">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Center Favor Modal -->
+<div id="modal-center-favor" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box" style="width:420px;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-on-surface" style="font-family:'Hanken Grotesk'">Favor 수정</h3>
+      <button onclick="document.getElementById('modal-center-favor').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <input type="hidden" id="favor-center-id">
+    <div class="space-y-3">
+      <div class="grid grid-cols-3 gap-3">
+        <div><label class="block text-xs font-semibold text-secondary mb-1">RF (개)</label><input type="number" id="favor-rf" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">Fitout (개)</label><input type="number" id="favor-fitout" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+        <div><label class="block text-xs font-semibold text-secondary mb-1">TI (원)</label><input type="number" id="favor-ti" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+      </div>
+      <div><label class="block text-xs font-semibold text-secondary mb-1">Favor 특이사항</label><textarea id="favor-note" rows="2" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none"></textarea></div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="document.getElementById('modal-center-favor').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2 text-sm text-secondary">취소</button>
+      <button onclick="saveFavor()" class="flex-1 bg-primary text-white rounded-lg py-2 text-sm font-semibold">저장</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
