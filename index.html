@@ -5542,7 +5542,7 @@ Pages.drafts = (() => {
     if (d.type === 'template' && d.templateId) {
       html += renderTemplateContent(version.content, d.templateId);
     } else {
-      html += `<div class="border border-outline-variant rounded-xl overflow-hidden mb-4 p-3 text-sm draft-content-html">${version.content || ''}</div>`;
+      html += `<div class="border border-outline-variant rounded-xl overflow-x-auto mb-4 p-3 text-sm draft-content-html">${version.content || ''}</div>`;
     }
 
     if ((version.attachments||[]).length) {
