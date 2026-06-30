@@ -101,6 +101,11 @@ tailwind.config = {
     #center-detail-panel { width:100% !important; }
     .mc-acc-body { overflow:hidden; max-height:0; transition:max-height .25s ease; }
     .mc-acc-body.open { max-height:600px; }
+    /* 검토방 모바일 탭 */
+    #draft-content-panel { border-right:none !important; }
+    #draft-comment-panel { width:100% !important; flex-shrink:unset !important; }
+    #draft-content-panel.draft-m-hidden,
+    #draft-comment-panel.draft-m-hidden { display:none !important; }
   }
   #center-detail-overlay { background:rgba(0,0,0,.35); }
   #center-detail-panel { transition:transform .25s cubic-bezier(.4,0,.2,1); }
@@ -1176,12 +1181,17 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
         </button>
       </div>
     </div>
+    <!-- 모바일 탭 전환 버튼 (lg 이상에서는 숨김) -->
+    <div id="draft-mobile-tabs" class="lg:hidden flex border-b border-outline-variant bg-surface-container/30">
+      <button id="draft-mtab-doc" onclick="switchDraftMobileTab('doc')" class="flex-1 py-2.5 text-sm font-semibold text-primary border-b-2 border-primary">기안서</button>
+      <button id="draft-mtab-comment" onclick="switchDraftMobileTab('comment')" class="flex-1 py-2.5 text-sm font-semibold text-secondary border-b-2 border-transparent">검토의견</button>
+    </div>
     <!-- 본문 + 코멘트 2패널 -->
     <div class="flex flex-1 overflow-hidden">
       <!-- 좌: 본문 -->
-      <div id="draft-content-panel" class="flex-1 overflow-y-auto p-5 border-r border-outline-variant" style="min-width:0;"></div>
+      <div id="draft-content-panel" class="flex-1 overflow-y-auto p-5 border-r border-outline-variant lg:border-r" style="min-width:0;"></div>
       <!-- 우: 검토 코멘트 -->
-      <div class="w-72 flex-shrink-0 flex flex-col p-4">
+      <div id="draft-comment-panel" class="w-72 flex-shrink-0 flex flex-col p-4 lg:w-72">
         <p class="text-xs font-semibold text-secondary uppercase tracking-wide mb-3">검토 코멘트</p>
         <div id="draft-comments-list" class="flex-1 overflow-y-auto space-y-3 mb-3"></div>
         <div class="border-t border-outline-variant pt-3 space-y-2">
@@ -6702,6 +6712,9 @@ Pages.drafts = (() => {
     const versions = d.versions || [];
     _currentVersionId = versions[0]?.id || null;
 
+    // 모바일 탭 초기화 (기안서 탭으로)
+    if (window.innerWidth < 1024) switchDraftMobileTab('doc');
+
     document.getElementById('draft-detail-title').textContent = d.title;
     document.getElementById('draft-detail-meta').textContent =
       `${d.type === 'free' ? '자유형식' : (DB.draft_templates||[]).find(t=>t.id===d.templateId)?.name||'양식'} · ${d.createdBy} · ${new Date(d.createdAt).toLocaleDateString('ko-KR')}`;
@@ -7249,6 +7262,24 @@ function submitInlineComment(did, vid, li) { Pages.drafts.submitInlineComment(di
 function resolveInlineComment(did, vid, cid) { Pages.drafts.resolveInlineComment(did, vid, cid); }
 function deleteInlineComment(did, vid, cid) { Pages.drafts.deleteInlineComment(did, vid, cid); }
 function addDraftComment()                  { Pages.drafts.addComment(); }
+function switchDraftMobileTab(tab) {
+  const docPanel     = document.getElementById('draft-content-panel');
+  const commentPanel = document.getElementById('draft-comment-panel');
+  const tabDoc       = document.getElementById('draft-mtab-doc');
+  const tabComment   = document.getElementById('draft-mtab-comment');
+  if (!docPanel || !commentPanel) return;
+  if (tab === 'doc') {
+    docPanel.classList.remove('draft-m-hidden');
+    commentPanel.classList.add('draft-m-hidden');
+    tabDoc.classList.add('text-primary','border-primary'); tabDoc.classList.remove('text-secondary','border-transparent');
+    tabComment.classList.add('text-secondary','border-transparent'); tabComment.classList.remove('text-primary','border-primary');
+  } else {
+    commentPanel.classList.remove('draft-m-hidden');
+    docPanel.classList.add('draft-m-hidden');
+    tabComment.classList.add('text-primary','border-primary'); tabComment.classList.remove('text-secondary','border-transparent');
+    tabDoc.classList.add('text-secondary','border-transparent'); tabDoc.classList.remove('text-primary','border-primary');
+  }
+}
 function deleteDraftComment(did, cid)       { Pages.drafts.deleteComment(did, cid); }
 function saveRevision()                 { Pages.drafts.saveRevision(); }
 
