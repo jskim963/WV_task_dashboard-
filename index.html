@@ -3610,8 +3610,13 @@ Pages.centers = (() => {
       const avgFO = favorsWithFO.length > 0 ? (favorsWithFO.reduce((s,t) => s + Number(t.favor.fitout||0), 0) / favorsWithFO.length).toFixed(1) : null;
       const favorsWithTI = tenants.filter(t => t.favor?.ti != null && Number(t.favor.ti) > 0);
       const avgTI = favorsWithTI.length > 0 ? Math.round(favorsWithTI.reduce((s,t) => s + Number(t.favor.ti||0), 0) / favorsWithTI.length) : null;
-      const pctAmbient = total > 0 ? Math.round(leasedAmbient / total * 100) : 0;
-      const pctFrozen  = total > 0 ? Math.round(leasedFrozen  / total * 100) : 0;
+      const totalAmbient  = c.areaAmbient || 0;
+      const totalFrozen   = c.areaFrozen  || 0;
+      const pctAmbient = totalAmbient > 0 ? Math.round(leasedAmbient / totalAmbient * 100) : 0;
+      const pctFrozen  = totalFrozen  > 0 ? Math.round(leasedFrozen  / totalFrozen  * 100) : 0;
+      const availAmbient = totalAmbient - leasedAmbient;
+      const availFrozen  = totalFrozen  - leasedFrozen;
+      const avail        = total - leased;
       const occupancyHtml = `
       <div class="mb-6">
         <div class="flex items-center justify-between mb-3">
@@ -3632,6 +3637,7 @@ Pages.centers = (() => {
               <div class="text-center">
                 <div class="text-xs font-semibold text-[#2563eb]">총합</div>
                 <div class="text-xs text-secondary">${leased}평 / ${total}평</div>
+                <div class="text-xs text-secondary mt-0.5">가능 <span class="font-semibold text-on-surface">${avail}평</span></div>
               </div>
             </div>
             <!-- 상온 도넛 -->
@@ -3645,7 +3651,8 @@ Pages.centers = (() => {
               </div>
               <div class="text-center">
                 <div class="text-xs font-semibold text-[#f97316]">상온</div>
-                <div class="text-xs text-secondary">${leasedAmbient}평</div>
+                <div class="text-xs text-secondary">${leasedAmbient}평 / ${totalAmbient}평</div>
+                <div class="text-xs text-secondary mt-0.5">가능 <span class="font-semibold text-on-surface">${availAmbient}평</span></div>
               </div>
             </div>
             <!-- 저온 도넛 -->
@@ -3659,7 +3666,8 @@ Pages.centers = (() => {
               </div>
               <div class="text-center">
                 <div class="text-xs font-semibold text-[#10b981]">저온</div>
-                <div class="text-xs text-secondary">${leasedFrozen}평</div>
+                <div class="text-xs text-secondary">${leasedFrozen}평 / ${totalFrozen}평</div>
+                <div class="text-xs text-secondary mt-0.5">가능 <span class="font-semibold text-on-surface">${availFrozen}평</span></div>
               </div>
             </div>
           </div>
