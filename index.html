@@ -3133,15 +3133,18 @@ Pages.centers = (() => {
     let metricHtml = '';
     if (c.type === 'W') {
       const total = c.area || 0;
-      const leased = (c.tenants||[]).reduce((s,t) => s + (t.area||0), 0);
+      const tenants = c.tenants || [];
+      const leased = tenants.reduce((s,t) => s + (t.area||0), 0);
+      const leasedAmbient = tenants.reduce((s,t) => s + (t.areaAmbient||0), 0);
+      const leasedFrozen  = tenants.reduce((s,t) => s + (t.areaFrozen||0), 0);
       const pct = total > 0 ? Math.round(leased / total * 100) : 0;
       metricHtml = `
         <div class="mt-3">
           <div class="flex justify-between text-xs text-secondary mb-1"><span>가동률</span><span class="font-semibold text-on-surface">${pct}%</span></div>
           <div class="occupancy-bar-track"><div class="occupancy-bar-fill" style="width:${pct}%"></div></div>
-          <div class="text-xs text-secondary mt-0.5">${leased}평 / ${total}평</div>
+          <div class="text-xs text-secondary mt-0.5">총합 ${leased}평 / ${total}평</div>
+          <div class="text-xs text-secondary mt-0.5">상온 ${leasedAmbient}평 · 저온 ${leasedFrozen}평</div>
         </div>`;
-      const tenants = c.tenants || [];
       if (tenants.length) {
         metricHtml += `<div class="mt-2 text-xs text-secondary">임차사 ${tenants.length}개사</div>`;
       }
@@ -3211,7 +3214,10 @@ Pages.centers = (() => {
     let metricHtml = '';
     if (c.type === 'W') {
       const total = c.area || 0;
-      const leased = (c.tenants||[]).reduce((s,t) => s + (t.area||0), 0);
+      const _tenants = c.tenants || [];
+      const leased = _tenants.reduce((s,t) => s + (t.area||0), 0);
+      const leasedAmbient = _tenants.reduce((s,t) => s + (t.areaAmbient||0), 0);
+      const leasedFrozen  = _tenants.reduce((s,t) => s + (t.areaFrozen||0), 0);
       const pct = total > 0 ? Math.round(leased / total * 100) : 0;
       metricHtml = `
         <div class="mt-2">
@@ -3219,7 +3225,8 @@ Pages.centers = (() => {
             <span>가동률</span><span class="font-semibold text-on-surface">${pct}%</span>
           </div>
           <div class="occupancy-bar-track"><div class="occupancy-bar-fill" style="width:${pct}%"></div></div>
-          <div class="text-xs text-secondary mt-0.5">${leased}평 / ${total}평</div>
+          <div class="text-xs text-secondary mt-0.5">총합 ${leased}평 / ${total}평</div>
+          <div class="text-xs text-secondary mt-0.5">상온 ${leasedAmbient}평 · 저온 ${leasedFrozen}평</div>
         </div>`;
     } else if (c.type === 'V') {
       const vols = (c.volumes || []).slice(0, 3);
@@ -3591,6 +3598,8 @@ Pages.centers = (() => {
       const total = c.area || 0;
       const tenants = c.tenants || [];
       const leased = tenants.reduce((s,t) => s + (t.area||0), 0);
+      const leasedAmbient = tenants.reduce((s,t) => s + (t.areaAmbient||0), 0);
+      const leasedFrozen  = tenants.reduce((s,t) => s + (t.areaFrozen||0), 0);
       const pct = total > 0 ? Math.round(leased / total * 100) : 0;
       const tenantCount = tenants.length;
       const rentsWithVal = tenants.filter(t => t.rent && Number(t.rent) > 0);
@@ -3617,8 +3626,9 @@ Pages.centers = (() => {
               <div class="absolute inset-0 flex items-center justify-center text-lg font-bold text-on-surface">${pct}%</div>
             </div>
             <div class="space-y-1">
-              <div class="text-sm"><span class="text-secondary">임차 평수</span> <span class="font-semibold ml-2">${leased}평</span></div>
-              <div class="text-sm"><span class="text-secondary">전체 평수</span> <span class="font-semibold ml-2">${total}평</span></div>
+              <div class="text-sm"><span class="text-secondary">총합</span> <span class="font-semibold ml-2">${leased}평 / ${total}평</span></div>
+              <div class="text-sm"><span class="text-secondary">상온</span> <span class="font-semibold ml-2">${leasedAmbient}평</span></div>
+              <div class="text-sm"><span class="text-secondary">저온</span> <span class="font-semibold ml-2">${leasedFrozen}평</span></div>
             </div>
           </div>
           <div class="flex gap-3 flex-wrap">
