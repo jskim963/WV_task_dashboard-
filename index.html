@@ -157,10 +157,16 @@ tailwind.config = {
 
   /* AI Chatbot */
   #chatbot-panel { position:fixed; bottom:24px; right:24px; z-index:300; }
-  .chat-window { width:360px; height:520px; background:#fff; border-radius:16px; box-shadow:0 16px 48px rgba(0,0,0,0.18); display:flex; flex-direction:column; overflow:hidden; border:1px solid #e2e8f0; }
-  .chat-msg { padding:10px 14px; border-radius:12px; max-width:82%; font-size:13px; line-height:1.5; }
+  .chat-window { width:440px; height:600px; background:#fff; border-radius:16px; box-shadow:0 16px 48px rgba(0,0,0,0.18); display:flex; flex-direction:column; overflow:hidden; border:1px solid #e2e8f0; }
+  .chat-msg { padding:10px 14px; border-radius:12px; max-width:90%; font-size:13px; line-height:1.6; }
   .chat-msg.ai { background:#eff6ff; color:#1e40af; border-bottom-left-radius:4px; }
   .chat-msg.user { background:#2563eb; color:#fff; border-bottom-right-radius:4px; margin-left:auto; }
+  .chat-msg table { width:100%; border-collapse:collapse; margin:6px 0; font-size:12px; }
+  .chat-msg th { background:#dbeafe; padding:4px 8px; text-align:left; border:1px solid #bfdbfe; font-weight:600; }
+  .chat-msg td { padding:4px 8px; border:1px solid #bfdbfe; vertical-align:top; }
+  .chat-msg tr:nth-child(even) td { background:#f0f7ff; }
+  .chat-msg ul { margin:4px 0 4px 16px; padding:0; list-style:disc; }
+  .chat-msg li { margin:2px 0; }
   .typing-dot { width:6px; height:6px; background:#94a3b8; border-radius:50%; animation:bounce 1.4s infinite ease-in-out; }
   .typing-dot:nth-child(2) { animation-delay:0.2s; }
   .typing-dot:nth-child(3) { animation-delay:0.4s; }
@@ -4705,9 +4711,15 @@ function buildSystemPrompt() {
   ).sort((a,b)=>b[1]-a[1]).map(([n,c])=>`${n}(${c}건)`).join(', ') || '없음';
 
   return `당신은 W&V팀 내부 업무관리 시스템의 AI 어시스턴트입니다.
-아래의 실시간 팀 데이터를 완전히 숙지하고, 어떤 질문이든 데이터를 근거로 정확하고 통찰력 있게 답변하세요.
-단순 조회뿐 아니라 패턴 분석, 업무 배분 제안, 리스크 경고 등 능동적 인사이트를 제공하세요.
-항상 한국어로, 친근하면서도 전문적인 어투로 답변하세요. 이모지로 가독성을 높이세요.
+아래의 실시간 팀 데이터를 근거로 정확하게 답변하세요.
+
+【답변 규칙 - 반드시 준수】
+- 답변은 핵심만 간결하게. 불필요한 서론·마무리 문장 금지
+- 목록이 3개 이하면 줄글로, 4개 이상이면 bullet(-) 사용
+- 여러 항목 비교 시 반드시 markdown 표(| 컬럼 | 컬럼 |) 형식으로 작성
+- 표에서 파이프(|) 구분자 앞뒤 공백 유지, 구분행(|---|---|) 반드시 포함
+- 이모지는 꼭 필요할 때만 최소한으로 사용
+- 한국어, 간결·전문적 어투
 
 ═══ 오늘 날짜: ${today} ═══
 
@@ -4750,11 +4762,54 @@ function addUserMessage(text) {
   scrollChat();
 }
 
+function renderChatMarkdown(text) {
+  // 표(| ... |) 변환
+  const lines = text.split('\n');
+  const out = [];
+  let tableLines = [], inTable = false;
+  function flushTable() {
+    if (!tableLines.length) return;
+    const rows = tableLines.filter(l => !/^\s*\|[-| :]+\|\s*$/.test(l));
+    let html = '<table>';
+    rows.forEach((row, i) => {
+      const cells = row.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+      const tag = i === 0 ? 'th' : 'td';
+      html += '<tr>' + cells.map(c => `<${tag}>${c}</${tag}>`).join('') + '</tr>';
+    });
+    out.push(html + '</table>');
+    tableLines = []; inTable = false;
+  }
+  lines.forEach(line => {
+    if (/^\s*\|/.test(line)) {
+      inTable = true; tableLines.push(line);
+    } else {
+      if (inTable) flushTable();
+      // 헤더(##)
+      if (/^##+ /.test(line)) {
+        out.push('<strong style="font-size:13px;display:block;margin-top:6px">' + line.replace(/^##+ /, '') + '</strong>');
+      // 불릿(- 또는 •)
+      } else if (/^[-•]\s/.test(line)) {
+        out.push('<li>' + line.replace(/^[-•]\s/, '') + '</li>');
+      } else if (line.trim() === '') {
+        out.push('<br>');
+      } else {
+        out.push(line);
+      }
+    }
+  });
+  if (inTable) flushTable();
+  // li 묶기
+  let result = out.join('\n')
+    .replace(/(<li>.*?<\/li>\n?)+/g, m => '<ul>' + m + '</ul>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+  return result;
+}
+
 function addAIMessage(text) {
   const el = document.createElement('div');
   el.className = 'flex gap-2 items-start';
-  const formatted = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
-  el.innerHTML = `<div class="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-0.5"><span class="material-symbols-outlined text-white fill-icon" style="font-size:13px">smart_toy</span></div><div class="chat-msg ai">${formatted}</div>`;
+  el.innerHTML = `<div class="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-0.5"><span class="material-symbols-outlined text-white fill-icon" style="font-size:13px">smart_toy</span></div><div class="chat-msg ai">${renderChatMarkdown(text)}</div>`;
   document.getElementById('chat-messages').appendChild(el);
   scrollChat();
 }
