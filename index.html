@@ -136,6 +136,11 @@ tailwind.config = {
   .cal-day.other-month { opacity:0.4; }
   .cal-event { font-size:10px; line-height:1.3; padding:1px 4px; border-radius:3px; margin-top:2px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; display:block; max-width:100%; }
   .cal-filter-btn { font-size:12px; padding:3px 10px; border-radius:999px; border:1px solid #e2e8f0; color:#64748b; cursor:pointer; transition:all 0.15s; background:#fff; }
+  .person-check-list { border:1px solid #d1d5db; border-radius:8px; overflow-y:auto; height:110px; background:#fff; }
+  .person-check-list .pck-group { padding:3px 10px 1px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.05em; background:#f8fafc; position:sticky; top:0; z-index:1; }
+  .person-check-list label { display:flex; align-items:center; gap:8px; padding:5px 12px; cursor:pointer; font-size:13px; user-select:none; -webkit-user-select:none; }
+  .person-check-list label:active { background:#eff6ff; }
+  .person-check-list input[type=checkbox] { accent-color:#2563eb; width:15px; height:15px; flex-shrink:0; cursor:pointer; }
   .cal-filter-btn.active { background:#1d4ed8; color:#fff; border-color:#1d4ed8; font-weight:600; }
 
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -1261,13 +1266,13 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs font-semibold text-secondary mb-1.5">담당자 * <span class="font-normal text-secondary">(Ctrl+클릭으로 복수 선택)</span></label>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">담당자 *</label>
           <div class="flex gap-1.5 flex-wrap mb-1.5">
             <button type="button" id="btn-taskpart-W" onclick="selectTaskPart('W파트')" class="text-xs px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 text-blue-700">W파트 전체</button>
             <button type="button" id="btn-taskpart-U" onclick="selectTaskPart('U파트')" class="text-xs px-2 py-1 rounded border border-green-200 hover:bg-green-50 text-green-700">U파트 전체</button>
             <button type="button" id="btn-taskpart-KAM" onclick="selectTaskPart('KAM파트')" class="text-xs px-2 py-1 rounded border border-purple-200 hover:bg-purple-50 text-purple-700">KAM파트 전체</button>
           </div>
-          <select id="task-assignee" multiple class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white" style="height:110px" onchange="updateTaskPartBtns()"></select>
+          <div id="task-assignee" class="person-check-list w-full"></div>
         </div>
         <div>
           <label class="block text-xs font-semibold text-secondary mb-1.5">상태</label>
@@ -1396,14 +1401,14 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
         </div>
       </div>
       <div>
-        <label class="block text-xs font-semibold text-secondary mb-1.5">담당자 <span class="font-normal text-secondary">(Ctrl+클릭으로 복수 선택)</span></label>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">담당자</label>
         <div class="flex gap-1.5 flex-wrap mb-1.5">
           <button type="button" onclick="selectEventPart('all')" class="text-xs px-2 py-1 rounded border border-outline-variant hover:bg-surface-container text-secondary">팀 전체</button>
           <button type="button" onclick="selectEventPart('W파트')" class="text-xs px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 text-blue-700">W파트</button>
           <button type="button" onclick="selectEventPart('U파트')" class="text-xs px-2 py-1 rounded border border-green-200 hover:bg-green-50 text-green-700">U파트</button>
           <button type="button" onclick="selectEventPart('KAM파트')" class="text-xs px-2 py-1 rounded border border-purple-200 hover:bg-purple-50 text-purple-700">KAM파트</button>
         </div>
-        <select id="event-person" multiple class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white" style="height:110px"></select>
+        <div id="event-person" class="person-check-list w-full"></div>
       </div>
       <div>
         <label class="block text-xs font-semibold text-secondary mb-1.5">유형</label>
@@ -1888,41 +1893,80 @@ function initDemoData() {
 function getAssigneeIds(t) { return t.assigneeIds || (t.assigneeId ? [t.assigneeId] : []); }
 function getEventPersonIds(e) { if (e.personIds && e.personIds.length) return e.personIds; if (e.personId && e.personId !== 0) return [e.personId]; return []; }
 function isTeamEvent(e) { return getEventPersonIds(e).length === 0; }
-function populateEventPersonSelect(sel, selectedIds) {
+// ── 공통: 체크박스 목록으로 담당자 렌더 ──────────────────────
+function renderPersonCheckboxes(containerId, selectedIds, hasTeam) {
+  const wrap = document.getElementById(containerId);
+  if (!wrap) return;
+  const selSet = new Set((selectedIds||[]).map(String));
   const parts = ['W파트','U파트','KAM파트'];
-  let html = '<option value="0">팀 전체</option>';
+  let html = '';
+  if (hasTeam) {
+    const teamChk = selSet.size === 0 ? 'checked' : '';
+    html += `<label><input type="checkbox" value="0" ${teamChk} onchange="onEventTeamCheck(this)"> 팀 전체</label>`;
+  }
   parts.forEach(p => {
     const ms = DB.members.filter(m => m.part === p);
     if (!ms.length) return;
-    html += `<optgroup label="${p}">${ms.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`;
+    html += `<div class="pck-group">${p}</div>`;
+    ms.forEach(m => {
+      const chk = selSet.has(String(m.id)) ? 'checked' : '';
+      const onChange = hasTeam ? 'onchange="onEventMemberCheck(this)"' : 'onchange="updateTaskPartBtns()"';
+      html += `<label><input type="checkbox" value="${m.id}" ${chk} ${onChange}> ${m.name}</label>`;
+    });
   });
   const others = DB.members.filter(m => !m.part);
-  if (others.length) html += `<optgroup label="기타">${others.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`;
-  sel.innerHTML = html;
-  if (selectedIds && selectedIds.length) {
-    [...sel.options].forEach(o => { o.selected = selectedIds.map(String).includes(o.value); });
+  if (others.length) {
+    html += '<div class="pck-group">기타</div>';
+    others.forEach(m => {
+      const chk = selSet.has(String(m.id)) ? 'checked' : '';
+      const onChange = hasTeam ? 'onchange="onEventMemberCheck(this)"' : 'onchange="updateTaskPartBtns()"';
+      html += `<label><input type="checkbox" value="${m.id}" ${chk} ${onChange}> ${m.name}</label>`;
+    });
+  }
+  wrap.innerHTML = html;
+}
+
+function onEventTeamCheck(cb) {
+  const wrap = document.getElementById('event-person');
+  if (cb.checked) {
+    wrap.querySelectorAll('input[type=checkbox]').forEach(c => { if (c !== cb) c.checked = false; });
   }
 }
+function onEventMemberCheck(cb) {
+  if (cb.checked) {
+    const teamCb = document.querySelector('#event-person input[value="0"]');
+    if (teamCb) teamCb.checked = false;
+  }
+}
+
+function populateEventPersonSelect(sel, selectedIds) {
+  renderPersonCheckboxes('event-person', selectedIds, true);
+}
+
 function selectEventPart(part) {
-  const sel = document.getElementById('event-person');
-  [...sel.options].forEach(o => o.selected = false);
-  if (part === 'all') { sel.options[0].selected = true; return; }
-  const ids = DB.members.filter(m => m.part === part).map(m => String(m.id));
-  [...sel.options].forEach(o => { if (ids.includes(o.value)) o.selected = true; });
+  const wrap = document.getElementById('event-person');
+  wrap.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+  if (part === 'all') {
+    const teamCb = wrap.querySelector('input[value="0"]');
+    if (teamCb) teamCb.checked = true;
+    return;
+  }
+  const ids = new Set(DB.members.filter(m => m.part === part).map(m => String(m.id)));
+  wrap.querySelectorAll('input[type=checkbox]').forEach(cb => { if (ids.has(cb.value)) cb.checked = true; });
 }
 
 function selectTaskPart(part) {
-  const sel = document.getElementById('task-assignee');
-  [...sel.options].forEach(o => o.selected = false);
-  const ids = DB.members.filter(m => m.part === part).map(m => String(m.id));
-  [...sel.options].forEach(o => { if (ids.includes(o.value)) o.selected = true; });
+  const wrap = document.getElementById('task-assignee');
+  wrap.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+  const ids = new Set(DB.members.filter(m => m.part === part).map(m => String(m.id)));
+  wrap.querySelectorAll('input[type=checkbox]').forEach(cb => { if (ids.has(cb.value)) cb.checked = true; });
   updateTaskPartBtns();
 }
 
 function updateTaskPartBtns() {
-  const sel = document.getElementById('task-assignee');
-  if (!sel) return;
-  const selected = new Set([...sel.selectedOptions].map(o => o.value));
+  const wrap = document.getElementById('task-assignee');
+  if (!wrap) return;
+  const selected = new Set([...wrap.querySelectorAll('input:checked')].map(cb => cb.value));
   const cfg = [
     {part:'W파트', id:'btn-taskpart-W', active:'text-xs px-2 py-1 rounded border bg-blue-600 text-white border-blue-600 font-semibold', inactive:'text-xs px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 text-blue-700'},
     {part:'U파트', id:'btn-taskpart-U', active:'text-xs px-2 py-1 rounded border bg-green-600 text-white border-green-600 font-semibold', inactive:'text-xs px-2 py-1 rounded border border-green-200 hover:bg-green-50 text-green-700'},
@@ -2288,17 +2332,8 @@ Pages.dashboard = (() => {
     document.getElementById('task-status').value = '대기';
     document.getElementById('task-priority').value = '보통';
     document.getElementById('task-modal-title').textContent = '새 업무 추가';
-    // Populate assignee select grouped by part
-    const sel = document.getElementById('task-assignee');
-    const parts = ['W파트','U파트','KAM파트'];
-    const grouped = parts.map(p => {
-      const members = DB.members.filter(m => m.part === p);
-      if (!members.length) return '';
-      return `<optgroup label="${p}">${members.map(m => { const cnt = DB.tasks.filter(t=>getAssigneeIds(t).includes(m.id)&&t.status!=='완료').length; return `<option value="${m.id}">${m.name}${cnt?` (${cnt}건)`:''}`;}).join('')}</optgroup>`;
-    }).join('');
-    const noPart = DB.members.filter(m => !m.part);
-    const noPartHtml = noPart.length ? `<optgroup label="기타">${noPart.map(m => { const cnt = DB.tasks.filter(t=>getAssigneeIds(t).includes(m.id)&&t.status!=='완료').length; return `<option value="${m.id}">${m.name}${cnt?` (${cnt}건)`:''}`;}).join('')}</optgroup>` : '';
-    sel.innerHTML = grouped + noPartHtml;
+    // Populate assignee checkbox list
+    renderPersonCheckboxes('task-assignee', [], false);
     // Populate center select
     const cSel = document.getElementById('task-center');
     cSel.innerHTML = '<option value="">없음</option>' + DB.centers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
@@ -2322,13 +2357,7 @@ Pages.dashboard = (() => {
     document.getElementById('task-status').value = t.status;
     document.getElementById('task-priority').value = t.priority;
     document.getElementById('task-modal-title').textContent = '업무 수정';
-    const sel = document.getElementById('task-assignee');
-    const parts2 = ['W파트','U파트','KAM파트'];
-    const grouped2 = parts2.map(p => { const ms = DB.members.filter(m=>m.part===p); if(!ms.length) return ''; return `<optgroup label="${p}">${ms.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`; }).join('');
-    const noPart2 = DB.members.filter(m=>!m.part);
-    sel.innerHTML = grouped2 + (noPart2.length?`<optgroup label="기타">${noPart2.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`:'');
-    const ids = getAssigneeIds(t);
-    [...sel.options].forEach(o => { o.selected = ids.includes(parseInt(o.value)); });
+    renderPersonCheckboxes('task-assignee', getAssigneeIds(t).map(String), false);
     // Populate & restore center select
     const cSel = document.getElementById('task-center');
     cSel.innerHTML = '<option value="">없음</option>' + DB.centers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
@@ -2351,7 +2380,7 @@ Pages.dashboard = (() => {
     const desc = document.getElementById('task-desc').value.trim();
     const centerId = parseInt(document.getElementById('task-center').value) || null;
     const projectId = parseInt(document.getElementById('task-project')?.value) || null;
-    const assigneeIds = [...document.getElementById('task-assignee').selectedOptions].map(o=>parseInt(o.value));
+    const assigneeIds = [...document.querySelectorAll('#task-assignee input:checked')].map(cb=>parseInt(cb.value));
     if (!assigneeIds.length) { alert('담당자를 선택하세요.'); return; }
     const editId = document.getElementById('editing-task-id').value;
     if (editId) {
@@ -2729,9 +2758,7 @@ Pages.calendar = (() => {
     document.getElementById('event-date').value = dateStr || formatDate(new Date());
     document.getElementById('event-date-end').value = '';
     document.getElementById('event-memo').value = '';
-    const sel = document.getElementById('event-person');
-    populateEventPersonSelect(sel, []);
-    sel.options[0].selected = true;
+    renderPersonCheckboxes('event-person', [], true);
     const radios = document.querySelectorAll('input[name="event-type"]');
     radios.forEach(r => r.checked = false);
     document.getElementById('modal-add-event').classList.remove('hidden');
@@ -2747,10 +2774,8 @@ Pages.calendar = (() => {
     document.getElementById('event-date').value = e.date;
     document.getElementById('event-date-end').value = e.dateEnd || '';
     document.getElementById('event-memo').value = e.memo || '';
-    const sel = document.getElementById('event-person');
     const existingIds = getEventPersonIds(e).map(String);
-    populateEventPersonSelect(sel, existingIds.length ? existingIds : []);
-    if (!existingIds.length) sel.options[0].selected = true;
+    renderPersonCheckboxes('event-person', existingIds, true);
     const radios = document.querySelectorAll('input[name="event-type"]');
     radios.forEach(r => { r.checked = r.value === e.type; });
     document.getElementById('modal-add-event').classList.remove('hidden');
@@ -2761,10 +2786,11 @@ Pages.calendar = (() => {
     const date = document.getElementById('event-date').value;
     if (!title || !date) { alert('제목과 시작일을 입력하세요.'); return; }
     const dateEnd = document.getElementById('event-date-end').value || null;
-    const selOpts = [...document.getElementById('event-person').selectedOptions].map(o => o.value);
-    const isTeam = selOpts.includes('0') || selOpts.length === 0;
-    const personId = isTeam ? 0 : (selOpts.length === 1 ? parseInt(selOpts[0]) : 0);
-    const personIds = isTeam ? [] : selOpts.map(v => parseInt(v)).filter(Boolean);
+    const teamCb = document.querySelector('#event-person input[value="0"]');
+    const isTeam = teamCb?.checked || !document.querySelector('#event-person input:checked');
+    const checkedVals = [...document.querySelectorAll('#event-person input:checked')].map(cb=>cb.value).filter(v=>v!=='0');
+    const personIds = isTeam ? [] : checkedVals.map(v=>parseInt(v)).filter(Boolean);
+    const personId = isTeam ? 0 : (personIds.length===1 ? personIds[0] : 0);
     const type = document.querySelector('input[name="event-type"]:checked')?.value || '기타';
     const memo = document.getElementById('event-memo').value.trim();
     const editId = parseInt(document.getElementById('editing-event-id').value);
