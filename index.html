@@ -1521,7 +1521,20 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       </div>
       <div>
         <label class="block text-xs font-semibold text-secondary mb-1.5">면적 (평)</label>
-        <input type="number" id="center-area" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0">
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="block text-xs text-secondary mb-1">상온</label>
+            <input type="number" id="center-area-ambient" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" placeholder="0" oninput="calcCenterArea()">
+          </div>
+          <div>
+            <label class="block text-xs text-secondary mb-1">저온</label>
+            <input type="number" id="center-area-frozen" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" placeholder="0" oninput="calcCenterArea()">
+          </div>
+          <div>
+            <label class="block text-xs text-secondary mb-1">합계 (자동)</label>
+            <input type="number" id="center-area" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-surface-container-low" readonly placeholder="0">
+          </div>
+        </div>
       </div>
       <!-- 소유 형태 -->
       <div>
@@ -3044,8 +3057,8 @@ Pages.centers = (() => {
     const isActive = _selectedId === c.id;
     let metricHtml = '';
     if (c.type === 'W') {
-      const leased = c.occupancy?.leased ?? 0;
-      const total = c.occupancy?.total ?? 0;
+      const total = c.area || 0;
+      const leased = (c.tenants||[]).reduce((s,t) => s + (t.area||0), 0);
       const pct = total > 0 ? Math.round(leased / total * 100) : 0;
       metricHtml = `
         <div class="mt-2">
@@ -3193,7 +3206,7 @@ Pages.centers = (() => {
   function buildTabContractW(c, edit) {
     const tenants = c.tenants || [];
     const sales = c.salesList || [];
-    const cols1 = edit ? 8 : 7;
+    const cols1 = edit ? 10 : 9;
     const cols2 = edit ? 6 : 5;
     return `
     <div class="space-y-8">
@@ -3207,7 +3220,9 @@ Pages.centers = (() => {
             <thead><tr class="bg-surface-container-low">
               <th class="border border-outline-variant px-3 py-2 text-left">임차사명</th>
               <th class="border border-outline-variant px-3 py-2 text-left">계약기간</th>
-              <th class="border border-outline-variant px-3 py-2 text-right">평수</th>
+              <th class="border border-outline-variant px-3 py-2 text-right">상온(평)</th>
+              <th class="border border-outline-variant px-3 py-2 text-right">저온(평)</th>
+              <th class="border border-outline-variant px-3 py-2 text-right">합계(평)</th>
               <th class="border border-outline-variant px-3 py-2 text-right">월 임차료</th>
               <th class="border border-outline-variant px-3 py-2 text-right">관리비</th>
               <th class="border border-outline-variant px-3 py-2 text-center">통보기간</th>
@@ -3223,7 +3238,9 @@ Pages.centers = (() => {
                 return `<tr>
                 <td class="border border-outline-variant px-3 py-2 font-medium">${t.name||'-'}</td>
                 <td class="border border-outline-variant px-3 py-2 whitespace-nowrap">${t.contractStart||''}~${t.contractEnd||''}</td>
-                <td class="border border-outline-variant px-3 py-2 text-right">${t.area||0}평</td>
+                <td class="border border-outline-variant px-3 py-2 text-right">${t.areaAmbient||0}</td>
+                <td class="border border-outline-variant px-3 py-2 text-right">${t.areaFrozen||0}</td>
+                <td class="border border-outline-variant px-3 py-2 text-right font-semibold">${(t.area||0)}</td>
                 <td class="border border-outline-variant px-3 py-2 text-right">${(t.monthlyRent||0).toLocaleString()}원</td>
                 <td class="border border-outline-variant px-3 py-2 text-right">${(t.managementFee||0).toLocaleString()}원</td>
                 <td class="border border-outline-variant px-3 py-2 text-center">${t.noticePeriod||0}개월</td>
@@ -3244,6 +3261,7 @@ Pages.centers = (() => {
             <thead><tr class="bg-surface-container-low">
               <th class="border border-outline-variant px-3 py-2 text-left">업체명</th>
               <th class="border border-outline-variant px-3 py-2 text-right">평수</th>
+              <th class="border border-outline-variant px-3 py-2 text-center">구분</th>
               <th class="border border-outline-variant px-3 py-2 text-left">기간</th>
               <th class="border border-outline-variant px-3 py-2 text-left">상품</th>
               <th class="border border-outline-variant px-3 py-2 text-left">특이사항</th>
@@ -3253,6 +3271,7 @@ Pages.centers = (() => {
               ${sales.length ? sales.map(s => `<tr>
                 <td class="border border-outline-variant px-3 py-2">${s.company||'-'}</td>
                 <td class="border border-outline-variant px-3 py-2 text-right">${s.area||0}평</td>
+                <td class="border border-outline-variant px-3 py-2 text-center text-xs">${s.tempType||'-'}</td>
                 <td class="border border-outline-variant px-3 py-2">${s.period||'-'}</td>
                 <td class="border border-outline-variant px-3 py-2">${s.product||'-'}</td>
                 <td class="border border-outline-variant px-3 py-2">${s.note||'-'}</td>
@@ -3352,10 +3371,10 @@ Pages.centers = (() => {
     </div>`;
 
     if (c.type === 'W') {
-      const leased = c.occupancy?.leased ?? 0;
-      const total = c.occupancy?.total ?? 0;
-      const pct = total > 0 ? Math.round(leased / total * 100) : 0;
+      const total = c.area || 0;
       const tenants = c.tenants || [];
+      const leased = tenants.reduce((s,t) => s + (t.area||0), 0);
+      const pct = total > 0 ? Math.round(leased / total * 100) : 0;
       const tenantCount = tenants.length;
       const rentsWithVal = tenants.filter(t => t.rent && Number(t.rent) > 0);
       const avgRent = rentsWithVal.length > 0 ? Math.round(rentsWithVal.reduce((s,t) => s + Number(t.rent), 0) / rentsWithVal.length) : null;
@@ -3459,6 +3478,8 @@ Pages.centers = (() => {
     document.getElementById('center-name').value = c.name || '';
     document.getElementById('center-code').value = c.code || '';
     document.getElementById('center-address').value = c.address || '';
+    document.getElementById('center-area-ambient').value = c.areaAmbient || '';
+    document.getElementById('center-area-frozen').value = c.areaFrozen || '';
     document.getElementById('center-area').value = c.area || '';
     document.getElementById('center-monthly-rent').value = c.monthlyRent || '';
     document.getElementById('center-landlord').value = c.landlord || '';
@@ -3510,6 +3531,8 @@ Pages.centers = (() => {
       name, type, ownership,
       code: document.getElementById('center-code').value.trim(),
       address: document.getElementById('center-address').value.trim(),
+      areaAmbient: parseFloat(document.getElementById('center-area-ambient').value) || 0,
+      areaFrozen: parseFloat(document.getElementById('center-area-frozen').value) || 0,
       area: parseFloat(document.getElementById('center-area').value) || 0,
       monthlyRent: isLease ? (parseFloat(document.getElementById('center-monthly-rent').value) || 0) : 0,
       landlord: isLease ? (document.getElementById('center-landlord').value.trim() || null) : null,
@@ -3664,10 +3687,54 @@ function changeOpsNotePage(centerId, page) {
 }
 
 // ---- Center sub-item CRUD ----
+function calcTenantArea() {
+  const a = parseFloat(document.getElementById('tenant-area-ambient').value) || 0;
+  const f = parseFloat(document.getElementById('tenant-area-frozen').value) || 0;
+  document.getElementById('tenant-area').value = a + f || '';
+}
+function calcTenantRent() {
+  if (document.getElementById('tenant-rent-manual').checked) return;
+  const a = parseFloat(document.getElementById('tenant-area-ambient').value) || 0;
+  const f = parseFloat(document.getElementById('tenant-area-frozen').value) || 0;
+  const ra = parseFloat(document.getElementById('tenant-rent-rate-ambient').value) || 0;
+  const rf = parseFloat(document.getElementById('tenant-rent-rate-frozen').value) || 0;
+  document.getElementById('tenant-rent').value = (a * ra + f * rf) || '';
+}
+function calcTenantMgmt() {
+  if (document.getElementById('tenant-mgmt-manual').checked) return;
+  const a = parseFloat(document.getElementById('tenant-area-ambient').value) || 0;
+  const f = parseFloat(document.getElementById('tenant-area-frozen').value) || 0;
+  const ra = parseFloat(document.getElementById('tenant-mgmt-rate-ambient').value) || 0;
+  const rf = parseFloat(document.getElementById('tenant-mgmt-rate-frozen').value) || 0;
+  document.getElementById('tenant-mgmt').value = (a * ra + f * rf) || '';
+}
+function toggleTenantRentMode() {
+  const manual = document.getElementById('tenant-rent-manual').checked;
+  document.getElementById('tenant-rent-auto').classList.toggle('hidden', manual);
+  document.getElementById('tenant-rent-direct').classList.toggle('hidden', !manual);
+}
+function toggleTenantMgmtMode() {
+  const manual = document.getElementById('tenant-mgmt-manual').checked;
+  document.getElementById('tenant-mgmt-auto').classList.toggle('hidden', manual);
+  document.getElementById('tenant-mgmt-direct').classList.toggle('hidden', !manual);
+}
+function calcCenterArea() {
+  const a = parseFloat(document.getElementById('center-area-ambient').value) || 0;
+  const f = parseFloat(document.getElementById('center-area-frozen').value) || 0;
+  document.getElementById('center-area').value = a + f || '';
+}
+
 function addTenantRow(centerId) {
   document.getElementById('tenant-center-id').value = centerId;
-  ['tenant-name','tenant-area','tenant-start','tenant-end','tenant-rent','tenant-mgmt','tenant-notice','tenant-favor-note'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['tenant-name','tenant-area-ambient','tenant-area-frozen','tenant-area','tenant-start','tenant-end',
+   'tenant-rent-rate-ambient','tenant-rent-rate-frozen','tenant-rent','tenant-rent-manual-val',
+   'tenant-mgmt-rate-ambient','tenant-mgmt-rate-frozen','tenant-mgmt','tenant-mgmt-manual-val',
+   'tenant-notice','tenant-favor-note'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   ['tenant-favor-rf','tenant-favor-fitout','tenant-favor-ti'].forEach(id => { const el = document.getElementById(id); if(el) el.value = '0'; });
+  document.getElementById('tenant-rent-manual').checked = false;
+  document.getElementById('tenant-mgmt-manual').checked = false;
+  toggleTenantRentMode();
+  toggleTenantMgmtMode();
   document.getElementById('modal-center-tenant').classList.remove('hidden');
 }
 
@@ -3678,13 +3745,30 @@ function saveTenantRow() {
   const c = (DB.centers||[]).find(c => c.id === centerId);
   if (!c) return;
   if (!c.tenants) c.tenants = [];
+  const rentManual = document.getElementById('tenant-rent-manual').checked;
+  const mgmtManual = document.getElementById('tenant-mgmt-manual').checked;
+  const areaAmbient = parseFloat(document.getElementById('tenant-area-ambient').value) || 0;
+  const areaFrozen = parseFloat(document.getElementById('tenant-area-frozen').value) || 0;
+  const monthlyRent = rentManual
+    ? (parseFloat(document.getElementById('tenant-rent-manual-val').value) || 0)
+    : (parseFloat(document.getElementById('tenant-rent').value) || 0);
+  const managementFee = mgmtManual
+    ? (parseFloat(document.getElementById('tenant-mgmt-manual-val').value) || 0)
+    : (parseFloat(document.getElementById('tenant-mgmt').value) || 0);
   c.tenants.push({
     id: Date.now(), name,
-    area: parseFloat(document.getElementById('tenant-area').value) || 0,
+    areaAmbient, areaFrozen,
+    area: areaAmbient + areaFrozen,
+    rentManual,
+    rentRateAmbient: parseFloat(document.getElementById('tenant-rent-rate-ambient').value) || 0,
+    rentRateFrozen: parseFloat(document.getElementById('tenant-rent-rate-frozen').value) || 0,
+    monthlyRent,
+    mgmtManual,
+    mgmtRateAmbient: parseFloat(document.getElementById('tenant-mgmt-rate-ambient').value) || 0,
+    mgmtRateFrozen: parseFloat(document.getElementById('tenant-mgmt-rate-frozen').value) || 0,
+    managementFee,
     contractStart: document.getElementById('tenant-start').value,
     contractEnd: document.getElementById('tenant-end').value,
-    monthlyRent: parseFloat(document.getElementById('tenant-rent').value) || 0,
-    managementFee: parseFloat(document.getElementById('tenant-mgmt').value) || 0,
     noticePeriod: parseInt(document.getElementById('tenant-notice').value) || 0,
     favor: {
       rf: parseFloat(document.getElementById('tenant-favor-rf').value) || 0,
@@ -3710,6 +3794,7 @@ function deleteTenantRow(centerId, tenantId) {
 function addSalesRow(centerId) {
   document.getElementById('sales-center-id').value = centerId;
   ['sales-company','sales-area','sales-period','sales-product','sales-note'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  const tt = document.getElementById('sales-temp-type'); if(tt) tt.value = '';
   document.getElementById('modal-center-sales').classList.remove('hidden');
 }
 
@@ -3723,6 +3808,7 @@ function saveSalesRow() {
   c.salesList.push({
     id: Date.now(), company,
     area: parseFloat(document.getElementById('sales-area').value) || 0,
+    tempType: document.getElementById('sales-temp-type').value || '',
     period: document.getElementById('sales-period').value.trim(),
     product: document.getElementById('sales-product').value.trim(),
     note: document.getElementById('sales-note').value.trim(),
@@ -4246,7 +4332,7 @@ function buildSystemPrompt() {
     const unresolvedNotes = (c.operationNotes||[]).filter(n=>!n.resolved);
     const noteStr = unresolvedNotes.length ? unresolvedNotes.map(n=>`[미해결특이사항:${n.text}]`).join(' ') : '특이사항없음';
     if (c.type === 'W') {
-      const pct = c.occupancy?.total > 0 ? Math.round((c.occupancy.leased/c.occupancy.total)*100) : 0;
+      const _total = c.area || 0; const _leased = (c.tenants||[]).reduce((s,t)=>s+(t.area||0),0); const pct = _total > 0 ? Math.round(_leased/_total*100) : 0;
       const tenants = (c.tenants||[]).map(t=>`${t.name}(임차료:${t.rent||'-'})`).join(', ');
       return `  - [W] ${c.name} 상태:${c.status||'정상'} 가동률:${pct}% 임차사:${tenants||'없음'} ${noteStr}`;
     } else {
@@ -7190,26 +7276,69 @@ window.addEventListener('resize', () => {
 
 <!-- Center Tenant Modal -->
 <div id="modal-center-tenant" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
-  <div class="modal-box" style="width:min(96vw,560px);">
+  <div class="modal-box" style="width:min(96vw,600px);max-height:90vh;overflow-y:auto;">
     <div class="flex items-center justify-between mb-4">
       <h3 class="font-bold text-on-surface" style="font-family:'Hanken Grotesk'">임차사 추가</h3>
       <button onclick="document.getElementById('modal-center-tenant').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
     </div>
     <input type="hidden" id="tenant-center-id">
-    <div class="space-y-3">
-      <div class="grid grid-cols-2 gap-3">
-        <div><label class="block text-xs font-semibold text-secondary mb-1">임차사명 *</label><input type="text" id="tenant-name" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-semibold text-secondary mb-1">평수</label><input type="number" id="tenant-area" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
-      </div>
+    <div class="space-y-4">
+      <!-- 임차사명 + 계약기간 -->
+      <div><label class="block text-xs font-semibold text-secondary mb-1">임차사명 *</label><input type="text" id="tenant-name" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
       <div class="grid grid-cols-2 gap-3">
         <div><label class="block text-xs font-semibold text-secondary mb-1">계약 시작</label><input type="date" id="tenant-start" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
         <div><label class="block text-xs font-semibold text-secondary mb-1">계약 종료</label><input type="date" id="tenant-end" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
       </div>
-      <div class="grid grid-cols-3 gap-3">
-        <div><label class="block text-xs font-semibold text-secondary mb-1">월 임차료(원)</label><input type="number" id="tenant-rent" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
-        <div><label class="block text-xs font-semibold text-secondary mb-1">관리비(원)</label><input type="number" id="tenant-mgmt" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
-        <div><label class="block text-xs font-semibold text-secondary mb-1">통보기간(개월)</label><input type="number" id="tenant-notice" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+      <!-- 면적 -->
+      <div class="border border-outline-variant rounded-xl p-3">
+        <p class="text-xs font-bold text-secondary mb-2">면적 (평)</p>
+        <div class="grid grid-cols-3 gap-2">
+          <div><label class="block text-xs text-secondary mb-1">상온</label><input type="number" id="tenant-area-ambient" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" placeholder="0" oninput="calcTenantArea();calcTenantRent();calcTenantMgmt()"></div>
+          <div><label class="block text-xs text-secondary mb-1">저온</label><input type="number" id="tenant-area-frozen" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" placeholder="0" oninput="calcTenantArea();calcTenantRent();calcTenantMgmt()"></div>
+          <div><label class="block text-xs text-secondary mb-1">합계 (자동)</label><input type="number" id="tenant-area" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-surface-container-low" readonly placeholder="0"></div>
+        </div>
       </div>
+      <!-- 월 임차료 -->
+      <div class="border border-outline-variant rounded-xl p-3">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs font-bold text-secondary">월 임차료 (원)</p>
+          <label class="flex items-center gap-1.5 text-xs text-secondary cursor-pointer">
+            <input type="checkbox" id="tenant-rent-manual" onchange="toggleTenantRentMode()" class="rounded"> 직접 입력
+          </label>
+        </div>
+        <div id="tenant-rent-auto">
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <div><label class="block text-xs text-secondary mb-1">상온 평단가</label><input type="number" id="tenant-rent-rate-ambient" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" placeholder="0" oninput="calcTenantRent()"></div>
+            <div><label class="block text-xs text-secondary mb-1">저온 평단가</label><input type="number" id="tenant-rent-rate-frozen" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" placeholder="0" oninput="calcTenantRent()"></div>
+          </div>
+          <div><label class="block text-xs text-secondary mb-1">합계 (자동계산)</label><input type="number" id="tenant-rent" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-surface-container-low font-semibold" readonly placeholder="0"></div>
+        </div>
+        <div id="tenant-rent-direct" class="hidden">
+          <input type="number" id="tenant-rent-manual-val" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" placeholder="직접 입력 (원)">
+        </div>
+      </div>
+      <!-- 관리비 -->
+      <div class="border border-outline-variant rounded-xl p-3">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs font-bold text-secondary">관리비 (원)</p>
+          <label class="flex items-center gap-1.5 text-xs text-secondary cursor-pointer">
+            <input type="checkbox" id="tenant-mgmt-manual" onchange="toggleTenantMgmtMode()" class="rounded"> 직접 입력
+          </label>
+        </div>
+        <div id="tenant-mgmt-auto">
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <div><label class="block text-xs text-secondary mb-1">상온 평단가</label><input type="number" id="tenant-mgmt-rate-ambient" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" placeholder="0" oninput="calcTenantMgmt()"></div>
+            <div><label class="block text-xs text-secondary mb-1">저온 평단가</label><input type="number" id="tenant-mgmt-rate-frozen" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" placeholder="0" oninput="calcTenantMgmt()"></div>
+          </div>
+          <div><label class="block text-xs text-secondary mb-1">합계 (자동계산)</label><input type="number" id="tenant-mgmt" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-surface-container-low font-semibold" readonly placeholder="0"></div>
+        </div>
+        <div id="tenant-mgmt-direct" class="hidden">
+          <input type="number" id="tenant-mgmt-manual-val" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" placeholder="직접 입력 (원)">
+        </div>
+      </div>
+      <!-- 통보기간 -->
+      <div><label class="block text-xs font-semibold text-secondary mb-1">통보기간 (개월)</label><input type="number" id="tenant-notice" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+      <!-- Favor -->
       <div class="border-t border-outline-variant pt-3">
         <p class="text-xs font-bold text-secondary mb-2">Favor</p>
         <div class="grid grid-cols-3 gap-3">
@@ -7217,7 +7346,7 @@ window.addEventListener('resize', () => {
           <div><label class="block text-xs font-semibold text-secondary mb-1">Fitout (개)</label><input type="number" id="tenant-favor-fitout" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" value="0"></div>
           <div><label class="block text-xs font-semibold text-secondary mb-1">TI (원)</label><input type="number" id="tenant-favor-ti" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0" value="0"></div>
         </div>
-        <div class="mt-2"><label class="block text-xs font-semibold text-secondary mb-1">Favor 특이사항</label><input type="text" id="tenant-favor-note" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder=""></div>
+        <div class="mt-2"><label class="block text-xs font-semibold text-secondary mb-1">Favor 특이사항</label><input type="text" id="tenant-favor-note" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
       </div>
     </div>
     <div class="flex gap-3 mt-5">
@@ -7238,7 +7367,18 @@ window.addEventListener('resize', () => {
     <div class="space-y-3">
       <div class="grid grid-cols-2 gap-3">
         <div><label class="block text-xs font-semibold text-secondary mb-1">업체명 *</label><input type="text" id="sales-company" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-semibold text-secondary mb-1">평수</label><input type="number" id="sales-area" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0"></div>
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1">평수</label>
+          <div class="flex gap-2">
+            <input type="number" id="sales-area" class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm" min="0">
+            <select id="sales-temp-type" class="border border-outline-variant rounded-lg px-2 py-2 text-xs bg-white">
+              <option value="">구분</option>
+              <option value="상온">상온</option>
+              <option value="저온">저온</option>
+              <option value="상온+저온">상온+저온</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div><label class="block text-xs font-semibold text-secondary mb-1">기간</label><input type="text" id="sales-period" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="예: 2025.01~2025.12"></div>
