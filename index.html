@@ -2064,7 +2064,7 @@ function formatDate(d) {
 //  NAVIGATION
 // ============================================================
 function showPage(name) {
-  if (name !== 'weekly' && window.Pages && Pages.weekly && Pages.weekly.resetSelection) Pages.weekly.resetSelection();
+  if (name !== 'weekly' && typeof Pages !== 'undefined' && Pages.weekly && Pages.weekly.resetSelection) Pages.weekly.resetSelection();
   if (!requireAuth()) return;
   // 모바일에서 사이드바 자동 닫기
   if (window.innerWidth < 1024) {
