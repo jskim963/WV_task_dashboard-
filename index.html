@@ -5090,6 +5090,107 @@ Pages.weekly = (() => {
     if (todayIdx >= 0) toggleWkCard(todayIdx, true);
   }
 
+  function renderSelectionHighlight() {
+    document.querySelectorAll('#weekly-content td[data-member]').forEach(td => {
+      const key = td.dataset.member + '|' + td.dataset.date;
+      td.classList.toggle('wk-selected', selection.has(key));
+    });
+    updateSelectionBar();
+  }
+
+  function updateSelectionBar() {
+    const bar = document.getElementById('wk-selection-bar');
+    if (selection.size === 0) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+    bar.innerHTML = `<span>${selection.size}칸 선택됨</span><button onclick="Pages.weekly.openBulkPopover()">일정 입력</button>`;
+    bar.classList.remove('hidden');
+  }
+
+  function cellClick(evt, memberId, dateStr) {
+    if (evt.ctrlKey && evt.shiftKey) {
+      if (!anchorCell) anchorCell = { memberId, dateStr };
+      addRectToSelection(anchorCell, { memberId, dateStr });
+      renderSelectionHighlight();
+      return;
+    }
+    if (evt.ctrlKey) {
+      const key = memberId + '|' + dateStr;
+      if (selection.has(key)) selection.delete(key); else selection.add(key);
+      anchorCell = { memberId, dateStr };
+      renderSelectionHighlight();
+      return;
+    }
+    selection.clear();
+    anchorCell = { memberId, dateStr };
+    renderSelectionHighlight();
+    openCellPopover(evt.currentTarget, memberId, dateStr);
+  }
+
+  function positionPopover(pop, anchorEl) {
+    const rect = anchorEl.getBoundingClientRect();
+    const popWidth = 230;
+    let left = rect.left;
+    if (left + popWidth > window.innerWidth - 12) left = window.innerWidth - popWidth - 12;
+    pop.style.left = Math.max(12, left) + 'px';
+    pop.style.top = (rect.bottom + 6) + 'px';
+  }
+
+  function chipsHtml() {
+    return TYPE_LIST.map(t => `<span class="wk-pop-chip" data-type="${t}" style="${EVENT_COLORS[t]}" onclick="Pages.weekly.chipClick('${t}')">${TYPE_ICON[t]}${t}</span>`).join('');
+  }
+
+  function chipClick(type) {
+    popoverType = type;
+    document.querySelectorAll('#wk-popover .wk-pop-chip').forEach(el => el.classList.toggle('active', el.dataset.type === type));
+    const input = document.getElementById('wk-pop-input');
+    if (input && !input.value.trim()) input.value = type;
+  }
+
+  function openCellPopover(cellEl, memberId, dateStr) {
+    popoverMode = 'single'; popoverMember = memberId; popoverDate = dateStr; popoverType = null;
+    const member = DB.members.find(m => m.id === memberId);
+    const existing = getCellEvents(memberId, dateStr);
+    const existingHtml = existing.map(e => {
+      const del = isTeamEvent(e) ? '' : `<button onclick="Pages.weekly.deleteExisting(${e.id})">✕</button>`;
+      const label = (isTeamEvent(e) ? '(팀) ' : '') + e.title;
+      return `<div class="wk-pop-existing"><span>${label}</span>${del}</div>`;
+    }).join('');
+    const pop = document.getElementById('wk-popover');
+    pop.innerHTML = `
+      <div class="wk-pop-context">${member ? member.name : ''} · ${formatDateLabel(dateStr)}</div>
+      ${existingHtml}
+      <input type="text" class="wk-pop-input" id="wk-pop-input" placeholder="새 일정 추가..." onkeydown="if(event.key==='Enter')Pages.weekly.saveSingle()">
+      <div>${chipsHtml()}</div>
+      <button class="wk-pop-save" onclick="Pages.weekly.saveSingle()">추가</button>
+    `;
+    positionPopover(pop, cellEl);
+    pop.classList.remove('hidden');
+    document.getElementById('wk-pop-input').focus();
+  }
+
+  function closePopover() {
+    const pop = document.getElementById('wk-popover');
+    pop.classList.add('hidden');
+    pop.innerHTML = '';
+    popoverMode = null;
+  }
+
+  function saveSingle() {
+    const input = document.getElementById('wk-pop-input');
+    const title = input.value.trim();
+    if (!title) return;
+    const type = popoverType || '기타';
+    DB.events.push({ id: Date.now(), title, date: popoverDate, personId: popoverMember, personIds: [popoverMember], type, memo: '', createdAt: Date.now() });
+    saveDB();
+    showToast('일정이 추가되었습니다');
+    closePopover();
+    render();
+  }
+
+  function deleteExisting(id) {
+    closePopover();
+    deleteEvent(id);
+  }
+
   function changeWeek(dir) {
     weekStart = new Date(weekStart);
     weekStart.setDate(weekStart.getDate() + dir * 7);
@@ -5127,6 +5228,7 @@ Pages.weekly = (() => {
   }
 
   return { render, changeWeek, goThisWeek, toggleCard,
+           cellClick, chipClick, saveSingle, deleteExisting, closePopover,
            get weekStart() { return weekStart; } };
 })();
 
