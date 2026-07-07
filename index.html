@@ -691,9 +691,16 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       </div>
       <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-4">
         <div class="flex items-center gap-3 mb-4 flex-wrap">
-          <button onclick="changeWeek(-1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">chevron_left</span></button>
-          <button onclick="changeWeek(1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">chevron_right</span></button>
-          <button onclick="goToThisWeek()" class="px-3 py-1 border border-outline-variant rounded-lg text-sm text-secondary hover:bg-surface-container">이번 주</button>
+          <!-- 모바일 전용: 기존 주 단위 네비게이션 유지 -->
+          <div class="lg:hidden flex items-center gap-3">
+            <button onclick="changeWeek(-1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">chevron_left</span></button>
+            <button onclick="changeWeek(1)" class="p-1.5 rounded-lg hover:bg-surface-container text-secondary"><span class="material-symbols-outlined">chevron_right</span></button>
+            <button onclick="goToThisWeek()" class="px-3 py-1 border border-outline-variant rounded-lg text-sm text-secondary hover:bg-surface-container">이번 주</button>
+          </div>
+          <!-- 데스크탑 전용: 연속 스크롤이라 이번 주로 이동만 제공 -->
+          <div class="hidden lg:flex items-center gap-3">
+            <button onclick="Pages.weekly.scrollToThisWeek()" class="px-3 py-1 border border-outline-variant rounded-lg text-sm text-secondary hover:bg-surface-container">이번 주로 이동</button>
+          </div>
           <div class="flex gap-3 text-xs text-secondary ml-2">
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm inline-block" style="background:#fee2e2"></span>휴무</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm inline-block" style="background:#dbeafe"></span>출장/외근</span>
@@ -701,12 +708,15 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm inline-block" style="background:#ede9fe"></span>기타</span>
           </div>
         </div>
-        <!-- 데스크탑 테이블 -->
-        <div class="overflow-x-auto hidden lg:block" id="weekly-content"></div>
-        <!-- 모바일 요일 스택 -->
+        <!-- 데스크탑 테이블 (연속 스크롤 영역) -->
+        <div class="overflow-x-auto hidden lg:block wk-scroll-area" id="weekly-content"></div>
+        <!-- 모바일 요일 스택 (기존과 동일, 변경 없음) -->
         <div class="lg:hidden flex flex-col gap-2" id="weekly-mobile-stack"></div>
       </div>
     </div>
+    <!-- 셀 클릭 팝오버 / 다중선택 액션바 (주간일정 전용, 최초엔 비어있음) -->
+    <div id="wk-popover" class="wk-popover hidden"></div>
+    <div id="wk-selection-bar" class="wk-selection-bar hidden"></div>
 
     <!-- ====== PAGE: TEAM ====== -->
     <div id="page-team" class="page">
