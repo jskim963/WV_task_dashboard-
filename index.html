@@ -5191,6 +5191,41 @@ Pages.weekly = (() => {
     deleteEvent(id);
   }
 
+  function openBulkPopover() {
+    if (selection.size === 0) return;
+    popoverMode = 'bulk'; popoverType = null;
+    const pop = document.getElementById('wk-popover');
+    pop.innerHTML = `
+      <div class="wk-pop-context">${selection.size}칸에 동일하게 입력됩니다</div>
+      <input type="text" class="wk-pop-input" id="wk-pop-input" placeholder="예: 출장(이천2)" onkeydown="if(event.key==='Enter')Pages.weekly.saveBulk()">
+      <div>${chipsHtml()}</div>
+      <button class="wk-pop-save" onclick="Pages.weekly.saveBulk()">저장 (${selection.size}건 생성)</button>
+    `;
+    const bar = document.getElementById('wk-selection-bar');
+    positionPopover(pop, bar);
+    pop.classList.remove('hidden');
+    document.getElementById('wk-pop-input').focus();
+  }
+
+  function saveBulk() {
+    const input = document.getElementById('wk-pop-input');
+    const title = input.value.trim();
+    if (!title) return;
+    const type = popoverType || '기타';
+    let i = 0;
+    selection.forEach(key => {
+      const [memberIdStr, dateStr] = key.split('|');
+      DB.events.push({ id: Date.now() + i, title, date: dateStr, personId: parseInt(memberIdStr), personIds: [parseInt(memberIdStr)], type, memo: '', createdAt: Date.now() });
+      i++;
+    });
+    const count = selection.size;
+    saveDB();
+    showToast(count + '건의 일정이 추가되었습니다');
+    selection.clear();
+    closePopover();
+    render();
+  }
+
   function changeWeek(dir) {
     weekStart = new Date(weekStart);
     weekStart.setDate(weekStart.getDate() + dir * 7);
@@ -5229,6 +5264,7 @@ Pages.weekly = (() => {
 
   return { render, changeWeek, goThisWeek, toggleCard,
            cellClick, chipClick, saveSingle, deleteExisting, closePopover,
+           openBulkPopover, saveBulk,
            get weekStart() { return weekStart; } };
 })();
 
