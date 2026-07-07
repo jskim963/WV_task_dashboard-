@@ -4934,6 +4934,52 @@ function getWeekMonday(d) {
 
 Pages.weekly = (() => {
   let weekStart = getWeekMonday(new Date());
+  const BASE_PAST_WEEKS = 2, BASE_FUTURE_WEEKS = 6, EXTEND_CHUNK = 4;
+  let extraPastWeeks = 0, extraFutureWeeks = 0;
+  let selection = new Set();
+  let anchorCell = null;
+  let popoverMode = null, popoverMember = null, popoverDate = null, popoverType = null;
+  const EVENT_COLORS = {휴무:'background:#fee2e2;color:#dc2626', 출장:'background:#dbeafe;color:#1d4ed8', 미팅:'background:#fef9c3;color:#ca8a04', 업무보고:'background:#dcfce7;color:#16a34a', 기타:'background:#ede9fe;color:#7c3aed'};
+  const TYPE_LIST = ['출장','휴무','미팅','기타'];
+  const TYPE_ICON = {출장:'🔵', 휴무:'🔴', 미팅:'🟡', 기타:'🟣'};
+
+  function getCellEvents(memberId, dateStr) {
+    return DB.events.filter(e => e.type !== '업무보고' && eventFallsOnDate(e, dateStr) && (isTeamEvent(e) || getEventPersonIds(e).includes(memberId)));
+  }
+
+  function getVisibleDateList() {
+    const start = new Date(weekStart);
+    start.setDate(start.getDate() - 7 * (BASE_PAST_WEEKS + extraPastWeeks));
+    const totalWeeks = BASE_PAST_WEEKS + extraPastWeeks + 1 + BASE_FUTURE_WEEKS + extraFutureWeeks;
+    const list = [];
+    for (let i = 0; i < totalWeeks * 7; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      list.push(formatDate(d));
+    }
+    return list;
+  }
+
+  function addRectToSelection(a, b) {
+    const memberIds = DB.members.map(m => m.id);
+    const dateList = getVisibleDateList();
+    const mi1 = memberIds.indexOf(a.memberId), mi2 = memberIds.indexOf(b.memberId);
+    const di1 = dateList.indexOf(a.dateStr), di2 = dateList.indexOf(b.dateStr);
+    if (mi1 === -1 || mi2 === -1 || di1 === -1 || di2 === -1) return;
+    const mLo = Math.min(mi1, mi2), mHi = Math.max(mi1, mi2);
+    const dLo = Math.min(di1, di2), dHi = Math.max(di1, di2);
+    for (let mi = mLo; mi <= mHi; mi++) {
+      for (let di = dLo; di <= dHi; di++) {
+        selection.add(memberIds[mi] + '|' + dateList[di]);
+      }
+    }
+  }
+
+  function formatDateLabel(dateStr) {
+    const d = new Date(dateStr);
+    const days = ['일','월','화','수','목','금','토'];
+    return `${d.getMonth()+1}/${d.getDate()}(${days[d.getDay()]})`;
+  }
 
   function render() {
     if (!requireAuth()) return;
