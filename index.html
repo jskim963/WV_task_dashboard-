@@ -2064,6 +2064,7 @@ function formatDate(d) {
 //  NAVIGATION
 // ============================================================
 function showPage(name) {
+  if (name !== 'weekly' && window.Pages && Pages.weekly && Pages.weekly.resetSelection) Pages.weekly.resetSelection();
   if (!requireAuth()) return;
   // 모바일에서 사이드바 자동 닫기
   if (window.innerWidth < 1024) {
@@ -5226,6 +5227,25 @@ Pages.weekly = (() => {
     render();
   }
 
+  function extendPast() {
+    const container = document.getElementById('weekly-content');
+    const oldHeight = container.scrollHeight;
+    const oldTop = container.scrollTop;
+    extraPastWeeks += EXTEND_CHUNK;
+    render();
+    container.scrollTop = oldTop + (container.scrollHeight - oldHeight);
+  }
+
+  function extendFuture() {
+    extraFutureWeeks += EXTEND_CHUNK;
+    render();
+  }
+
+  function scrollToThisWeek() {
+    const el = document.getElementById('wk-week-' + formatDate(weekStart));
+    if (el) el.scrollIntoView({ block: 'start' });
+  }
+
   function changeWeek(dir) {
     weekStart = new Date(weekStart);
     weekStart.setDate(weekStart.getDate() + dir * 7);
@@ -5262,11 +5282,30 @@ Pages.weekly = (() => {
     }
   }
 
+  function resetSelection() {
+    selection.clear();
+    closePopover();
+    updateSelectionBar();
+  }
+
   return { render, changeWeek, goThisWeek, toggleCard,
            cellClick, chipClick, saveSingle, deleteExisting, closePopover,
-           openBulkPopover, saveBulk,
+           openBulkPopover, saveBulk, extendPast, extendFuture, scrollToThisWeek,
+           resetSelection,
            get weekStart() { return weekStart; } };
 })();
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.wk-table td')) return;
+  if (e.target.closest('#wk-popover')) return;
+  if (e.target.closest('#wk-selection-bar')) return;
+  Pages.weekly.closePopover();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    Pages.weekly.closePopover();
+  }
+});
 
 // --- Weekly shims (HTML onclick 호환) ---
 function renderWeekly() { Pages.weekly.render(); }
