@@ -5038,7 +5038,7 @@ Pages.weekly = (() => {
       `<button class="wk-more-btn" onclick="Pages.weekly.extendPast()">↑ 이전 주 더보기</button>
        <table class="wk-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>
        <button class="wk-more-btn" onclick="Pages.weekly.extendFuture()">↓ 다음 주 더보기</button>`;
-    renderSelectionHighlight();
+    if (typeof renderSelectionHighlight === 'function') renderSelectionHighlight();
 
     // 모바일 요일 스택 렌더링
     const stack = document.getElementById('weekly-mobile-stack');
