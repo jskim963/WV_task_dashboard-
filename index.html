@@ -1006,10 +1006,11 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
               <span class="text-sm text-on-surface">센터 이슈 알림</span>
               <input type="checkbox" class="w-4 h-4 accent-primary" id="notif-center">
             </label>
-            <div class="pt-2 border-t border-outline-variant">
-              <p class="text-xs text-secondary mb-2">Webex 연동</p>
-              <input type="text" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm mb-2" placeholder="Webex Webhook URL (추후 설정)" disabled>
-              <p class="text-xs text-secondary">Outlook/Webex 연동은 IT 관리자에게 문의하세요</p>
+            <div class="pt-2 border-t border-outline-variant hidden" id="settings-webex-section">
+              <p class="text-xs text-secondary mb-2">Webex 연동 (취합리스트 알림 전용 봇 토큰)</p>
+              <input type="password" id="webex-bot-token" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm mb-2" placeholder="Webex Bot Access Token">
+              <button onclick="saveWebexSettings()" class="w-full border border-primary text-primary rounded-lg py-1.5 text-xs font-semibold hover:bg-blue-50">저장</button>
+              <p class="text-xs text-secondary mt-2">취합리스트의 "미제출자에게 알림 보내기"에 사용됩니다. 관리자만 설정할 수 있습니다.</p>
             </div>
           </div>
         </div>
@@ -4639,6 +4640,26 @@ function loadSettings() {
     tplSection.classList.toggle('hidden', !isAdmin);
     if (isAdmin) renderTemplateList();
   }
+  // 관리자 전용 Webex 봇 토큰 설정
+  const webexSection = document.getElementById('settings-webex-section');
+  if (webexSection) {
+    const isAdmin = currentUser?.username === 'jungsoo.kim';
+    webexSection.classList.toggle('hidden', !isAdmin);
+    if (isAdmin) {
+      db.collection('settings').doc('webex').get().then(snap => {
+        const tokenInput = document.getElementById('webex-bot-token');
+        if (tokenInput) tokenInput.value = snap.exists ? (snap.data().botToken || '') : '';
+      }).catch(e => console.error('Webex 설정 로드 실패:', e));
+    }
+  }
+}
+
+function saveWebexSettings() {
+  const token = document.getElementById('webex-bot-token').value.trim();
+  if (!token) { showToast('토큰을 입력하세요'); return; }
+  db.collection('settings').doc('webex').set({ botToken: token }).then(() => {
+    showToast('Webex 설정이 저장되었습니다');
+  }).catch(e => { console.error(e); showToast('저장 실패'); });
 }
 
 function saveProfile() {
@@ -8011,7 +8032,46 @@ Pages.collections = (() => {
     render();
   }
 
-  return { switchTab, render, isFullyChecked, openDetail, closeDetail, toggleCheck, deleteItem, openAddModal, editModal, save, removeAttachment };
+  async function notifyUnsubmitted(id) {
+    const item = (DB.collections || []).find(c => c.id === id);
+    if (!item) return;
+    const uncheckedIds = item.targetIds.filter(mid => !item.submitted[String(mid)]?.checked);
+    if (!uncheckedIds.length) { showToast('미제출자가 없습니다'); return; }
+
+    let botToken;
+    try {
+      const snap = await db.collection('settings').doc('webex').get();
+      botToken = snap.exists ? snap.data().botToken : null;
+    } catch (e) {
+      showToast('Webex 설정을 불러오지 못했습니다');
+      return;
+    }
+    if (!botToken) { showToast('Webex 봇 토큰이 설정되지 않았습니다. 설정 페이지에서 등록해주세요'); return; }
+
+    const text = `[취합리스트] ${item.dept} · ${item.title} — 회신기한 ${item.deadline}까지 제출 부탁드립니다.`;
+    let successCount = 0;
+    const failNames = [];
+    for (const mid of uncheckedIds) {
+      const member = DB.members.find(m => m.id === mid);
+      if (!member || !member.email) { failNames.push(member ? member.name : String(mid)); continue; }
+      try {
+        const res = await fetch('https://webexapis.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${botToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ toPersonEmail: member.email, text }),
+        });
+        if (res.ok) successCount++; else failNames.push(member.name);
+      } catch (e) { failNames.push(member.name); }
+    }
+    item.lastNotifiedAt = Date.now();
+    db.collection('collections').doc(String(id)).update({ lastNotifiedAt: item.lastNotifiedAt }).catch(e => console.error(e));
+    showToast(failNames.length
+      ? `${successCount}명에게 발송완료, 실패: ${failNames.join(', ')}`
+      : `${successCount}명에게 알림 발송완료`);
+    render();
+  }
+
+  return { switchTab, render, isFullyChecked, openDetail, closeDetail, toggleCheck, deleteItem, openAddModal, editModal, save, removeAttachment, notifyUnsubmitted };
 })();
 
 function switchDraftMobileTab(tab) {
@@ -8215,6 +8275,7 @@ function saveCollection() { Pages.collections.save(); }
 function editCollection(id) { Pages.collections.editModal(id); }
 function deleteCollection(id) { Pages.collections.deleteItem(id); }
 function closeCollectionDetail() { Pages.collections.closeDetail(); }
+function notifyUnsubmitted(id) { Pages.collections.notifyUnsubmitted(id); }
 
 // ---- Library global shims ----
 function libNavigate(id, name)         { Pages.library.navigateTo(id, name); }
