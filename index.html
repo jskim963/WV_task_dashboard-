@@ -1488,6 +1488,31 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
   </div>
 </div>
 
+<!-- Collection Detail Modal -->
+<div id="modal-collection-detail" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')" ontouchend="if(event.target===this){event.preventDefault();this.classList.add('hidden')}">
+  <div class="modal-box" style="width:520px;max-height:90vh;overflow-y:auto;">
+    <div class="flex items-start justify-between mb-1">
+      <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="cd-title"></h3>
+      <div class="flex gap-1">
+        <button onclick="editCollection(window._activeCollectionId)" class="p-1.5 rounded-lg text-secondary hover:bg-surface-container"><span class="material-symbols-outlined text-sm">edit</span></button>
+        <button onclick="deleteCollection(window._activeCollectionId)" class="p-1.5 rounded-lg text-red-400 hover:bg-red-50"><span class="material-symbols-outlined text-sm">delete</span></button>
+        <button onclick="closeCollectionDetail()" class="p-1.5 rounded-lg text-secondary hover:bg-surface-container"><span class="material-symbols-outlined text-sm">close</span></button>
+      </div>
+    </div>
+    <p id="cd-meta" class="text-xs text-secondary mb-3"></p>
+    <p id="cd-memo" class="text-sm text-on-surface mb-4"></p>
+    <div>
+      <label class="block text-xs font-semibold text-secondary mb-1.5 uppercase tracking-wide">제출 현황</label>
+      <div id="cd-checklist" class="border border-outline-variant rounded-lg overflow-hidden mb-2"></div>
+      <button id="cd-notify-btn" onclick="notifyUnsubmitted(window._activeCollectionId)" class="w-full border border-primary text-primary rounded-lg py-2 text-sm font-semibold hover:bg-blue-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed">미제출자에게 Webex 알림 보내기</button>
+    </div>
+    <div class="mt-4">
+      <label class="block text-xs font-semibold text-secondary mb-1.5 uppercase tracking-wide">첨부파일</label>
+      <div id="cd-attachments" class="space-y-1"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Task Detail Modal -->
 <div id="modal-task-detail" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')" ontouchend="if(event.target===this){event.preventDefault();this.classList.add('hidden')}">
   <div class="modal-box" style="width:640px;">
@@ -7869,6 +7894,7 @@ Pages.collections = (() => {
   function editModal(id) {
     const item = (DB.collections || []).find(c => c.id === id);
     if (!item) return;
+    closeDetail();
     document.getElementById('editing-collection-id').value = item.id;
     document.getElementById('coll-dept').value = item.dept;
     document.getElementById('coll-title').value = item.title;
@@ -7928,7 +7954,64 @@ Pages.collections = (() => {
     render();
   }
 
-  return { switchTab, render, isFullyChecked, openDetail: (id) => {}, openAddModal, editModal, save, removeAttachment };
+  function renderDetail(id) {
+    const item = (DB.collections || []).find(c => c.id === id);
+    if (!item) return;
+    const manager = DB.members.find(m => m.id === item.managerId);
+    document.getElementById('cd-title').textContent = item.title;
+    document.getElementById('cd-meta').textContent = `${item.dept} · 회신기한 ${item.deadline} · 취합담당 ${manager ? manager.name : '-'}`;
+    document.getElementById('cd-memo').textContent = item.memo || '';
+    document.getElementById('cd-checklist').innerHTML = item.targetIds.map(mid => {
+      const m = DB.members.find(mm => mm.id === mid);
+      const s = item.submitted[String(mid)] || { checked: false, at: null };
+      return `<label class="flex items-center justify-between px-3 py-2 border-b border-outline-variant last:border-b-0 cursor-pointer">
+        <span class="flex items-center gap-2 text-sm"><input type="checkbox" ${s.checked ? 'checked' : ''} onchange="Pages.collections.toggleCheck(${item.id},${mid})" class="w-4 h-4 accent-primary">${m ? m.name : mid}</span>
+        <span class="text-xs text-secondary">${s.checked && s.at ? new Date(s.at).toLocaleString('ko-KR') : '미제출'}</span>
+      </label>`;
+    }).join('');
+    const uncheckedCount = item.targetIds.filter(mid => !item.submitted[String(mid)]?.checked).length;
+    const notifyBtn = document.getElementById('cd-notify-btn');
+    notifyBtn.textContent = `미제출자에게 Webex 알림 보내기 (${uncheckedCount}명)`;
+    notifyBtn.disabled = uncheckedCount === 0;
+    document.getElementById('cd-attachments').innerHTML = (item.attachments || []).map(a =>
+      `<a href="${a.url}" target="_blank" class="flex items-center gap-1.5 text-xs text-primary hover:underline"><span class="material-symbols-outlined text-sm">attach_file</span>${a.name}</a>`
+    ).join('') || '<p class="text-xs text-secondary">첨부파일 없음</p>';
+  }
+
+  function openDetail(id) {
+    window._activeCollectionId = id;
+    renderDetail(id);
+    document.getElementById('modal-collection-detail').classList.remove('hidden');
+  }
+
+  function closeDetail() {
+    document.getElementById('modal-collection-detail').classList.add('hidden');
+    window._activeCollectionId = null;
+  }
+
+  function toggleCheck(id, memberId) {
+    const item = (DB.collections || []).find(c => c.id === id);
+    if (!item) return;
+    if (!item.submitted) item.submitted = {};
+    const key = String(memberId);
+    const wasChecked = !!item.submitted[key]?.checked;
+    item.submitted[key] = { checked: !wasChecked, at: !wasChecked ? Date.now() : null };
+    item.status = isFullyChecked(item) ? '완료' : '진행중';
+    db.collection('collections').doc(String(id)).update({ submitted: item.submitted, status: item.status }).catch(e => console.error(e));
+    renderDetail(id);
+    render();
+  }
+
+  function deleteItem(id) {
+    if (!confirm('취합건을 삭제하시겠습니까?')) return;
+    DB.collections = (DB.collections || []).filter(c => c.id !== id);
+    db.collection('collections').doc(String(id)).delete().catch(e => console.error(e));
+    closeDetail();
+    showToast('삭제되었습니다');
+    render();
+  }
+
+  return { switchTab, render, isFullyChecked, openDetail, closeDetail, toggleCheck, deleteItem, openAddModal, editModal, save, removeAttachment };
 })();
 
 function switchDraftMobileTab(tab) {
@@ -8129,6 +8212,9 @@ document.addEventListener('click', function(e) {
 function switchCollectionTab(tab) { Pages.collections.switchTab(tab); }
 function openAddCollectionModal() { Pages.collections.openAddModal(); }
 function saveCollection() { Pages.collections.save(); }
+function editCollection(id) { Pages.collections.editModal(id); }
+function deleteCollection(id) { Pages.collections.deleteItem(id); }
+function closeCollectionDetail() { Pages.collections.closeDetail(); }
 
 // ---- Library global shims ----
 function libNavigate(id, name)         { Pages.library.navigateTo(id, name); }
