@@ -1432,6 +1432,62 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
   </div>
 </div>
 
+<!-- Collection Add/Edit Modal -->
+<div id="modal-add-collection" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')" ontouchend="if(event.target===this){event.preventDefault();this.classList.add('hidden')}">
+  <div class="modal-box" style="width:520px;max-height:90vh;overflow-y:auto;">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-lg font-bold text-on-surface" style="font-family:'Hanken Grotesk'" id="collection-modal-title">취합건 등록</h3>
+      <button onclick="document.getElementById('modal-add-collection').classList.add('hidden')" class="text-secondary p-1 rounded-lg hover:bg-surface-container"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <input type="hidden" id="editing-collection-id">
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">요청부서 *</label>
+        <input type="text" id="coll-dept" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="예: TLS기획팀">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">구분</label>
+          <select id="coll-tag" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="">일반</option>
+            <option value="신규">신규</option>
+            <option value="중요">중요</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-secondary mb-1.5">회신기한 *</label>
+          <input type="date" id="coll-deadline" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">제목 *</label>
+        <input type="text" id="coll-title" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm" placeholder="취합 항목 제목">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">취합 담당자 *</label>
+        <select id="coll-manager" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white"></select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">대상 팀원 *</label>
+        <div id="coll-target-members" class="person-check-list w-full"></div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">비고</label>
+        <textarea id="coll-memo" rows="2" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-secondary mb-1.5">첨부파일</label>
+        <input type="file" id="coll-file-input" multiple class="w-full text-xs border border-outline-variant rounded-lg px-2 py-1.5">
+        <div id="coll-attachment-list" class="mt-2 space-y-1"></div>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-6">
+      <button onclick="document.getElementById('modal-add-collection').classList.add('hidden')" class="flex-1 border border-outline-variant rounded-lg py-2.5 text-sm text-secondary hover:bg-surface-container transition-all">취소</button>
+      <button onclick="saveCollection()" class="flex-1 bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700 transition-all">저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- Task Detail Modal -->
 <div id="modal-task-detail" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')" ontouchend="if(event.target===this){event.preventDefault();this.classList.add('hidden')}">
   <div class="modal-box" style="width:640px;">
@@ -7758,7 +7814,121 @@ Pages.collections = (() => {
     }).join('');
   }
 
-  return { switchTab, render, isFullyChecked, openDetail: (id) => {} };
+  function populateManagerSelect(selectedId) {
+    const sel = document.getElementById('coll-manager');
+    sel.innerHTML = '<option value="">담당자 선택</option>' +
+      DB.members.map(m => `<option value="${m.id}" ${selectedId === m.id ? 'selected' : ''}>${m.name}</option>`).join('');
+  }
+
+  function renderAttachmentList() {
+    const wrap = document.getElementById('coll-attachment-list');
+    wrap.innerHTML = _collAttachments.map((a, i) => `
+      <div class="flex items-center justify-between text-xs bg-surface-container rounded-lg px-2 py-1.5">
+        <a href="${a.url}" target="_blank" class="text-primary hover:underline truncate">${a.name}</a>
+        <button type="button" onclick="Pages.collections.removeAttachment(${i})" class="text-secondary hover:text-red-500"><span class="material-symbols-outlined text-sm">close</span></button>
+      </div>`).join('');
+  }
+
+  function removeAttachment(i) {
+    _collAttachments.splice(i, 1);
+    renderAttachmentList();
+  }
+
+  async function uploadCollectionFiles(inputId, existingAttachments, collectionId) {
+    const input = document.getElementById(inputId);
+    const files = input ? Array.from(input.files) : [];
+    const uploaded = [...existingAttachments];
+    for (const file of files) {
+      const path = `collections/${collectionId}/${Date.now()}_${file.name}`;
+      const ref = firebase.storage().ref(path);
+      try {
+        await ref.put(file);
+        const url = await ref.getDownloadURL();
+        uploaded.push({ name: file.name, path, url });
+      } catch (e) { console.error('파일 업로드 오류:', e); }
+    }
+    return uploaded;
+  }
+
+  function openAddModal() {
+    document.getElementById('editing-collection-id').value = '';
+    document.getElementById('coll-dept').value = '';
+    document.getElementById('coll-title').value = '';
+    document.getElementById('coll-deadline').value = '';
+    document.getElementById('coll-tag').value = '';
+    document.getElementById('coll-memo').value = '';
+    document.getElementById('coll-file-input').value = '';
+    _collAttachments = [];
+    renderAttachmentList();
+    populateManagerSelect(null);
+    renderPersonCheckboxes('coll-target-members', [], false);
+    document.getElementById('collection-modal-title').textContent = '취합건 등록';
+    document.getElementById('modal-add-collection').classList.remove('hidden');
+  }
+
+  function editModal(id) {
+    const item = (DB.collections || []).find(c => c.id === id);
+    if (!item) return;
+    document.getElementById('editing-collection-id').value = item.id;
+    document.getElementById('coll-dept').value = item.dept;
+    document.getElementById('coll-title').value = item.title;
+    document.getElementById('coll-deadline').value = item.deadline;
+    document.getElementById('coll-tag').value = item.tag || '';
+    document.getElementById('coll-memo').value = item.memo || '';
+    document.getElementById('coll-file-input').value = '';
+    _collAttachments = [...(item.attachments || [])];
+    renderAttachmentList();
+    populateManagerSelect(item.managerId);
+    renderPersonCheckboxes('coll-target-members', item.targetIds, false);
+    document.getElementById('collection-modal-title').textContent = '취합건 수정';
+    document.getElementById('modal-add-collection').classList.remove('hidden');
+  }
+
+  async function save() {
+    const dept = document.getElementById('coll-dept').value.trim();
+    const title = document.getElementById('coll-title').value.trim();
+    const deadline = document.getElementById('coll-deadline').value;
+    const managerId = parseInt(document.getElementById('coll-manager').value) || null;
+    const memo = document.getElementById('coll-memo').value.trim();
+    const tag = document.getElementById('coll-tag').value || null;
+    const targetIds = [...document.querySelectorAll('#coll-target-members input:checked')].map(cb => parseInt(cb.value));
+    if (!dept || !title || !deadline || !managerId) { alert('요청부서, 제목, 회신기한, 취합 담당자는 필수입니다'); return; }
+    if (!targetIds.length) { alert('대상 팀원을 1명 이상 선택하세요'); return; }
+
+    const editId = document.getElementById('editing-collection-id').value;
+    const id = editId ? parseInt(editId) : Date.now();
+    const existing = editId ? (DB.collections || []).find(c => c.id === id) : null;
+    const attachments = await uploadCollectionFiles('coll-file-input', _collAttachments, id);
+
+    const submitted = {};
+    targetIds.forEach(mid => {
+      const key = String(mid);
+      submitted[key] = existing?.submitted?.[key] || { checked: false, at: null };
+    });
+    const status = isFullyChecked({ targetIds, submitted }) ? '완료' : '진행중';
+
+    const data = {
+      id, dept, tag, title, deadline, managerId, memo, targetIds, submitted, attachments, status,
+      lastNotifiedAt: existing?.lastNotifiedAt || null,
+      createdAt: existing?.createdAt || id,
+      createdBy: existing?.createdBy || currentUser?.username || '',
+    };
+
+    if (existing) {
+      Object.assign(existing, data);
+      db.collection('collections').doc(String(id)).update(data).catch(e => console.error(e));
+      showToast('취합건이 수정되었습니다');
+    } else {
+      if (!DB.collections) DB.collections = [];
+      DB.collections.push(data);
+      db.collection('collections').doc(String(id)).set(data).catch(e => console.error(e));
+      showToast('취합건이 등록되었습니다');
+    }
+    document.getElementById('modal-add-collection').classList.add('hidden');
+    render();
+  }
+
+  return { switchTab, render, isFullyChecked, openDetail: (id) => {}, openAddModal, editModal, save, removeAttachment };
 })();
 
 function switchDraftMobileTab(tab) {
@@ -7957,6 +8127,8 @@ document.addEventListener('click', function(e) {
 });
 
 function switchCollectionTab(tab) { Pages.collections.switchTab(tab); }
+function openAddCollectionModal() { Pages.collections.openAddModal(); }
+function saveCollection() { Pages.collections.save(); }
 
 // ---- Library global shims ----
 function libNavigate(id, name)         { Pages.library.navigateTo(id, name); }
