@@ -7812,6 +7812,10 @@ Pages.collections = (() => {
   let _tab = '진행중';
   let _collAttachments = [];
 
+  function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
   function isFullyChecked(item) {
     return item.targetIds.length > 0 && item.targetIds.every(mid => item.submitted[String(mid)]?.checked);
   }
@@ -7870,7 +7874,7 @@ Pages.collections = (() => {
     const wrap = document.getElementById('coll-attachment-list');
     wrap.innerHTML = _collAttachments.map((a, i) => `
       <div class="flex items-center justify-between text-xs bg-surface-container rounded-lg px-2 py-1.5">
-        <a href="${a.url}" target="_blank" class="text-primary hover:underline truncate">${a.name}</a>
+        <a href="${a.url}" target="_blank" class="text-primary hover:underline truncate">${escapeHtml(a.name)}</a>
         <button type="button" onclick="Pages.collections.removeAttachment(${i})" class="text-secondary hover:text-red-500"><span class="material-symbols-outlined text-sm">close</span></button>
       </div>`).join('');
   }
@@ -7995,7 +7999,7 @@ Pages.collections = (() => {
     notifyBtn.textContent = `미제출자에게 Webex 알림 보내기 (${uncheckedCount}명)`;
     notifyBtn.disabled = uncheckedCount === 0;
     document.getElementById('cd-attachments').innerHTML = (item.attachments || []).map(a =>
-      `<a href="${a.url}" target="_blank" class="flex items-center gap-1.5 text-xs text-primary hover:underline"><span class="material-symbols-outlined text-sm">attach_file</span>${a.name}</a>`
+      `<a href="${a.url}" target="_blank" class="flex items-center gap-1.5 text-xs text-primary hover:underline"><span class="material-symbols-outlined text-sm">attach_file</span>${escapeHtml(a.name)}</a>`
     ).join('') || '<p class="text-xs text-secondary">첨부파일 없음</p>';
   }
 
