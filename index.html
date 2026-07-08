@@ -1826,7 +1826,7 @@ db.enablePersistence().catch(err => {
   }
 });
 
-const FS_COLLS = ['tasks', 'members', 'centers', 'events', 'notices', 'users', 'memos', 'library', 'projects', 'drafts', 'draft_templates'];
+const FS_COLLS = ['tasks', 'members', 'centers', 'events', 'notices', 'users', 'memos', 'library', 'projects', 'drafts', 'draft_templates', 'collections'];
 
 // ============================================================
 //  DATA STORE (localStorage persistence)
@@ -1844,6 +1844,7 @@ let DB = {
   projects: [],
   drafts: [],
   draft_templates: [],
+  collections: [],
   myProfile: { name: '나', email: '', rank: '' },
 };
 let currentUser = null;
@@ -1921,6 +1922,11 @@ function setupListeners() {
     DB.draft_templates = snapshot.docs.map(d => d.data());
     refreshCurrentPage();
   }, err => console.error('onSnapshot 오류 (draft_templates):', err));
+
+  db.collection('collections').onSnapshot(snapshot => {
+    DB.collections = snapshot.docs.map(d => d.data());
+    refreshCurrentPage();
+  }, err => console.error('onSnapshot 오류 (collections):', err));
 }
 
 function initDemoData() {
