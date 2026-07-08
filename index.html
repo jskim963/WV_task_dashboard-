@@ -381,6 +381,9 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       <div class="nav-item" onclick="showPage('drafts')" id="nav-drafts">
         <span class="material-symbols-outlined">rate_review</span> 검토방
       </div>
+      <div class="nav-item" onclick="showPage('collections')" id="nav-collections">
+        <span class="material-symbols-outlined">checklist</span> 취합리스트
+      </div>
       <div class="nav-item" onclick="showPage('library')" id="nav-library">
         <span class="material-symbols-outlined">folder_open</span> 자료실
       </div>
@@ -885,6 +888,37 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
     <span class="material-symbols-outlined text-5xl mb-3 opacity-40">rate_review</span>
     <p class="text-sm">아직 기안서가 없습니다</p>
     <button onclick="openAddDraftModal()" class="mt-4 text-primary text-sm hover:underline">+ 첫 기안서 작성하기</button>
+  </div>
+</div>
+<div id="page-collections" class="page">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-xl lg:text-2xl font-bold text-on-surface" style="font-family:'Hanken Grotesk'">취합리스트</h1>
+      <p class="text-sm text-secondary mt-0.5">회신 요청 취합 및 제출 현황 관리</p>
+    </div>
+    <button onclick="openAddCollectionModal()" class="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700">
+      <span class="material-symbols-outlined text-base">add</span> 취합건 등록
+    </button>
+  </div>
+  <div class="flex gap-2 mb-4">
+    <button class="coll-tab-btn" data-tab="진행중" onclick="switchCollectionTab('진행중')">진행중</button>
+    <button class="coll-tab-btn" data-tab="완료" onclick="switchCollectionTab('완료')">완료</button>
+  </div>
+  <div class="bg-white rounded-xl border border-outline-variant shadow-sm overflow-x-auto">
+    <table class="w-full text-left" style="min-width:800px">
+      <thead class="bg-surface-container text-xs text-secondary">
+        <tr>
+          <th class="px-4 py-2.5 font-semibold">요청부서</th>
+          <th class="px-4 py-2.5 font-semibold">구분</th>
+          <th class="px-4 py-2.5 font-semibold">제목</th>
+          <th class="px-4 py-2.5 font-semibold">회신기한</th>
+          <th class="px-4 py-2.5 font-semibold">취합 담당자</th>
+          <th class="px-4 py-2.5 font-semibold">제출현황</th>
+          <th class="px-4 py-2.5 font-semibold">비고</th>
+        </tr>
+      </thead>
+      <tbody id="coll-tbody"></tbody>
+    </table>
   </div>
 </div>
     <div id="page-library" class="page">
@@ -7668,6 +7702,41 @@ function submitInlineComment(did, vid, li) { Pages.drafts.submitInlineComment(di
 function resolveInlineComment(did, vid, cid) { Pages.drafts.resolveInlineComment(did, vid, cid); }
 function deleteInlineComment(did, vid, cid) { Pages.drafts.deleteInlineComment(did, vid, cid); }
 function addDraftComment()                  { Pages.drafts.addComment(); }
+
+// ============================================================
+//  PAGE: COLLECTIONS (취합리스트)
+// ============================================================
+Pages.collections = (() => {
+  let _tab = '진행중';
+  let _collAttachments = [];
+
+  function isFullyChecked(item) {
+    return item.targetIds.length > 0 && item.targetIds.every(mid => item.submitted[String(mid)]?.checked);
+  }
+
+  function switchTab(tab) {
+    _tab = tab;
+    render();
+  }
+
+  function updateTabButtons() {
+    document.querySelectorAll('.coll-tab-btn').forEach(b => {
+      const isActive = b.dataset.tab === _tab;
+      b.className = 'coll-tab-btn px-4 py-1.5 rounded-full text-sm font-medium transition-all ' +
+        (isActive ? 'bg-primary text-white' : 'border border-outline-variant text-secondary hover:border-primary hover:text-primary');
+    });
+  }
+
+  function render() {
+    updateTabButtons();
+    const tbody = document.getElementById('coll-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-sm text-secondary py-10">준비 중입니다</td></tr>`;
+  }
+
+  return { switchTab, render, isFullyChecked };
+})();
+
 function switchDraftMobileTab(tab) {
   const docPanel     = document.getElementById('draft-content-panel');
   const commentPanel = document.getElementById('draft-comment-panel');
@@ -7862,6 +7931,8 @@ document.addEventListener('click', function(e) {
     document.getElementById('draft-member-dropdown-panel')?.classList.add('hidden');
   }
 });
+
+function switchCollectionTab(tab) { Pages.collections.switchTab(tab); }
 
 // ---- Library global shims ----
 function libNavigate(id, name)         { Pages.library.navigateTo(id, name); }
