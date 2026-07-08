@@ -8037,6 +8037,7 @@ Pages.collections = (() => {
     const key = String(memberId);
     const existing = item.submitted[key] || { checked: false, at: null, files: [] };
     const uploaded = [...(existing.files || [])];
+    let successCount = 0;
     for (const file of files) {
       const path = `collections/${id}/${memberId}/${Date.now()}_${file.name}`;
       const ref = firebase.storage().ref(path);
@@ -8044,7 +8045,13 @@ Pages.collections = (() => {
         await ref.put(file);
         const url = await ref.getDownloadURL();
         uploaded.push({ name: file.name, path, url });
+        successCount++;
       } catch (e) { console.error('파일 업로드 오류:', e); }
+    }
+    if (!successCount) {
+      showToast('파일 업로드에 실패했습니다. 다시 시도해주세요');
+      inputEl.value = '';
+      return;
     }
     item.submitted[key] = { ...existing, checked: true, at: Date.now(), files: uploaded };
     item.status = isFullyChecked(item) ? '완료' : '진행중';
