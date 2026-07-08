@@ -8021,11 +8021,48 @@ Pages.collections = (() => {
     if (!item.submitted) item.submitted = {};
     const key = String(memberId);
     const wasChecked = !!item.submitted[key]?.checked;
-    item.submitted[key] = { checked: !wasChecked, at: !wasChecked ? Date.now() : null };
+    item.submitted[key] = { ...item.submitted[key], checked: !wasChecked, at: !wasChecked ? Date.now() : null };
     item.status = isFullyChecked(item) ? '완료' : '진행중';
     db.collection('collections').doc(String(id)).update({ submitted: item.submitted, status: item.status }).catch(e => console.error(e));
     renderDetail(id);
     render();
+  }
+
+  async function uploadReplyFile(id, memberId, inputEl) {
+    const files = inputEl && inputEl.files ? Array.from(inputEl.files) : [];
+    if (!files.length) return;
+    const item = (DB.collections || []).find(c => c.id === id);
+    if (!item) return;
+    if (!item.submitted) item.submitted = {};
+    const key = String(memberId);
+    const existing = item.submitted[key] || { checked: false, at: null, files: [] };
+    const uploaded = [...(existing.files || [])];
+    for (const file of files) {
+      const path = `collections/${id}/${memberId}/${Date.now()}_${file.name}`;
+      const ref = firebase.storage().ref(path);
+      try {
+        await ref.put(file);
+        const url = await ref.getDownloadURL();
+        uploaded.push({ name: file.name, path, url });
+      } catch (e) { console.error('파일 업로드 오류:', e); }
+    }
+    item.submitted[key] = { ...existing, checked: true, at: Date.now(), files: uploaded };
+    item.status = isFullyChecked(item) ? '완료' : '진행중';
+    db.collection('collections').doc(String(id)).update({ submitted: item.submitted, status: item.status }).catch(e => console.error(e));
+    inputEl.value = '';
+    renderDetail(id);
+    render();
+  }
+
+  function removeReplyFile(id, memberId, fileIndex) {
+    const item = (DB.collections || []).find(c => c.id === id);
+    if (!item) return;
+    const key = String(memberId);
+    const entry = item.submitted[key];
+    if (!entry || !entry.files) return;
+    entry.files = entry.files.filter((_, i) => i !== fileIndex);
+    db.collection('collections').doc(String(id)).update({ submitted: item.submitted }).catch(e => console.error(e));
+    renderDetail(id);
   }
 
   function deleteItem(id) {
@@ -8076,7 +8113,7 @@ Pages.collections = (() => {
     render();
   }
 
-  return { switchTab, render, isFullyChecked, openDetail, closeDetail, toggleCheck, deleteItem, openAddModal, editModal, save, removeAttachment, notifyUnsubmitted };
+  return { switchTab, render, isFullyChecked, openDetail, closeDetail, toggleCheck, deleteItem, openAddModal, editModal, save, removeAttachment, notifyUnsubmitted, uploadReplyFile, removeReplyFile };
 })();
 
 function switchDraftMobileTab(tab) {
@@ -8281,6 +8318,8 @@ function editCollection(id) { Pages.collections.editModal(id); }
 function deleteCollection(id) { Pages.collections.deleteItem(id); }
 function closeCollectionDetail() { Pages.collections.closeDetail(); }
 function notifyUnsubmitted(id) { Pages.collections.notifyUnsubmitted(id); }
+function uploadReplyFile(id, memberId, inputEl) { Pages.collections.uploadReplyFile(id, memberId, inputEl); }
+function removeReplyFile(id, memberId, fileIndex) { Pages.collections.removeReplyFile(id, memberId, fileIndex); }
 
 // ---- Library global shims ----
 function libNavigate(id, name)         { Pages.library.navigateTo(id, name); }
