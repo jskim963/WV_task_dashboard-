@@ -7989,11 +7989,28 @@ Pages.collections = (() => {
     document.getElementById('cd-memo').textContent = item.memo || '';
     document.getElementById('cd-checklist').innerHTML = item.targetIds.map(mid => {
       const m = DB.members.find(mm => mm.id === mid);
-      const s = item.submitted[String(mid)] || { checked: false, at: null };
-      return `<label class="flex items-center justify-between px-3 py-2 border-b border-outline-variant last:border-b-0 cursor-pointer">
-        <span class="flex items-center gap-2 text-sm"><input type="checkbox" ${s.checked ? 'checked' : ''} onchange="Pages.collections.toggleCheck(${item.id},${mid})" class="w-4 h-4 accent-primary">${m ? m.name : mid}</span>
-        <span class="text-xs text-secondary">${s.checked && s.at ? new Date(s.at).toLocaleString('ko-KR') : '미제출'}</span>
-      </label>`;
+      const s = item.submitted[String(mid)] || { checked: false, at: null, files: [] };
+      const files = s.files || [];
+      const fileListHtml = files.map((f, i) => `
+        <div class="flex items-center justify-between text-xs bg-surface-container rounded px-2 py-1 mt-1 ml-6">
+          <a href="${f.url}" target="_blank" class="text-primary hover:underline truncate">${escapeHtml(f.name)}</a>
+          <button type="button" onclick="Pages.collections.removeReplyFile(${item.id},${mid},${i})" class="text-secondary hover:text-red-500"><span class="material-symbols-outlined text-sm">close</span></button>
+        </div>`).join('');
+      return `<div class="px-3 py-2 border-b border-outline-variant last:border-b-0">
+        <div class="flex items-center justify-between">
+          <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" ${s.checked ? 'checked' : ''} onchange="Pages.collections.toggleCheck(${item.id},${mid})" class="w-4 h-4 accent-primary">${m ? m.name : mid}
+          </label>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-secondary">${s.checked && s.at ? new Date(s.at).toLocaleString('ko-KR') : '미제출'}</span>
+            <label class="material-symbols-outlined text-sm text-secondary hover:text-primary cursor-pointer" title="파일 첨부">
+              attach_file
+              <input type="file" multiple class="hidden" onchange="Pages.collections.uploadReplyFile(${item.id},${mid},this)">
+            </label>
+          </div>
+        </div>
+        ${fileListHtml}
+      </div>`;
     }).join('');
     const uncheckedCount = item.targetIds.filter(mid => !item.submitted[String(mid)]?.checked).length;
     const notifyBtn = document.getElementById('cd-notify-btn');
