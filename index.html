@@ -240,12 +240,12 @@ tailwind.config = {
 
   /* Weekly grid */
   .wk-table { border-collapse:collapse; width:100%; min-width:700px; table-layout:fixed; }
-  .wk-table th, .wk-table td { border:1px solid #e2e8f0; padding:6px 8px; vertical-align:top; overflow:hidden; }
+  .wk-table th, .wk-table td { border:1px solid #e2e8f0; padding:3px 6px; vertical-align:top; overflow:hidden; }
   .wk-table th { background:#f8fafc; font-size:11px; text-align:center; font-weight:600; color:#505f76; }
   .wk-table th:first-child, .wk-table td:first-child { width:116px; }
   .wk-table th:not(:first-child), .wk-table td:not(:first-child) { width:calc((100% - 116px) / 7); }
-  .wk-cell { height:56px; overflow:hidden; vertical-align:top; }
-  .wk-event { font-size:11px; padding:2px 6px; border-radius:4px; margin-bottom:2px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; max-width:100%; }
+  .wk-cell { height:34px; overflow:hidden; vertical-align:top; }
+  .wk-event { font-size:10px; padding:1px 5px; border-radius:4px; margin-bottom:1px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; max-width:100%; }
   .wk-today { background:#eff6ff !important; }
   .wk-scroll-area { max-height:65vh; overflow-y:auto; position:relative; }
   .wk-table thead th { position:sticky; top:0; z-index:5; }
@@ -5022,12 +5022,12 @@ Pages.weekly = (() => {
           return `<td class="px-2 py-1 wk-cell ${isToday?'wk-today':isWeekend?'bg-slate-50':''}" data-member="${m.id}" data-date="${ds}" onclick="Pages.weekly.cellClick(event, ${m.id}, '${ds}')">${evHtml}</td>`;
         }).join('');
         return `<tr>
-          <td class="px-2 py-2 bg-white" style="vertical-align:middle">
+          <td class="px-2 py-1 bg-white" style="vertical-align:middle">
             <div class="flex items-center gap-1.5">
-              <div class="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">${m.name[0]}</div>
+              <div class="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">${m.name[0]}</div>
               <div class="flex items-baseline gap-1 min-w-0">
                 <span class="text-xs font-semibold whitespace-nowrap">${m.name}</span>
-                <span class="text-xs text-secondary whitespace-nowrap opacity-70">${m.rank||''}</span>
+                <span class="text-[10px] text-secondary whitespace-nowrap opacity-70">${m.rank||''}</span>
               </div>
             </div>
           </td>${cells}
@@ -5126,13 +5126,22 @@ Pages.weekly = (() => {
     openCellPopover(evt.currentTarget, memberId, dateStr);
   }
 
-  function positionPopover(pop, anchorEl) {
+  function positionPopover(pop, anchorEl, placement) {
     const rect = anchorEl.getBoundingClientRect();
     const popWidth = 230;
-    let left = rect.left;
-    if (left + popWidth > window.innerWidth - 12) left = window.innerWidth - popWidth - 12;
-    pop.style.left = Math.max(12, left) + 'px';
-    pop.style.top = (rect.bottom + 6) + 'px';
+    if (placement === 'above') {
+      let left = rect.left + rect.width / 2 - popWidth / 2;
+      if (left + popWidth > window.innerWidth - 12) left = window.innerWidth - popWidth - 12;
+      pop.style.left = Math.max(12, left) + 'px';
+      pop.style.top = 'auto';
+      pop.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+    } else {
+      let left = rect.left;
+      if (left + popWidth > window.innerWidth - 12) left = window.innerWidth - popWidth - 12;
+      pop.style.left = Math.max(12, left) + 'px';
+      pop.style.top = (rect.bottom + 6) + 'px';
+      pop.style.bottom = 'auto';
+    }
   }
 
   function chipsHtml() {
@@ -5203,7 +5212,7 @@ Pages.weekly = (() => {
       <button class="wk-pop-save" onclick="Pages.weekly.saveBulk()">저장 (${selection.size}건 생성)</button>
     `;
     const bar = document.getElementById('wk-selection-bar');
-    positionPopover(pop, bar);
+    positionPopover(pop, bar, 'above');
     pop.classList.remove('hidden');
     document.getElementById('wk-pop-input').focus();
   }
