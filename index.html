@@ -4798,7 +4798,6 @@ function resetData() {
 // ============================================================
 //  AI CHATBOT
 // ============================================================
-let chatOpen = false;
 let chatHistory = [];
 
 function getChatApiKey() { return localStorage.getItem('wvteam_claude_key') || ''; }
@@ -4825,16 +4824,54 @@ function updateChatStatusLabel() {
   el.className = getChatApiKey() ? 'text-blue-200 text-xs' : 'text-yellow-300 text-xs';
 }
 
-function toggleChat() {
-  chatOpen = !chatOpen;
-  const win = document.getElementById('chat-window');
-  const btn = document.getElementById('chat-toggle-btn');
-  win.classList.toggle('hidden', !chatOpen);
-  btn.classList.toggle('hidden', chatOpen);
-  if (chatOpen) {
+let utilityPanelOpen = false;
+let utilityActiveTab = 'memo';
+
+function toggleUtilityPanel() {
+  setUtilityPanelOpen(!utilityPanelOpen);
+}
+
+function setUtilityPanelOpen(open) {
+  utilityPanelOpen = open;
+  const drawer = document.getElementById('utility-drawer');
+  const tab = document.getElementById('utility-tab');
+  drawer.classList.toggle('open', utilityPanelOpen);
+  tab.style.right = utilityPanelOpen ? drawer.offsetWidth + 'px' : '0px';
+  try { localStorage.setItem('utilityPanelOpen', utilityPanelOpen ? '1' : '0'); } catch(e) {}
+  if (utilityPanelOpen && utilityActiveTab === 'chat') {
     updateChatStatusLabel();
     if (chatHistory.length === 0) initChat();
   }
+}
+
+function switchUtilityTab(tabName) {
+  utilityActiveTab = tabName;
+  ['memo','calc','chat'].forEach(t => {
+    document.getElementById('utility-tabbtn-' + t).classList.toggle('active', t === tabName);
+    document.getElementById('utility-view-' + t).classList.toggle('active', t === tabName);
+  });
+  try { localStorage.setItem('utilityPanelTab', tabName); } catch(e) {}
+  if (tabName === 'chat') {
+    updateChatStatusLabel();
+    if (chatHistory.length === 0) initChat();
+  }
+}
+
+function openUtilityTab(tabName) {
+  switchUtilityTab(tabName);
+  if (!utilityPanelOpen) setUtilityPanelOpen(true);
+}
+
+function initUtilityPanelState() {
+  let savedTab = 'memo', savedOpen = false, savedWidth = 360;
+  try {
+    savedTab = localStorage.getItem('utilityPanelTab') || 'memo';
+    savedOpen = localStorage.getItem('utilityPanelOpen') === '1';
+    savedWidth = parseInt(localStorage.getItem('utilityPanelWidth'), 10) || 360;
+  } catch(e) {}
+  document.getElementById('utility-drawer').style.width = savedWidth + 'px';
+  switchUtilityTab(savedTab);
+  if (savedOpen) setUtilityPanelOpen(true);
 }
 
 function initChat() {
@@ -5824,6 +5861,8 @@ function applyCurrentUser() {
       if (memoEl && document.activeElement !== memoEl) memoEl.value = data.content || '';
     });
   }
+
+  initUtilityPanelState();
 }
 
 function showMsg(el, msg) {
