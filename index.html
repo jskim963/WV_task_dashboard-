@@ -505,15 +505,6 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
           <div id="ov-my-tasks" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
         </div>
 
-        <!-- Panel 5: 개인 메모장 -->
-        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5 flex flex-col">
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-yellow-500 text-base">sticky_note_2</span>개인 메모장</h2>
-            <span class="text-xs text-secondary" id="memo-saved-indicator"></span>
-          </div>
-          <textarea id="personal-memo" rows="6" class="flex-1 w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none text-on-surface placeholder:text-secondary" placeholder="개인 메모를 입력하세요... (자동 저장)" oninput="scheduleMemoSave()"></textarea>
-        </div>
-
         <!-- Panel 6: 오늘 일정 -->
         <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5">
           <div class="flex items-center justify-between mb-3">
@@ -5945,12 +5936,6 @@ Pages.overview = (() => {
           <span class="text-xs font-medium ${statusColors[t.status]||'text-secondary'} flex-shrink-0">${t.status}</span>
         </div>`).join('');
     }
-
-    // Panel 5: 메모
-    const memo = DB.memos ? DB.memos.find(m => m.userId === myId) : null;
-    const memoEl = document.getElementById('personal-memo');
-    if (memoEl) memoEl.value = memo ? memo.content : '';
-    document.getElementById('memo-saved-indicator').textContent = '';
 
     // Panel 6: 공지사항
     renderNotices();
