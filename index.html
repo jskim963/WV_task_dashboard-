@@ -161,11 +161,16 @@ tailwind.config = {
   #utility-drawer { position:fixed; top:0; right:0; height:100%; width:360px; min-width:280px; max-width:560px; background:#fff; box-shadow:-4px 0 24px rgba(0,0,0,0.12); z-index:300; transform:translateX(100%); transition:transform 0.25s ease; display:flex; flex-direction:column; }
   #utility-drawer.open { transform:translateX(0); }
   #utility-resize-handle { position:absolute; top:0; left:-4px; width:8px; height:100%; cursor:ew-resize; z-index:302; }
-  .utility-header { display:flex; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+  .utility-header { display:flex; align-items:center; justify-content:space-between; padding:0 6px 0 16px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
   .utility-tab-btn { flex:1; padding:12px 0; text-align:center; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; background:none; border-left:none; border-right:none; border-top:none; }
   .utility-tab-btn.active { color:#1d4ed8; border-bottom-color:#1d4ed8; }
-  .utility-view { display:none; flex:1; overflow-y:auto; flex-direction:column; min-height:0; }
-  .utility-view.active { display:flex; }
+  .utility-view { display:flex; flex-direction:column; overflow-y:auto; }
+  #utility-view-memo { flex:0 0 auto; height:160px; min-height:80px; border-bottom:1px solid #e2e8f0; }
+  #utility-view-calc { flex:0 0 auto; height:320px; min-height:200px; border-bottom:1px solid #e2e8f0; }
+  #utility-view-chat { flex:1 1 auto; min-height:160px; }
+  .utility-vresize-handle { height:6px; cursor:row-resize; background:#f8fafc; flex-shrink:0; position:relative; }
+  .utility-vresize-handle::after { content:''; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:32px; height:3px; border-radius:2px; background:#cbd5e1; }
+  .utility-vresize-handle:hover::after { background:#94a3b8; }
   .chat-msg { padding:10px 14px; border-radius:12px; max-width:90%; font-size:13px; line-height:1.6; }
   .chat-msg.ai { background:#eff6ff; color:#1e40af; border-bottom-left-radius:4px; }
   .chat-msg.user { background:#2563eb; color:#fff; border-bottom-right-radius:4px; margin-left:auto; }
@@ -407,7 +412,7 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
     </nav>
   </div>
   <div class="mt-auto p-4 border-t border-outline-variant">
-    <button onclick="openUtilityTab('chat')" class="w-full flex items-center justify-center gap-2 bg-primary text-white py-2.5 rounded-lg hover:bg-blue-700 transition-all text-sm font-semibold relative">
+    <button onclick="openUtilityPanel('chat')" class="w-full flex items-center justify-center gap-2 bg-primary text-white py-2.5 rounded-lg hover:bg-blue-700 transition-all text-sm font-semibold relative">
       <span class="material-symbols-outlined text-base">chat</span> AI 챗봇
       <span class="notif-badge"></span>
     </button>
@@ -1124,10 +1129,8 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
 <div id="utility-drawer">
   <div id="utility-resize-handle"></div>
   <div class="utility-header">
-    <button class="utility-tab-btn" id="utility-tabbtn-memo" onclick="switchUtilityTab('memo')">메모</button>
-    <button class="utility-tab-btn" id="utility-tabbtn-calc" onclick="switchUtilityTab('calc')">계산기</button>
-    <button class="utility-tab-btn" id="utility-tabbtn-chat" onclick="switchUtilityTab('chat')">AI챗봇</button>
-    <button onclick="toggleUtilityPanel()" class="px-3 text-secondary hover:bg-surface-container-low"><span class="material-symbols-outlined text-base">close</span></button>
+    <span class="font-bold text-sm text-on-surface">메모 · 계산기 · AI챗봇</span>
+    <button onclick="toggleUtilityPanel()" class="p-2 text-secondary hover:bg-surface-container-low rounded-lg"><span class="material-symbols-outlined text-base">close</span></button>
   </div>
 
   <!-- 메모 뷰 -->
@@ -1139,8 +1142,11 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
     <textarea id="personal-memo" class="flex-1 w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none text-on-surface placeholder:text-secondary" placeholder="개인 메모를 입력하세요... (자동 저장)" oninput="scheduleMemoSave()"></textarea>
   </div>
 
+  <div class="utility-vresize-handle" id="utility-vresize-1"></div>
+
   <!-- 계산기 뷰 -->
   <div id="utility-view-calc" class="utility-view p-4">
+    <h3 class="font-bold text-sm text-on-surface flex items-center gap-1.5 mb-2 flex-shrink-0"><span class="material-symbols-outlined text-blue-500 text-base">calculate</span>계산기</h3>
     <div class="flex gap-1.5 mb-3 flex-shrink-0">
       <button class="utility-tab-btn" id="calc-subtab-basic" onclick="switchCalcSubtab('basic')" style="flex:1;border-radius:8px;border:1px solid #e2e8f0;">일반</button>
       <button class="utility-tab-btn" id="calc-subtab-unit" onclick="switchCalcSubtab('unit')" style="flex:1;border-radius:8px;border:1px solid #e2e8f0;">단위환산</button>
@@ -1188,6 +1194,8 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
       <div id="conv-result" class="text-right text-xl font-semibold text-primary"></div>
     </div>
   </div>
+
+  <div class="utility-vresize-handle" id="utility-vresize-2"></div>
 
   <!-- AI챗봇 뷰 -->
   <div id="utility-view-chat" class="utility-view">
@@ -4825,7 +4833,6 @@ function updateChatStatusLabel() {
 }
 
 let utilityPanelOpen = false;
-let utilityActiveTab = 'memo';
 let chatInitialized = false;
 
 function toggleUtilityPanel() {
@@ -4844,39 +4851,52 @@ function setUtilityPanelOpen(open) {
   drawer.classList.toggle('open', utilityPanelOpen);
   tab.style.right = utilityPanelOpen ? drawer.offsetWidth + 'px' : '0px';
   try { localStorage.setItem('utilityPanelOpen', utilityPanelOpen ? '1' : '0'); } catch(e) {}
-  if (utilityPanelOpen && utilityActiveTab === 'chat') {
-    ensureChatReady();
-  }
+  if (utilityPanelOpen) ensureChatReady();
 }
 
-function switchUtilityTab(tabName) {
-  utilityActiveTab = tabName;
-  ['memo','calc','chat'].forEach(t => {
-    document.getElementById('utility-tabbtn-' + t).classList.toggle('active', t === tabName);
-    document.getElementById('utility-view-' + t).classList.toggle('active', t === tabName);
-  });
-  try { localStorage.setItem('utilityPanelTab', tabName); } catch(e) {}
-  if (tabName === 'chat') {
-    ensureChatReady();
-  }
-}
-
-function openUtilityTab(tabName) {
-  switchUtilityTab(tabName);
+function openUtilityPanel(section) {
   if (!utilityPanelOpen) setUtilityPanelOpen(true);
+  const el = document.getElementById('utility-view-' + section);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function initUtilityPanelState() {
-  let savedTab = 'memo', savedOpen = false, savedWidth = 360;
+  let savedOpen = false, savedWidth = 360, savedMemoH = 160, savedCalcH = 320;
   try {
-    savedTab = localStorage.getItem('utilityPanelTab') || 'memo';
     savedOpen = localStorage.getItem('utilityPanelOpen') === '1';
     savedWidth = parseInt(localStorage.getItem('utilityPanelWidth'), 10) || 360;
+    savedMemoH = parseInt(localStorage.getItem('utilityMemoHeight'), 10) || 160;
+    savedCalcH = parseInt(localStorage.getItem('utilityCalcHeight'), 10) || 320;
   } catch(e) {}
   document.getElementById('utility-drawer').style.width = savedWidth + 'px';
-  switchUtilityTab(savedTab);
+  document.getElementById('utility-view-memo').style.height = savedMemoH + 'px';
+  document.getElementById('utility-view-calc').style.height = savedCalcH + 'px';
   if (savedOpen) setUtilityPanelOpen(true);
 }
+
+(function initUtilityVResizeHandles() {
+  function bindVHandle(handleId, panelId, minH, storageKey) {
+    const handle = document.getElementById(handleId);
+    const panel = document.getElementById(panelId);
+    if (!handle || !panel) return;
+    let dragging = false;
+    handle.addEventListener('mousedown', (e) => { dragging = true; e.preventDefault(); });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const rect = panel.getBoundingClientRect();
+      let h = e.clientY - rect.top;
+      h = Math.max(minH, h);
+      panel.style.height = h + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      try { localStorage.setItem(storageKey, String(panel.offsetHeight)); } catch(e) {}
+    });
+  }
+  bindVHandle('utility-vresize-1', 'utility-view-memo', 80, 'utilityMemoHeight');
+  bindVHandle('utility-vresize-2', 'utility-view-calc', 200, 'utilityCalcHeight');
+})();
 
 function initChat() {
   chatInitialized = true;
