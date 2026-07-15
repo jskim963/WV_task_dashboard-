@@ -4826,9 +4826,15 @@ function updateChatStatusLabel() {
 
 let utilityPanelOpen = false;
 let utilityActiveTab = 'memo';
+let chatInitialized = false;
 
 function toggleUtilityPanel() {
   setUtilityPanelOpen(!utilityPanelOpen);
+}
+
+function ensureChatReady() {
+  updateChatStatusLabel();
+  if (!chatInitialized) { chatInitialized = true; initChat(); }
 }
 
 function setUtilityPanelOpen(open) {
@@ -4839,8 +4845,7 @@ function setUtilityPanelOpen(open) {
   tab.style.right = utilityPanelOpen ? drawer.offsetWidth + 'px' : '0px';
   try { localStorage.setItem('utilityPanelOpen', utilityPanelOpen ? '1' : '0'); } catch(e) {}
   if (utilityPanelOpen && utilityActiveTab === 'chat') {
-    updateChatStatusLabel();
-    if (chatHistory.length === 0) initChat();
+    ensureChatReady();
   }
 }
 
@@ -4852,8 +4857,7 @@ function switchUtilityTab(tabName) {
   });
   try { localStorage.setItem('utilityPanelTab', tabName); } catch(e) {}
   if (tabName === 'chat') {
-    updateChatStatusLabel();
-    if (chatHistory.length === 0) initChat();
+    ensureChatReady();
   }
 }
 
@@ -4875,6 +4879,7 @@ function initUtilityPanelState() {
 }
 
 function initChat() {
+  chatInitialized = true;
   const hasKey = !!getChatApiKey();
   addAIMessage('안녕하세요! 👋 W&V팀 AI 어시스턴트입니다.\n팀 업무·센터·일정·프로젝트 등 모든 데이터를 바탕으로 답변드립니다.' + (hasKey ? '' : '\n\n⚠️ API 키가 설정되지 않았습니다. 우측 상단 🔑 버튼으로 Anthropic API 키를 입력해주세요.'));
   renderQuickChips(['팀원 현황', '지연 업무 현황', '센터 특이사항', '가장 바쁜 사람은?']);
