@@ -455,6 +455,436 @@ git commit -m "feat: 유틸리티 패널 열기/닫기, 탭 전환, localStorage
 
 ---
 
+### Task 4.5: 탭 방식 → 상중하단 스택 레이아웃 전환 (사용자 요청으로 설계 변경)
+
+> **왜 이 태스크가 필요한가:** Task 2/4까지는 메모/계산기/AI챗봇을 클릭형 탭으로 전환하는 방식으로 구현했다. 사용자가 구현 도중 "탭을 골라서 하는 것 말고 상중하단으로 한번에 보이면 좋겠다"고 요청해, 세 섹션을 항상 동시에 세로로 쌓아 보여주고 섹션 경계를 드래그해 높이를 조절하는 방식으로 변경한다. 이 태스크는 Task 2(마크업)와 Task 4(탭 전환 JS)가 만든 결과물을 대체한다. 계산기 내부의 "일반/단위환산" 서브탭은 이번 변경과 무관하며 그대로 유지한다.
+
+**Files:**
+- Modify: `index.html:159-168` (유틸리티 패널 CSS), `index.html:1123-1219` (유틸리티 패널 HTML), `index.html:410` 부근(사이드바 AI챗봇 버튼), `index.html:4826-4886` 부근(패널 제어 JS)
+
+- [ ] **Step 1: CSS — 탭 바 스타일 제거, 스택 섹션 + 세로 리사이즈 핸들 스타일 추가**
+
+`index.html:164-168`의 다음 블록을:
+
+```css
+  .utility-header { display:flex; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+  .utility-tab-btn { flex:1; padding:12px 0; text-align:center; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; background:none; border-left:none; border-right:none; border-top:none; }
+  .utility-tab-btn.active { color:#1d4ed8; border-bottom-color:#1d4ed8; }
+  .utility-view { display:none; flex:1; overflow-y:auto; flex-direction:column; min-height:0; }
+  .utility-view.active { display:flex; }
+```
+
+다음으로 교체한다. `.utility-tab-btn`/`.active`는 계산기 내부 "일반/단위환산" 서브탭이 계속 사용하므로 그대로 남긴다:
+
+```css
+  .utility-header { display:flex; align-items:center; justify-content:space-between; padding:0 6px 0 16px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+  .utility-tab-btn { flex:1; padding:12px 0; text-align:center; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; background:none; border-left:none; border-right:none; border-top:none; }
+  .utility-tab-btn.active { color:#1d4ed8; border-bottom-color:#1d4ed8; }
+  .utility-view { display:flex; flex-direction:column; overflow-y:auto; }
+  #utility-view-memo { flex:0 0 auto; height:160px; min-height:80px; border-bottom:1px solid #e2e8f0; }
+  #utility-view-calc { flex:0 0 auto; height:320px; min-height:200px; border-bottom:1px solid #e2e8f0; }
+  #utility-view-chat { flex:1 1 auto; min-height:160px; }
+  .utility-vresize-handle { height:6px; cursor:row-resize; background:#f8fafc; flex-shrink:0; position:relative; }
+  .utility-vresize-handle::after { content:''; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:32px; height:3px; border-radius:2px; background:#cbd5e1; }
+  .utility-vresize-handle:hover::after { background:#94a3b8; }
+```
+
+- [ ] **Step 2: HTML — 탭 헤더를 정적 타이틀로, 세 뷰를 항상 표시되는 스택 섹션으로 교체**
+
+`index.html:1123-1219`의 다음 블록을(현재 실제 파일 내용 기준):
+
+```html
+<div id="utility-tab" onclick="toggleUtilityPanel()">메모·계산기·AI</div>
+<div id="utility-drawer">
+  <div id="utility-resize-handle"></div>
+  <div class="utility-header">
+    <button class="utility-tab-btn" id="utility-tabbtn-memo" onclick="switchUtilityTab('memo')">메모</button>
+    <button class="utility-tab-btn" id="utility-tabbtn-calc" onclick="switchUtilityTab('calc')">계산기</button>
+    <button class="utility-tab-btn" id="utility-tabbtn-chat" onclick="switchUtilityTab('chat')">AI챗봇</button>
+    <button onclick="toggleUtilityPanel()" class="px-3 text-secondary hover:bg-surface-container-low"><span class="material-symbols-outlined text-base">close</span></button>
+  </div>
+
+  <!-- 메모 뷰 -->
+  <div id="utility-view-memo" class="utility-view p-4">
+    <div class="flex items-center justify-between mb-2 flex-shrink-0">
+      <h3 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-yellow-500 text-base">sticky_note_2</span>개인 메모장</h3>
+      <span class="text-xs text-secondary" id="memo-saved-indicator"></span>
+    </div>
+    <textarea id="personal-memo" class="flex-1 w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none text-on-surface placeholder:text-secondary" placeholder="개인 메모를 입력하세요... (자동 저장)" oninput="scheduleMemoSave()"></textarea>
+  </div>
+
+  <!-- 계산기 뷰 -->
+  <div id="utility-view-calc" class="utility-view p-4">
+    <div class="flex gap-1.5 mb-3 flex-shrink-0">
+      <button class="utility-tab-btn" id="calc-subtab-basic" onclick="switchCalcSubtab('basic')" style="flex:1;border-radius:8px;border:1px solid #e2e8f0;">일반</button>
+      <button class="utility-tab-btn" id="calc-subtab-unit" onclick="switchCalcSubtab('unit')" style="flex:1;border-radius:8px;border:1px solid #e2e8f0;">단위환산</button>
+    </div>
+
+    <div id="calc-basic-view">
+      <div id="calc-display" class="text-right text-2xl font-semibold text-on-surface border border-outline-variant rounded-lg px-3 py-4 mb-3 min-h-[64px] break-all">0</div>
+      <div class="grid grid-cols-4 gap-2 mb-3">
+        <div class="calc-btn op" onclick="calcInput('(')">(</div>
+        <div class="calc-btn op" onclick="calcInput(')')">)</div>
+        <div class="calc-btn op" onclick="calcClear()">C</div>
+        <div class="calc-btn op" onclick="calcBackspace()">⌫</div>
+        <div class="calc-btn" onclick="calcInput('7')">7</div>
+        <div class="calc-btn" onclick="calcInput('8')">8</div>
+        <div class="calc-btn" onclick="calcInput('9')">9</div>
+        <div class="calc-btn op" onclick="calcInput('÷')">÷</div>
+        <div class="calc-btn" onclick="calcInput('4')">4</div>
+        <div class="calc-btn" onclick="calcInput('5')">5</div>
+        <div class="calc-btn" onclick="calcInput('6')">6</div>
+        <div class="calc-btn op" onclick="calcInput('×')">×</div>
+        <div class="calc-btn" onclick="calcInput('1')">1</div>
+        <div class="calc-btn" onclick="calcInput('2')">2</div>
+        <div class="calc-btn" onclick="calcInput('3')">3</div>
+        <div class="calc-btn op" onclick="calcInput('-')">-</div>
+        <div class="calc-btn" onclick="calcInput('0')">0</div>
+        <div class="calc-btn" onclick="calcInput('.')">.</div>
+        <div class="calc-btn eq" onclick="calcEquals()">=</div>
+        <div class="calc-btn op" onclick="calcInput('+')">+</div>
+      </div>
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-xs font-semibold text-secondary">계산 이력</span>
+        <button onclick="calcClearHistory()" class="text-xs text-secondary hover:text-red-500">지우기</button>
+      </div>
+      <div id="calc-history-list" class="border border-outline-variant rounded-lg max-h-32 overflow-y-auto"></div>
+    </div>
+
+    <div id="calc-unit-view" class="hidden">
+      <div class="flex gap-2 mb-3">
+        <select id="conv-direction" onchange="convUnit(document.getElementById('conv-input').value)" class="flex-1 border border-outline-variant rounded-lg px-2 py-2 text-sm">
+          <option value="py2m2">평 → ㎡</option>
+          <option value="m22py">㎡ → 평</option>
+        </select>
+      </div>
+      <input type="number" id="conv-input" oninput="convUnit(this.value)" placeholder="숫자 입력" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm mb-3">
+      <div id="conv-result" class="text-right text-xl font-semibold text-primary"></div>
+    </div>
+  </div>
+
+  <!-- AI챗봇 뷰 -->
+  <div id="utility-view-chat" class="utility-view">
+    <div class="px-4 py-3 bg-primary flex items-center justify-between flex-shrink-0">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-white text-base fill-icon">smart_toy</span>
+        <div>
+          <div class="text-white font-semibold text-sm">AI 어시스턴트</div>
+          <div class="text-blue-200 text-xs" id="chat-status-label">온라인 · 무엇이든 물어보세요</div>
+        </div>
+      </div>
+      <div class="flex gap-1">
+        <button onclick="setChatApiKey()" class="text-white hover:bg-blue-700 p-1 rounded" title="API 키 설정"><span class="material-symbols-outlined text-base">key</span></button>
+        <button onclick="clearChat()" class="text-white hover:bg-blue-700 p-1 rounded" title="대화 초기화"><span class="material-symbols-outlined text-base">restart_alt</span></button>
+      </div>
+    </div>
+    <div id="chat-messages" class="flex-1 overflow-y-auto p-4 flex flex-col gap-3"></div>
+    <div class="p-3 border-t border-outline-variant flex-shrink-0">
+      <div class="flex flex-wrap gap-1.5 mb-2" id="quick-chips"></div>
+      <div class="flex gap-2">
+        <input type="text" id="chat-input" placeholder="메시지를 입력하세요..." class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')sendChat()">
+        <button onclick="sendChat()" class="bg-primary text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-all">
+          <span class="material-symbols-outlined text-base">send</span>
+        </button>
+      </div>
+      <p class="text-xs text-secondary mt-1.5 text-center">AI는 실수할 수 있으므로 중요한 정보는 확인해 주세요</p>
+    </div>
+  </div>
+</div>
+```
+
+다음으로 교체한다:
+
+```html
+<div id="utility-tab" onclick="toggleUtilityPanel()">메모·계산기·AI</div>
+<div id="utility-drawer">
+  <div id="utility-resize-handle"></div>
+  <div class="utility-header">
+    <span class="font-bold text-sm text-on-surface">메모 · 계산기 · AI챗봇</span>
+    <button onclick="toggleUtilityPanel()" class="p-2 text-secondary hover:bg-surface-container-low rounded-lg"><span class="material-symbols-outlined text-base">close</span></button>
+  </div>
+
+  <!-- 메모 뷰 -->
+  <div id="utility-view-memo" class="utility-view p-4">
+    <div class="flex items-center justify-between mb-2 flex-shrink-0">
+      <h3 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-yellow-500 text-base">sticky_note_2</span>개인 메모장</h3>
+      <span class="text-xs text-secondary" id="memo-saved-indicator"></span>
+    </div>
+    <textarea id="personal-memo" class="flex-1 w-full border border-outline-variant rounded-lg px-3 py-2 text-sm resize-none text-on-surface placeholder:text-secondary" placeholder="개인 메모를 입력하세요... (자동 저장)" oninput="scheduleMemoSave()"></textarea>
+  </div>
+
+  <div class="utility-vresize-handle" id="utility-vresize-1"></div>
+
+  <!-- 계산기 뷰 -->
+  <div id="utility-view-calc" class="utility-view p-4">
+    <h3 class="font-bold text-sm text-on-surface flex items-center gap-1.5 mb-2 flex-shrink-0"><span class="material-symbols-outlined text-blue-500 text-base">calculate</span>계산기</h3>
+    <div class="flex gap-1.5 mb-3 flex-shrink-0">
+      <button class="utility-tab-btn" id="calc-subtab-basic" onclick="switchCalcSubtab('basic')" style="flex:1;border-radius:8px;border:1px solid #e2e8f0;">일반</button>
+      <button class="utility-tab-btn" id="calc-subtab-unit" onclick="switchCalcSubtab('unit')" style="flex:1;border-radius:8px;border:1px solid #e2e8f0;">단위환산</button>
+    </div>
+
+    <div id="calc-basic-view">
+      <div id="calc-display" class="text-right text-2xl font-semibold text-on-surface border border-outline-variant rounded-lg px-3 py-4 mb-3 min-h-[64px] break-all">0</div>
+      <div class="grid grid-cols-4 gap-2 mb-3">
+        <div class="calc-btn op" onclick="calcInput('(')">(</div>
+        <div class="calc-btn op" onclick="calcInput(')')">)</div>
+        <div class="calc-btn op" onclick="calcClear()">C</div>
+        <div class="calc-btn op" onclick="calcBackspace()">⌫</div>
+        <div class="calc-btn" onclick="calcInput('7')">7</div>
+        <div class="calc-btn" onclick="calcInput('8')">8</div>
+        <div class="calc-btn" onclick="calcInput('9')">9</div>
+        <div class="calc-btn op" onclick="calcInput('÷')">÷</div>
+        <div class="calc-btn" onclick="calcInput('4')">4</div>
+        <div class="calc-btn" onclick="calcInput('5')">5</div>
+        <div class="calc-btn" onclick="calcInput('6')">6</div>
+        <div class="calc-btn op" onclick="calcInput('×')">×</div>
+        <div class="calc-btn" onclick="calcInput('1')">1</div>
+        <div class="calc-btn" onclick="calcInput('2')">2</div>
+        <div class="calc-btn" onclick="calcInput('3')">3</div>
+        <div class="calc-btn op" onclick="calcInput('-')">-</div>
+        <div class="calc-btn" onclick="calcInput('0')">0</div>
+        <div class="calc-btn" onclick="calcInput('.')">.</div>
+        <div class="calc-btn eq" onclick="calcEquals()">=</div>
+        <div class="calc-btn op" onclick="calcInput('+')">+</div>
+      </div>
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-xs font-semibold text-secondary">계산 이력</span>
+        <button onclick="calcClearHistory()" class="text-xs text-secondary hover:text-red-500">지우기</button>
+      </div>
+      <div id="calc-history-list" class="border border-outline-variant rounded-lg max-h-32 overflow-y-auto"></div>
+    </div>
+
+    <div id="calc-unit-view" class="hidden">
+      <div class="flex gap-2 mb-3">
+        <select id="conv-direction" onchange="convUnit(document.getElementById('conv-input').value)" class="flex-1 border border-outline-variant rounded-lg px-2 py-2 text-sm">
+          <option value="py2m2">평 → ㎡</option>
+          <option value="m22py">㎡ → 평</option>
+        </select>
+      </div>
+      <input type="number" id="conv-input" oninput="convUnit(this.value)" placeholder="숫자 입력" class="w-full border border-outline-variant rounded-lg px-3 py-2 text-sm mb-3">
+      <div id="conv-result" class="text-right text-xl font-semibold text-primary"></div>
+    </div>
+  </div>
+
+  <div class="utility-vresize-handle" id="utility-vresize-2"></div>
+
+  <!-- AI챗봇 뷰 -->
+  <div id="utility-view-chat" class="utility-view">
+    <div class="px-4 py-3 bg-primary flex items-center justify-between flex-shrink-0">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-white text-base fill-icon">smart_toy</span>
+        <div>
+          <div class="text-white font-semibold text-sm">AI 어시스턴트</div>
+          <div class="text-blue-200 text-xs" id="chat-status-label">온라인 · 무엇이든 물어보세요</div>
+        </div>
+      </div>
+      <div class="flex gap-1">
+        <button onclick="setChatApiKey()" class="text-white hover:bg-blue-700 p-1 rounded" title="API 키 설정"><span class="material-symbols-outlined text-base">key</span></button>
+        <button onclick="clearChat()" class="text-white hover:bg-blue-700 p-1 rounded" title="대화 초기화"><span class="material-symbols-outlined text-base">restart_alt</span></button>
+      </div>
+    </div>
+    <div id="chat-messages" class="flex-1 overflow-y-auto p-4 flex flex-col gap-3"></div>
+    <div class="p-3 border-t border-outline-variant flex-shrink-0">
+      <div class="flex flex-wrap gap-1.5 mb-2" id="quick-chips"></div>
+      <div class="flex gap-2">
+        <input type="text" id="chat-input" placeholder="메시지를 입력하세요..." class="flex-1 border border-outline-variant rounded-lg px-3 py-2 text-sm" onkeydown="if(event.key==='Enter')sendChat()">
+        <button onclick="sendChat()" class="bg-primary text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-all">
+          <span class="material-symbols-outlined text-base">send</span>
+        </button>
+      </div>
+      <p class="text-xs text-secondary mt-1.5 text-center">AI는 실수할 수 있으므로 중요한 정보는 확인해 주세요</p>
+    </div>
+  </div>
+</div>
+```
+
+변경 요약: 헤더의 3개 탭 버튼(`utility-tabbtn-*`)을 정적 타이틀 텍스트로 교체, 두 섹션 경계에 `.utility-vresize-handle` div 2개(`utility-vresize-1`, `utility-vresize-2`) 추가, 계산기 뷰 상단에 제목(`계산기`) 추가. 계산기 내부 일반/단위환산 서브탭과 각 섹션의 내부 내용(메모 textarea, 계산기 버튼 그리드, 챗봇 메시지창)은 완전히 동일하게 유지.
+
+- [ ] **Step 3: 사이드바 "AI 챗봇" 버튼 갱신**
+
+사이드바 하단 버튼(`index.html:410` 부근)의 다음 줄을:
+
+```html
+    <button onclick="openUtilityTab('chat')" class="w-full flex items-center justify-center gap-2 bg-primary text-white py-2.5 rounded-lg hover:bg-blue-700 transition-all text-sm font-semibold relative">
+```
+
+다음으로 교체한다:
+
+```html
+    <button onclick="openUtilityPanel('chat')" class="w-full flex items-center justify-center gap-2 bg-primary text-white py-2.5 rounded-lg hover:bg-blue-700 transition-all text-sm font-semibold relative">
+```
+
+- [ ] **Step 4: JS — 탭 전환 로직 제거, 패널 열기/상태기억을 스택 레이아웃에 맞게 재작성**
+
+`function toggleChat()`이 있던 자리에 Task 4에서 추가했던 다음 블록 전체를(`function toggleUtilityPanel`부터 `function initUtilityPanelState`까지, `let utilityPanelOpen`/`let utilityActiveTab`/`let chatInitialized` 선언 포함):
+
+```js
+let utilityPanelOpen = false;
+let utilityActiveTab = 'memo';
+let chatInitialized = false;
+
+function toggleUtilityPanel() {
+  setUtilityPanelOpen(!utilityPanelOpen);
+}
+
+function ensureChatReady() {
+  updateChatStatusLabel();
+  if (!chatInitialized) { chatInitialized = true; initChat(); }
+}
+
+function setUtilityPanelOpen(open) {
+  utilityPanelOpen = open;
+  const drawer = document.getElementById('utility-drawer');
+  const tab = document.getElementById('utility-tab');
+  drawer.classList.toggle('open', utilityPanelOpen);
+  tab.style.right = utilityPanelOpen ? drawer.offsetWidth + 'px' : '0px';
+  try { localStorage.setItem('utilityPanelOpen', utilityPanelOpen ? '1' : '0'); } catch(e) {}
+  if (utilityPanelOpen && utilityActiveTab === 'chat') {
+    ensureChatReady();
+  }
+}
+
+function switchUtilityTab(tabName) {
+  utilityActiveTab = tabName;
+  ['memo','calc','chat'].forEach(t => {
+    document.getElementById('utility-tabbtn-' + t).classList.toggle('active', t === tabName);
+    document.getElementById('utility-view-' + t).classList.toggle('active', t === tabName);
+  });
+  try { localStorage.setItem('utilityPanelTab', tabName); } catch(e) {}
+  if (tabName === 'chat') {
+    ensureChatReady();
+  }
+}
+
+function openUtilityTab(tabName) {
+  switchUtilityTab(tabName);
+  if (!utilityPanelOpen) setUtilityPanelOpen(true);
+}
+
+function initUtilityPanelState() {
+  let savedTab = 'memo', savedOpen = false, savedWidth = 360;
+  try {
+    savedTab = localStorage.getItem('utilityPanelTab') || 'memo';
+    savedOpen = localStorage.getItem('utilityPanelOpen') === '1';
+    savedWidth = parseInt(localStorage.getItem('utilityPanelWidth'), 10) || 360;
+  } catch(e) {}
+  document.getElementById('utility-drawer').style.width = savedWidth + 'px';
+  switchUtilityTab(savedTab);
+  if (savedOpen) setUtilityPanelOpen(true);
+}
+```
+
+다음으로 교체한다(`ensureChatReady`/`initChat`은 그대로 재사용, `utilityActiveTab`/`switchUtilityTab`/`openUtilityTab`은 완전히 제거):
+
+```js
+let utilityPanelOpen = false;
+let chatInitialized = false;
+
+function toggleUtilityPanel() {
+  setUtilityPanelOpen(!utilityPanelOpen);
+}
+
+function ensureChatReady() {
+  updateChatStatusLabel();
+  if (!chatInitialized) { chatInitialized = true; initChat(); }
+}
+
+function setUtilityPanelOpen(open) {
+  utilityPanelOpen = open;
+  const drawer = document.getElementById('utility-drawer');
+  const tab = document.getElementById('utility-tab');
+  drawer.classList.toggle('open', utilityPanelOpen);
+  tab.style.right = utilityPanelOpen ? drawer.offsetWidth + 'px' : '0px';
+  try { localStorage.setItem('utilityPanelOpen', utilityPanelOpen ? '1' : '0'); } catch(e) {}
+  if (utilityPanelOpen) ensureChatReady();
+}
+
+function openUtilityPanel(section) {
+  if (!utilityPanelOpen) setUtilityPanelOpen(true);
+  const el = document.getElementById('utility-view-' + section);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function initUtilityPanelState() {
+  let savedOpen = false, savedWidth = 360, savedMemoH = 160, savedCalcH = 320;
+  try {
+    savedOpen = localStorage.getItem('utilityPanelOpen') === '1';
+    savedWidth = parseInt(localStorage.getItem('utilityPanelWidth'), 10) || 360;
+    savedMemoH = parseInt(localStorage.getItem('utilityMemoHeight'), 10) || 160;
+    savedCalcH = parseInt(localStorage.getItem('utilityCalcHeight'), 10) || 320;
+  } catch(e) {}
+  document.getElementById('utility-drawer').style.width = savedWidth + 'px';
+  document.getElementById('utility-view-memo').style.height = savedMemoH + 'px';
+  document.getElementById('utility-view-calc').style.height = savedCalcH + 'px';
+  if (savedOpen) setUtilityPanelOpen(true);
+}
+
+(function initUtilityVResizeHandles() {
+  function bindVHandle(handleId, panelId, minH, storageKey) {
+    const handle = document.getElementById(handleId);
+    const panel = document.getElementById(panelId);
+    if (!handle || !panel) return;
+    let dragging = false;
+    handle.addEventListener('mousedown', (e) => { dragging = true; e.preventDefault(); });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const rect = panel.getBoundingClientRect();
+      let h = e.clientY - rect.top;
+      h = Math.max(minH, h);
+      panel.style.height = h + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      try { localStorage.setItem(storageKey, String(panel.offsetHeight)); } catch(e) {}
+    });
+  }
+  bindVHandle('utility-vresize-1', 'utility-view-memo', 80, 'utilityMemoHeight');
+  bindVHandle('utility-vresize-2', 'utility-view-calc', 200, 'utilityCalcHeight');
+})();
+```
+
+`initUtilityVResizeHandles`는 Task 5(가로 폭 리사이즈 핸들)와 마찬가지로, 이 파일의 유일한 `<script>` 블록(`index.html:1921`부터 시작)이 모든 HTML 마크업 뒤에 위치하므로 `#utility-vresize-1`/`#utility-vresize-2`가 이미 DOM에 존재하는 시점에 실행되어 `DOMContentLoaded` 대기가 필요 없다.
+
+- [ ] **Step 5: 문법 검증 + 남은 참조 확인**
+
+Run:
+```bash
+node -e "
+const fs = require('fs');
+const html = fs.readFileSync('index.html', 'utf8');
+const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
+let ok = true;
+scripts.forEach((s,i) => { try { new Function(s); } catch(e) { ok = false; console.log('Block', i, 'ERROR:', e.message); } });
+console.log(ok ? 'SYNTAX OK' : 'SYNTAX ERRORS FOUND');
+"
+```
+Expected: `SYNTAX OK`
+
+`switchUtilityTab`/`utilityActiveTab`/`openUtilityTab(`/`utility-tabbtn-` 참조가 남아있지 않은지 확인:
+```bash
+node -e "
+const fs = require('fs');
+const html = fs.readFileSync('index.html', 'utf8');
+['switchUtilityTab', 'utilityActiveTab', 'openUtilityTab(', 'utility-tabbtn-'].forEach(term => {
+  const count = (html.match(new RegExp(term.replace(/[.*+?^\${}()|[\]\\\\]/g,'\\\\\$&'), 'g')) || []).length;
+  console.log(term, ':', count);
+});
+"
+```
+Expected: 전부 `0`
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add index.html docs/superpowers/plans/2026-07-15-utility-panel.md
+git commit -m "refactor: 유틸리티 패널을 탭 방식에서 상중하단 스택 레이아웃으로 변경"
+```
+
+> 참고: Task 8(계산기 키보드 단축키)은 아직 구현 전이므로, 그 태스크를 시작할 때 원래 스펙의 `if (!utilityPanelOpen || utilityActiveTab !== 'calc') return;` 가드를 `if (!utilityPanelOpen) return;`로 바꿔야 한다(더 이상 "활성 탭" 개념이 없고 계산기 섹션이 항상 보이기 때문). 아래 Task 8 본문은 이미 이 변경을 반영해 수정해 두었다.
+
+---
+
 ### Task 5: 리사이즈 핸들 (폭 조절)
 
 **Files:**
@@ -706,7 +1136,7 @@ git commit -m "feat: 계산기 버튼 동작 및 이력(localStorage) 구현"
 
 ```js
 document.addEventListener('keydown', function(e) {
-  if (!utilityPanelOpen || utilityActiveTab !== 'calc') return;
+  if (!utilityPanelOpen) return;
   const calcBasicView = document.getElementById('calc-basic-view');
   if (!calcBasicView || calcBasicView.classList.contains('hidden')) return;
   const active = document.activeElement;
