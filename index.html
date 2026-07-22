@@ -4896,6 +4896,8 @@ function initUtilityPanelState() {
     const handle = document.getElementById(handleId);
     const panel = document.getElementById(panelId);
     if (!handle || !panel) return;
+    const otherPanelId = panelId === 'utility-view-memo' ? 'utility-view-calc' : 'utility-view-memo';
+    const otherMinH = panelId === 'utility-view-memo' ? 200 : 80;
     let dragging = false;
     handle.addEventListener('mousedown', (e) => { dragging = true; e.preventDefault(); });
     document.addEventListener('mousemove', (e) => {
@@ -4904,21 +4906,28 @@ function initUtilityPanelState() {
       let h = e.clientY - rect.top;
       const drawer = document.getElementById('utility-drawer');
       const header = document.querySelector('#utility-drawer .utility-header');
-      const otherPanelId = panelId === 'utility-view-memo' ? 'utility-view-calc' : 'utility-view-memo';
       const otherPanel = document.getElementById(otherPanelId);
       const handles = document.querySelectorAll('#utility-drawer .utility-vresize-handle');
       const handlesHeight = Array.from(handles).reduce((sum, el) => sum + el.offsetHeight, 0);
       const headerHeight = header ? header.offsetHeight : 0;
-      const otherPanelHeight = otherPanel ? otherPanel.offsetHeight : 0;
       const chatMinHeight = 160;
-      const maxH = drawer.offsetHeight - headerHeight - handlesHeight - otherPanelHeight - chatMinHeight;
-      h = Math.max(minH, Math.min(h, maxH));
+      const totalForBoth = drawer.offsetHeight - headerHeight - handlesHeight - chatMinHeight;
+      h = Math.max(minH, Math.min(h, totalForBoth - otherMinH));
       panel.style.height = h + 'px';
+      if (otherPanel) {
+        const remainingForOther = totalForBoth - h;
+        if (otherPanel.offsetHeight > remainingForOther) {
+          otherPanel.style.height = Math.max(otherMinH, remainingForOther) + 'px';
+        }
+      }
     });
     document.addEventListener('mouseup', () => {
       if (!dragging) return;
       dragging = false;
       try { localStorage.setItem(storageKey, String(panel.offsetHeight)); } catch(e) {}
+      const otherKey = panelId === 'utility-view-memo' ? 'utilityCalcHeight' : 'utilityMemoHeight';
+      const otherPanel = document.getElementById(otherPanelId);
+      if (otherPanel) { try { localStorage.setItem(otherKey, String(otherPanel.offsetHeight)); } catch(e) {} }
     });
   }
   bindVHandle('utility-vresize-1', 'utility-view-memo', 80, 'utilityMemoHeight');
