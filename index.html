@@ -5053,7 +5053,7 @@ document.addEventListener('keydown', function(e) {
   };
   const directKeys = { '.':'.', '(':'(', ')':')', '+':'+', '-':'-', '*':'×', '/':'÷' };
 
-  const mapped = keyMap[e.code] || directKeys[e.key];
+  const mapped = keyMap[e.code] || keyMap[e.key] || directKeys[e.key];
   if (mapped) { e.preventDefault(); calcInput(mapped); }
 });
 
