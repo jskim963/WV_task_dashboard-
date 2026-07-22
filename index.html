@@ -2856,15 +2856,25 @@ function initMentionAutocomplete() {
       hideMentionDropdown();
     }
   });
+
+  document.addEventListener('keydown', function(e) {
+    const dd = document.getElementById('mention-dropdown');
+    if (!dd || dd.classList.contains('hidden') || !mentionDropdownTarget) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); hideMentionDropdown(); return; }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      const first = mentionDropdownTarget.members && mentionDropdownTarget.members[0];
+      if (first) { e.preventDefault(); e.stopPropagation(); selectMention(first.name); }
+    }
+  }, true);
 }
 
 function escapeMentionName(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
 }
 
 function showMentionDropdown(el, members, matchStart, cursorPos) {
   const dd = document.getElementById('mention-dropdown');
-  mentionDropdownTarget = { el, matchStart, cursorPos };
+  mentionDropdownTarget = { el, matchStart, cursorPos, members };
   dd.innerHTML = members.map(m =>
     `<div class="assignee-cb-row" onmousedown="event.preventDefault();selectMention('${escapeMentionName(m.name)}')">${escapeMentionName(m.name)}</div>`
   ).join('');
