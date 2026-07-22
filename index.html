@@ -4891,6 +4891,26 @@ function initUtilityPanelState() {
   if (savedOpen) setUtilityPanelOpen(true);
 }
 
+(function initUtilityResizeHandle() {
+  let dragging = false;
+  const handle = document.getElementById('utility-resize-handle');
+  if (handle) handle.addEventListener('mousedown', (e) => { dragging = true; e.preventDefault(); });
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const drawer = document.getElementById('utility-drawer');
+    let w = window.innerWidth - e.clientX;
+    w = Math.max(280, Math.min(560, w));
+    drawer.style.width = w + 'px';
+    if (utilityPanelOpen) document.getElementById('utility-tab').style.right = w + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    const w = document.getElementById('utility-drawer').offsetWidth;
+    try { localStorage.setItem('utilityPanelWidth', String(w)); } catch(e) {}
+  });
+})();
+
 (function initUtilityVResizeHandles() {
   function bindVHandle(handleId, panelId, minH, storageKey) {
     const handle = document.getElementById(handleId);
