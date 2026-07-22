@@ -166,7 +166,7 @@ tailwind.config = {
   .utility-tab-btn.active { color:#1d4ed8; border-bottom-color:#1d4ed8; }
   .utility-view { display:flex; flex-direction:column; overflow-y:auto; }
   #utility-view-memo { flex:0 0 auto; height:160px; min-height:80px; border-bottom:1px solid #e2e8f0; }
-  #utility-view-calc { flex:0 0 auto; height:320px; min-height:200px; border-bottom:1px solid #e2e8f0; }
+  #utility-view-calc { flex:0 0 auto; height:460px; min-height:200px; border-bottom:1px solid #e2e8f0; }
   #utility-view-chat { flex:1 1 auto; min-height:160px; }
   .utility-vresize-handle { height:6px; cursor:row-resize; background:#f8fafc; flex-shrink:0; position:relative; }
   .utility-vresize-handle::after { content:''; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:32px; height:3px; border-radius:2px; background:#cbd5e1; }
@@ -4861,16 +4861,33 @@ function openUtilityPanel(section) {
 }
 
 function initUtilityPanelState() {
-  let savedOpen = false, savedWidth = 360, savedMemoH = 160, savedCalcH = 320;
+  let savedOpen = false, savedWidth = 360, savedMemoH = 160, savedCalcH = 460;
   try {
     savedOpen = localStorage.getItem('utilityPanelOpen') === '1';
     savedWidth = parseInt(localStorage.getItem('utilityPanelWidth'), 10) || 360;
     savedMemoH = parseInt(localStorage.getItem('utilityMemoHeight'), 10) || 160;
-    savedCalcH = parseInt(localStorage.getItem('utilityCalcHeight'), 10) || 320;
+    savedCalcH = parseInt(localStorage.getItem('utilityCalcHeight'), 10) || 460;
   } catch(e) {}
   document.getElementById('utility-drawer').style.width = savedWidth + 'px';
   document.getElementById('utility-view-memo').style.height = savedMemoH + 'px';
   document.getElementById('utility-view-calc').style.height = savedCalcH + 'px';
+
+  // 저장된 높이 합이 현재 뷰포트에서 챗봇 영역(최소 160px)을 침범하면 비례 축소
+  const drawer = document.getElementById('utility-drawer');
+  const header = drawer.querySelector('.utility-header');
+  const handles = drawer.querySelectorAll('.utility-vresize-handle');
+  const handlesHeight = Array.from(handles).reduce((sum, el) => sum + el.offsetHeight, 0);
+  const headerHeight = header ? header.offsetHeight : 0;
+  const chatMinHeight = 160;
+  const availableForMemoCalc = drawer.offsetHeight - headerHeight - handlesHeight - chatMinHeight;
+  if (availableForMemoCalc > 0 && (savedMemoH + savedCalcH) > availableForMemoCalc) {
+    const ratio = availableForMemoCalc / (savedMemoH + savedCalcH);
+    const newMemoH = Math.max(80, Math.floor(savedMemoH * ratio));
+    const newCalcH = Math.max(200, Math.floor(savedCalcH * ratio));
+    document.getElementById('utility-view-memo').style.height = newMemoH + 'px';
+    document.getElementById('utility-view-calc').style.height = newCalcH + 'px';
+  }
+
   if (savedOpen) setUtilityPanelOpen(true);
 }
 
@@ -4885,7 +4902,17 @@ function initUtilityPanelState() {
       if (!dragging) return;
       const rect = panel.getBoundingClientRect();
       let h = e.clientY - rect.top;
-      h = Math.max(minH, h);
+      const drawer = document.getElementById('utility-drawer');
+      const header = document.querySelector('#utility-drawer .utility-header');
+      const otherPanelId = panelId === 'utility-view-memo' ? 'utility-view-calc' : 'utility-view-memo';
+      const otherPanel = document.getElementById(otherPanelId);
+      const handles = document.querySelectorAll('#utility-drawer .utility-vresize-handle');
+      const handlesHeight = Array.from(handles).reduce((sum, el) => sum + el.offsetHeight, 0);
+      const headerHeight = header ? header.offsetHeight : 0;
+      const otherPanelHeight = otherPanel ? otherPanel.offsetHeight : 0;
+      const chatMinHeight = 160;
+      const maxH = drawer.offsetHeight - headerHeight - handlesHeight - otherPanelHeight - chatMinHeight;
+      h = Math.max(minH, Math.min(h, maxH));
       panel.style.height = h + 'px';
     });
     document.addEventListener('mouseup', () => {
