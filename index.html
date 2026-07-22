@@ -4911,6 +4911,57 @@ function initUtilityPanelState() {
   });
 })();
 
+function evalExpr(rawStr) {
+  const str = rawStr.replace(/\s+/g, '');
+  if (!str) throw new Error('empty expression');
+  let i = 0;
+  function peek() { return str[i]; }
+  function consumeNumber() {
+    const start = i;
+    while (i < str.length && /[0-9.]/.test(str[i])) i++;
+    if (start === i) throw new Error('invalid number at ' + i);
+    return parseFloat(str.slice(start, i));
+  }
+  function parseFactor() {
+    if (peek() === '(') {
+      i++;
+      const v = parseExprInner();
+      if (peek() !== ')') throw new Error('missing )');
+      i++;
+      return v;
+    }
+    if (peek() === '-') { i++; return -parseFactor(); }
+    if (peek() === '+') { i++; return parseFactor(); }
+    return consumeNumber();
+  }
+  function parseTerm() {
+    let v = parseFactor();
+    while (peek() === '×' || peek() === '÷' || peek() === '*' || peek() === '/') {
+      const op = str[i]; i++;
+      const rhs = parseFactor();
+      if (op === '×' || op === '*') v *= rhs;
+      else {
+        if (rhs === 0) throw new Error('divide by zero');
+        v /= rhs;
+      }
+    }
+    return v;
+  }
+  function parseExprInner() {
+    let v = parseTerm();
+    while (peek() === '+' || peek() === '-') {
+      const op = str[i]; i++;
+      const rhs = parseTerm();
+      v = op === '+' ? v + rhs : v - rhs;
+    }
+    return v;
+  }
+  const result = parseExprInner();
+  if (i !== str.length) throw new Error('unexpected trailing input at ' + i);
+  if (!isFinite(result)) throw new Error('not finite');
+  return result;
+}
+
 (function initUtilityVResizeHandles() {
   function bindVHandle(handleId, panelId, minH, storageKey) {
     const handle = document.getElementById(handleId);
