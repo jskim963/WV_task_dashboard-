@@ -2740,7 +2740,7 @@ Pages.dashboard = (() => {
     if (!t || !text) return;
     const now = new Date();
     const timeStr = now.toLocaleDateString('ko-KR') + ' ' + now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
-    t.comments.push({author: DB.myProfile.name || '나', text, time: timeStr});
+    t.comments.push({author: DB.myProfile.name || '나', text, time: timeStr, ts: now.getTime()});
     saveDB();
     input.value = '';
     renderComments(detailTaskId);
