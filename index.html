@@ -512,6 +512,14 @@ main { padding-bottom: max(24px, env(safe-area-inset-bottom, 24px)) !important; 
           <div id="ov-my-tasks" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
         </div>
 
+        <!-- Panel 5: 멘션함 -->
+        <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5 flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-sm text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-purple-500 text-base">alternate_email</span>멘션함</h2>
+          </div>
+          <div id="ov-mentions" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
+        </div>
+
         <!-- Panel 6: 오늘 일정 -->
         <div class="bg-white rounded-xl border border-outline-variant shadow-sm p-5">
           <div class="flex items-center justify-between mb-3">
@@ -6352,9 +6360,100 @@ Pages.overview = (() => {
           <span class="material-symbols-outlined text-secondary ml-auto">chevron_right</span>
         </button>`;
     }
+
+    renderMentions();
   }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function buildMentionRegex() {
+    const names = (DB.members || []).map(m => m.name).filter(Boolean);
+    if (names.length === 0) return null;
+    const sorted = [...new Set(names)].sort((a, b) => b.length - a.length);
+    const escaped = sorted.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    return new RegExp('@(' + escaped.join('|') + ')', 'g');
+  }
+
+  function getMyMentions() {
+    if (!currentUser) return [];
+    const regex = buildMentionRegex();
+    if (!regex) return [];
+    const results = [];
+
+    (DB.tasks || []).forEach(t => {
+      (t.comments || []).forEach(c => {
+        regex.lastIndex = 0;
+        let m;
+        while ((m = regex.exec(c.text)) !== null) {
+          if (m[1] === currentUser.name) {
+            results.push({ sourceType: 'task', sourceId: t.id, snippet: c.text, authorName: c.author || '', ts: c.ts || 0 });
+            break;
+          }
+        }
+      });
+    });
+
+    (DB.centers || []).forEach(center => {
+      (center.operationNotes || []).forEach(n => {
+        regex.lastIndex = 0;
+        let m;
+        while ((m = regex.exec(n.text)) !== null) {
+          if (m[1] === currentUser.name) {
+            results.push({ sourceType: 'center', sourceId: center.id, snippet: n.text, authorName: '', ts: n.date || 0 });
+            break;
+          }
+        }
+      });
+    });
+
+    return results.sort((a, b) => b.ts - a.ts).slice(0, 20);
+  }
+
+  function formatMentionTime(ts) {
+    if (!ts) return '';
+    const diffMs = Date.now() - ts;
+    const min = Math.floor(diffMs / 60000);
+    if (min < 1) return '방금 전';
+    if (min < 60) return min + '분 전';
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return hr + '시간 전';
+    const day = Math.floor(hr / 24);
+    return day + '일 전';
+  }
+
+  function renderMentions() {
+    const el = document.getElementById('ov-mentions');
+    if (!el) return;
+    const mentions = getMyMentions();
+    if (mentions.length === 0) {
+      el.innerHTML = '<p class="text-xs text-secondary text-center py-4">아직 멘션된 내역이 없습니다</p>';
+      return;
+    }
+    el.innerHTML = mentions.map(m => `
+      <div class="flex items-start gap-2 cursor-pointer hover:bg-surface-container-low rounded-lg px-2 py-1.5 -mx-2" onclick="goToMention('${m.sourceType}', ${m.sourceId})">
+        <span class="material-symbols-outlined text-sm ${m.sourceType === 'task' ? 'text-green-600' : 'text-orange-500'} flex-shrink-0 mt-0.5">${m.sourceType === 'task' ? 'work' : 'warning'}</span>
+        <div class="min-w-0 flex-1">
+          <p class="text-xs text-on-surface truncate">${escapeHtml(m.snippet)}</p>
+          <p class="text-[11px] text-secondary">${escapeHtml(m.authorName)} · ${formatMentionTime(m.ts)}</p>
+        </div>
+      </div>
+    `).join('');
+  }
+
   return { render };
 })();
+
+function goToMention(sourceType, sourceId) {
+  if (sourceType === 'task') {
+    showPage('dashboard');
+    setTimeout(() => showTaskDetail(sourceId), 100);
+  } else if (sourceType === 'center') {
+    showPage('centers');
+    setTimeout(() => openCenterDetail(sourceId), 100);
+  }
+}
 
 // --- Overview shim ---
 function renderOverview() { Pages.overview.render(); }
