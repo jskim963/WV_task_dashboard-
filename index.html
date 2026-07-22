@@ -4918,7 +4918,13 @@ function evalExpr(rawStr) {
   function peek() { return str[i]; }
   function consumeNumber() {
     const start = i;
-    while (i < str.length && /[0-9.]/.test(str[i])) i++;
+    let sawDot = false;
+    while (i < str.length) {
+      const c = str[i];
+      if (c >= '0' && c <= '9') { i++; continue; }
+      if (c === '.' && !sawDot) { sawDot = true; i++; continue; }
+      break;
+    }
     if (start === i) throw new Error('invalid number at ' + i);
     return parseFloat(str.slice(start, i));
   }
