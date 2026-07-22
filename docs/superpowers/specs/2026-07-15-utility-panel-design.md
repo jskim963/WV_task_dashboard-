@@ -14,8 +14,9 @@
 **목표**
 - 모든 페이지에서 접근 가능한 메모 / 계산기 / AI챗봇 통합 패널
 - 클릭형 손잡이 탭으로 열고 닫기 (실제 드래그 제스처는 구현하지 않음)
+- 세 섹션(메모/계산기/AI챗봇)을 상중하단에 항상 동시 표시하고, 섹션 경계를 드래그해 각각의 높이를 조절 가능 (탭 선택 방식에서 변경됨, 위 개정 참고)
 - 사용자가 패널 폭을 직접 조절 가능
-- 열림 상태 / 폭 / 마지막 탭을 기기별로 기억
+- 열림 상태 / 폭 / 메모·계산기 섹션 높이를 기기별로 기억
 
 **비목표**
 - 실제 마우스 드래그로 패널을 "당겨서 여는" 제스처 (클릭형으로 충분하다고 판단)
@@ -26,44 +27,43 @@
 
 ### 마크업 배치
 
-기존 `#chatbot-panel` 및 `#chat-toggle-btn`(플로팅 버튼)을 제거하고 `<body>` 하단(기존 위치)에 다음으로 교체한다:
+기존 `#chatbot-panel` 및 `#chat-toggle-btn`(플로팅 버튼)을 제거하고 `<body>` 하단(기존 위치)에 다음으로 교체한다(최종 상중하단 스택 구조, Task 4.5 반영):
 
 ```html
 <div id="utility-tab" onclick="toggleUtilityPanel()">...</div>
 <div id="utility-drawer">
   <div id="utility-resize-handle"></div>
   <div class="utility-header">
-    <button data-tab="memo">메모</button>
-    <button data-tab="calc">계산기</button>
-    <button data-tab="chat">AI챗봇</button>
+    <span>메모 · 계산기 · AI챗봇</span>
     <button onclick="toggleUtilityPanel()">닫기</button>
   </div>
-  <div id="utility-body">
-    <div id="utility-view-memo">...</div>   <!-- 기존 #personal-memo textarea 이전 -->
-    <div id="utility-view-calc">...</div>   <!-- 신규 -->
-    <div id="utility-view-chat">...</div>   <!-- 기존 #chat-window 내용 이전 -->
-  </div>
+  <div id="utility-view-memo">...</div>   <!-- 기존 #personal-memo textarea 이전 -->
+  <div class="utility-vresize-handle" id="utility-vresize-1"></div>
+  <div id="utility-view-calc">...</div>   <!-- 신규 -->
+  <div class="utility-vresize-handle" id="utility-vresize-2"></div>
+  <div id="utility-view-chat">...</div>   <!-- 기존 #chat-window 내용 이전 -->
 </div>
 ```
 
-`#notif-panel`과 동일한 `translateX` 슬라이드 트랜지션 패턴을 재사용한다. 세 뷰는 `.hidden` 토글로 전환하며 동시에 하나만 표시한다(기존 `draft-content-panel` 방식과 동일).
+`#notif-panel`과 동일한 `translateX` 슬라이드 트랜지션 패턴을 재사용한다. 세 뷰는 항상 동시에 표시되며(탭 선택으로 하나만 보이던 초기 설계에서 변경됨), 헤더에는 탭 버튼 대신 정적 타이틀만 남는다. 메모/계산기 섹션은 고정 높이(기본 각각 160px/460px)를 갖고 `#utility-vresize-1`/`#utility-vresize-2` 드래그로 조절 가능하며, AI챗봇 섹션은 나머지 공간을 채운다(flex-fill, 별도 리사이즈 핸들 없음).
 
 기존 챗봇 관련 함수(`sendChat()`, `clearChat()`, `setChatApiKey()`, `toggleChat()`은 제거하고 `toggleUtilityPanel()`로 통합)는 로직 변경 없이 DOM 위치만 `#utility-view-chat` 내부로 옮긴다.
 
-### 탭 전환 / 상태 저장
+### 열기/닫기 + 리사이즈 + 상태 저장
 
-- `switchUtilityTab(tabName)`: 활성 탭 버튼 스타일 갱신 + 해당 뷰만 표시 + `localStorage.utilityPanelTab` 저장
-- `toggleUtilityPanel()`: 열림/닫힘 토글 + `localStorage.utilityPanelOpen` 저장
-- 리사이즈: `#utility-resize-handle`에서 `mousedown` → `mousemove`로 폭 계산(280px~560px clamp) → `mouseup`에서 `localStorage.utilityPanelWidth` 저장
-- 페이지 로드 시 세 값을 localStorage에서 읽어 초기 상태 복원
+- `toggleUtilityPanel()`/`setUtilityPanelOpen(open)`: 열림/닫힘 토글 + `localStorage.utilityPanelOpen` 저장. 패널이 열릴 때마다 AI챗봇 섹션이 항상 보이므로 `ensureChatReady()`를 호출해 최초 1회만 초기 인사말을 띄운다(`chatInitialized` 플래그로 중복 방지).
+- `openUtilityPanel(section)`: 패널을 열고 해당 섹션으로 스크롤 이동(사이드바 "AI 챗봇" 버튼 등에서 사용)
+- 폭 리사이즈: `#utility-resize-handle`에서 `mousedown` → `mousemove`로 폭 계산(280px~560px clamp) → `mouseup`에서 `localStorage.utilityPanelWidth` 저장
+- 높이 리사이즈: `#utility-vresize-1`(메모)/`#utility-vresize-2`(계산기) 드래그 시, AI챗봇 섹션이 최소 160px를 유지하도록 상대 섹션의 최소 높이를 기준으로 상한을 계산하고, 필요하면 반대쪽 섹션을 그 최소값까지 축소한다. `mouseup`에서 두 섹션 높이 모두 `localStorage.utilityMemoHeight`/`utilityCalcHeight`에 저장.
+- 페이지 로드 시 (폭 + 메모 높이 + 계산기 높이 + 열림 여부)를 localStorage에서 읽어 초기 상태 복원, 뷰포트 대비 합이 너무 크면 비율에 맞춰 축소
 
 ### 메모 탭
 
 기존 `#personal-memo` textarea + `scheduleMemoSave()` / `saveMemo()` 로직을 그대로 `#utility-view-memo`로 이전한다. Firestore `memos` 컬렉션 데이터는 변경 없음. 대시보드 "개인 메모장" 카드(Panel 5, `index.html:495-502`)는 제거한다.
 
-### 계산기 탭
+### 계산기 섹션
 
-서브탭 2개(`일반` / `단위환산`)를 상단에 둔다.
+서브탭 2개(`일반` / `단위환산`)를 상단에 둔다. 섹션 기본 높이는 460px(버튼 그리드+이력이 스크롤 없이 보이도록 320px에서 상향 조정됨).
 
 **일반 서브탭**
 - 디스플레이(현재 수식 + 계산 결과) + 버튼 그리드: `7 8 9 ( ) ⌫` / `4 5 6 × ÷ C` / `1 2 3 - +` / `0 . =`
@@ -73,9 +73,9 @@
 - 0으로 나누기 등 계산 불가 상황은 디스플레이에 "오류"를 표시하고 이력에는 추가하지 않는다
 
 **키보드 연동**
-- `document`에 `keydown` 리스너를 등록하되, 다음 조건을 모두 만족할 때만 동작: 유틸리티 패널이 열려 있음 + 활성 탭이 `계산기` + 활성 서브탭이 `일반` + `document.activeElement`가 계산기 외부의 텍스트 입력(메모 textarea, 챗봇 input, 단위환산 input, 다른 모달의 input 등)이 아님
+- `document`에 `keydown` 리스너를 등록하되, 다음 조건을 모두 만족할 때만 동작: 유틸리티 패널이 열려 있음(계산기 섹션은 항상 표시되므로 별도 "활성 탭" 체크 불필요) + 활성 서브탭이 `일반` + `document.activeElement`가 계산기 외부의 텍스트 입력(메모 textarea, 챗봇 input, 단위환산 input, 다른 모달의 input 등)이 아님
 - 매핑: 숫자키(상단 0-9 + Numpad0-9) → 숫자 입력 / `+ - * /`(상단 + Numpad) → 연산자 / `(` `)` → 괄호 / `.` `NumpadDecimal` → 소수점 / `Enter` `NumpadEnter` → `=` / `Backspace` → 마지막 문자 삭제 / `Escape` → 전체 초기화
-- 매핑되지 않은 키는 무시(브라우저 기본 동작 방해 안 함, `preventDefault()`는 매핑된 키에만 적용)
+- 매핑되지 않은 키는 무시(브라우저 기본 동작 방해 안 함, `preventDefault()`는 매핑된 키에만 적용). 처리한 키는 `stopPropagation()`도 함께 호출해 Weekly 페이지 팝오버 등 다른 전역 `keydown` 리스너로 전파되지 않게 한다.
 
 **단위환산 서브탭**
 - 숫자 입력 1개 + 방향 토글 버튼(평→㎡ / ㎡→평)

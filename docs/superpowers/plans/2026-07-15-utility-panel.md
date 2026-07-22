@@ -489,6 +489,8 @@ git commit -m "feat: 유틸리티 패널 열기/닫기, 탭 전환, localStorage
   .utility-vresize-handle:hover::after { background:#94a3b8; }
 ```
 
+> **후속 수정 (코드 리뷰 반영):** 위 `#utility-view-calc`의 `height:320px`는 이 태스크가 실제 구현된 시점의 값이며, 곧이어 코드 품질 리뷰에서 "계산기 버튼 그리드+이력이 기본 높이에서 스크롤 없이 다 보이지 않는다"는 지적을 받아 별도 후속 커밋(`2dd06d5`, "계산기 기본 높이 확대 및 리사이즈 상한선 추가")에서 `460px`로 상향 조정되었다. **현재 실제 코드의 값은 320px가 아니라 460px**이며, `initUtilityPanelState()`의 `savedCalcH` 기본값도 동일하게 460으로 맞춰져 있다. 이 계획 문서는 각 태스크가 실행된 시점의 코드를 기록하는 역사적 문서이므로 위 스니펫 자체는 수정하지 않았다.
+
 - [ ] **Step 2: HTML — 탭 헤더를 정적 타이틀로, 세 뷰를 항상 표시되는 스택 섹션으로 교체**
 
 `index.html:1123-1219`의 다음 블록을(현재 실제 파일 내용 기준):
@@ -1155,10 +1157,12 @@ document.addEventListener('keydown', function(e) {
   };
   const directKeys = { '.':'.', '(':'(', ')':')', '+':'+', '-':'-', '*':'×', '/':'÷' };
 
-  const mapped = keyMap[e.code] || directKeys[e.key];
+  const mapped = keyMap[e.code] || keyMap[e.key] || directKeys[e.key];
   if (mapped) { e.preventDefault(); calcInput(mapped); }
 });
 ```
+
+> **개정:** 원래 `const mapped = keyMap[e.code] || directKeys[e.key];`로 작성했으나, 상단 숫자키(예: `5`)는 `e.code`가 `"Digit5"`라 `keyMap`에 매칭되지 않고 `directKeys`에도 숫자가 없어 전혀 입력되지 않는 버그가 있었다. `keyMap[e.key]`를 중간에 추가해(이미 `keyMap`에 있는 `'0'`~`'9'` 항목이 상단 숫자키의 `e.key`와 매칭됨) 수정. 위 코드에 이미 반영함.
 
 - [ ] **Step 2: 문법 검증**
 
