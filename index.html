@@ -5128,9 +5128,9 @@ document.addEventListener('keydown', function(e) {
   const isForeignInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && !calcBasicView.contains(active);
   if (isForeignInput) return;
 
-  if (e.key === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); calcEquals(); return; }
-  if (e.key === 'Backspace') { e.preventDefault(); calcBackspace(); return; }
-  if (e.key === 'Escape') { e.preventDefault(); calcClear(); return; }
+  if (e.key === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); e.stopPropagation(); calcEquals(); return; }
+  if (e.key === 'Backspace') { e.preventDefault(); e.stopPropagation(); calcBackspace(); return; }
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); calcClear(); return; }
 
   const keyMap = {
     '0':'0','1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9',
@@ -5141,7 +5141,7 @@ document.addEventListener('keydown', function(e) {
   const directKeys = { '.':'.', '(':'(', ')':')', '+':'+', '-':'-', '*':'×', '/':'÷' };
 
   const mapped = keyMap[e.code] || keyMap[e.key] || directKeys[e.key];
-  if (mapped) { e.preventDefault(); calcInput(mapped); }
+  if (mapped) { e.preventDefault(); e.stopPropagation(); calcInput(mapped); }
 });
 
 function switchCalcSubtab(tab) {
