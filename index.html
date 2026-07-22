@@ -4889,6 +4889,7 @@ function initUtilityPanelState() {
   }
 
   if (savedOpen) setUtilityPanelOpen(true);
+  initCalcHistory();
 }
 
 (function initUtilityResizeHandle() {
@@ -4966,6 +4967,70 @@ function evalExpr(rawStr) {
   if (i !== str.length) throw new Error('unexpected trailing input at ' + i);
   if (!isFinite(result)) throw new Error('not finite');
   return result;
+}
+
+let calcExpr = '';
+let calcHistory = [];
+
+function calcInput(ch) {
+  calcExpr += ch;
+  document.getElementById('calc-display').textContent = calcExpr || '0';
+}
+
+function calcBackspace() {
+  calcExpr = calcExpr.slice(0, -1);
+  document.getElementById('calc-display').textContent = calcExpr || '0';
+}
+
+function calcClear() {
+  calcExpr = '';
+  document.getElementById('calc-display').textContent = '0';
+}
+
+function calcEquals() {
+  if (!calcExpr) return;
+  const display = document.getElementById('calc-display');
+  try {
+    const result = evalExpr(calcExpr);
+    display.textContent = String(result);
+    calcHistory.unshift({ expr: calcExpr, result, ts: Date.now() });
+    calcHistory = calcHistory.slice(0, 20);
+    try { localStorage.setItem('calcHistory', JSON.stringify(calcHistory)); } catch(e) {}
+    calcExpr = String(result);
+    renderCalcHistory();
+  } catch (e) {
+    display.textContent = '오류';
+    calcExpr = '';
+  }
+}
+
+function calcClearHistory() {
+  calcHistory = [];
+  try { localStorage.removeItem('calcHistory'); } catch(e) {}
+  renderCalcHistory();
+}
+
+function calcLoadHistory(idx) {
+  const item = calcHistory[idx];
+  if (!item) return;
+  calcExpr = String(item.result);
+  document.getElementById('calc-display').textContent = calcExpr;
+}
+
+function renderCalcHistory() {
+  const list = document.getElementById('calc-history-list');
+  if (!list) return;
+  list.innerHTML = calcHistory.map((h, idx) =>
+    `<div class="calc-history-item" onclick="calcLoadHistory(${idx})">${h.expr} = ${h.result}</div>`
+  ).join('') || '<div class="calc-history-item" style="cursor:default">이력 없음</div>';
+}
+
+function initCalcHistory() {
+  try {
+    const saved = localStorage.getItem('calcHistory');
+    calcHistory = saved ? JSON.parse(saved) : [];
+  } catch(e) { calcHistory = []; }
+  renderCalcHistory();
 }
 
 (function initUtilityVResizeHandles() {
