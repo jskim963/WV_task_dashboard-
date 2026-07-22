@@ -4890,6 +4890,7 @@ function initUtilityPanelState() {
 
   if (savedOpen) setUtilityPanelOpen(true);
   initCalcHistory();
+  switchCalcSubtab('basic');
 }
 
 (function initUtilityResizeHandle() {
@@ -5056,6 +5057,23 @@ document.addEventListener('keydown', function(e) {
   const mapped = keyMap[e.code] || keyMap[e.key] || directKeys[e.key];
   if (mapped) { e.preventDefault(); calcInput(mapped); }
 });
+
+function switchCalcSubtab(tab) {
+  document.getElementById('calc-subtab-basic').classList.toggle('active', tab === 'basic');
+  document.getElementById('calc-subtab-unit').classList.toggle('active', tab === 'unit');
+  document.getElementById('calc-basic-view').classList.toggle('hidden', tab !== 'basic');
+  document.getElementById('calc-unit-view').classList.toggle('hidden', tab !== 'unit');
+}
+
+function convUnit(rawVal) {
+  const dir = document.getElementById('conv-direction').value;
+  const n = parseFloat(rawVal);
+  const out = document.getElementById('conv-result');
+  if (isNaN(n)) { out.textContent = ''; return; }
+  const PYEONG_TO_M2 = 3.305785;
+  const result = dir === 'py2m2' ? n * PYEONG_TO_M2 : n / PYEONG_TO_M2;
+  out.textContent = result.toFixed(2) + (dir === 'py2m2' ? ' ㎡' : ' 평');
+}
 
 (function initUtilityVResizeHandles() {
   function bindVHandle(handleId, panelId, minH, storageKey) {
