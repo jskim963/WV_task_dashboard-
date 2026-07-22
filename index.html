@@ -5033,6 +5033,30 @@ function initCalcHistory() {
   renderCalcHistory();
 }
 
+document.addEventListener('keydown', function(e) {
+  if (!utilityPanelOpen) return;
+  const calcBasicView = document.getElementById('calc-basic-view');
+  if (!calcBasicView || calcBasicView.classList.contains('hidden')) return;
+  const active = document.activeElement;
+  const isForeignInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && !calcBasicView.contains(active);
+  if (isForeignInput) return;
+
+  if (e.key === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); calcEquals(); return; }
+  if (e.key === 'Backspace') { e.preventDefault(); calcBackspace(); return; }
+  if (e.key === 'Escape') { e.preventDefault(); calcClear(); return; }
+
+  const keyMap = {
+    '0':'0','1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9',
+    'Numpad0':'0','Numpad1':'1','Numpad2':'2','Numpad3':'3','Numpad4':'4','Numpad5':'5','Numpad6':'6','Numpad7':'7','Numpad8':'8','Numpad9':'9',
+    'NumpadDecimal':'.',
+    'NumpadAdd':'+', 'NumpadSubtract':'-', 'NumpadMultiply':'×', 'NumpadDivide':'÷'
+  };
+  const directKeys = { '.':'.', '(':'(', ')':')', '+':'+', '-':'-', '*':'×', '/':'÷' };
+
+  const mapped = keyMap[e.code] || directKeys[e.key];
+  if (mapped) { e.preventDefault(); calcInput(mapped); }
+});
+
 (function initUtilityVResizeHandles() {
   function bindVHandle(handleId, panelId, minH, storageKey) {
     const handle = document.getElementById(handleId);
